@@ -1,0 +1,2204 @@
+import React, { useState, useEffect, useRef } from 'react';
+import Chart from 'chart.js/auto';
+
+// Format Currency Utility (USD format)
+const formatUSD = (number) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2
+  }).format(number);
+};
+
+// Format Date Utility
+const formatDate = (dateObj) => {
+  const options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
+  return dateObj.toLocaleDateString('en-US', options).replace(',', '');
+};
+
+// --------------------------------------------------------------------------
+// MOCK CLIENTS DATABASES MATCHING MOSAIC METADATA
+// --------------------------------------------------------------------------
+const clientDatabases = {
+  'LG': {
+    statusLabel: 'Sandbox',
+    products: [
+      { sku: 'LG001', name: 'LG 55" OLED C4', model: 'OLED55C4PUA', category: 'TV', map: 1499.00, msrp: 1799.00, advertised: 1499.00, violations: 0, status: 'Active', complianceHistory: [1499, 1499, 1499, 1499, 1499, 1499, 1499] },
+      { sku: 'LG002', name: 'LG 65" OLED C4', model: 'OLED65C4PUA', category: 'TV', map: 1899.00, msrp: 2199.00, advertised: 1799.00, violations: 3, status: 'Active', complianceHistory: [1899, 1899, 1899, 1849, 1799, 1799, 1799] },
+      { sku: 'LG003', name: 'LG 27" UltraGear', model: '27GP850-B', category: 'Monitor', map: 349.00, msrp: 399.00, advertised: 349.00, violations: 0, status: 'Active', complianceHistory: [349, 349, 349, 349, 349, 349, 349] },
+      { sku: 'LG004', name: 'LG 75" QNED80TSA', model: '75QNED80TSA', category: 'TV', map: 1699.00, msrp: 1899.00, advertised: 1549.00, violations: 2, status: 'Active', complianceHistory: [1699, 1699, 1699, 1649, 1549, 1549, 1549] },
+      { sku: 'LG005', name: 'LG Multi-Door Fridge', model: 'LMXS28626S', category: 'Washer', map: 2199.00, msrp: 2499.00, advertised: 2199.00, violations: 0, status: 'Active', complianceHistory: [2199, 2199, 2199, 2199, 2199, 2199, 2199] }
+    ],
+    violations: [
+      { id: 'VIO-00123', sku: 'LG002', productName: 'LG 65" OLED C4', merchant: 'XYZ Electronics (Amazon)', map: 1899.00, advertised: 1799.00, gap: -5.3, duration: '3 days', severity: 'High', status: 'Under Review', detectedOn: 'Aug 23, 2026, 10:15 AM', listingUrl: 'https://www.amazon.com/dp/B0OLED65', timeline: [
+        { state: 'Detected', time: 'Aug 23, 2026, 10:15 AM', desc: 'System crawl identified price at $1,799.00' },
+        { state: 'Under Review', time: 'Aug 23, 2026, 10:20 AM', desc: 'Assigned to compliance queue' }
+      ]},
+      { id: 'VIO-00122', sku: 'LG004', productName: 'LG 75" QNED80TSA', merchant: 'Best Buy', map: 1699.00, advertised: 1549.00, gap: -8.8, duration: '1 day', severity: 'High', status: 'New', detectedOn: 'Aug 24, 2026, 09:00 AM', listingUrl: 'https://www.bestbuy.com/site/lg75qned', timeline: [
+        { state: 'Detected', time: 'Aug 24, 2026, 09:00 AM', desc: 'System crawl identified price at $1,549.00' }
+      ]},
+      { id: 'VIO-00121', sku: 'LG002', productName: 'LG 65" OLED C4', merchant: 'TechMart (Walmart)', map: 1899.00, advertised: 1839.00, gap: -3.2, duration: '5 hrs', severity: 'Medium', status: 'Resolved', detectedOn: 'Aug 25, 2026, 08:30 AM', timeline: [
+        { state: 'Detected', time: 'Aug 25, 2026, 08:30 AM', desc: 'Flagged pricing drop of 3.2%.' },
+        { state: 'Resolved', time: 'Aug 25, 2026, 04:15 PM', desc: 'Price restored to guideline floor.' }
+      ]}
+    ],
+    merchants: [
+      { name: 'XYZ Electronics (Amazon)', channel: 'Amazon.in', sellers: 12, skus: 10, violations: 9, compliance: 78, risk: 'High', lastActive: '5 min ago' },
+      { name: 'Best Buy', channel: 'Retailer', sellers: 1, skus: 8, violations: 6, compliance: 90, risk: 'Medium', lastActive: '15 min ago' },
+      { name: 'TechMart (Walmart)', channel: 'Retailer', sellers: 1, skus: 9, violations: 5, compliance: 92, risk: 'Medium', lastActive: '12 min ago' }
+    ],
+    promotions: [
+      { sku: 'LG001', name: 'LG 55" OLED C4', map: 1499.00, promo: 1399.00, from: 'Aug 17, 2026', until: 'Aug 25, 2026', status: 'Active' },
+      { sku: 'LG003', name: 'LG 27" UltraGear', map: 349.00, promo: 299.00, from: 'Sep 01, 2026', until: 'Sep 07, 2026', status: 'Scheduled' }
+    ]
+  },
+  'Philips': {
+    statusLabel: 'Active',
+    products: [
+      { sku: 'PH001', name: 'Philips Hybrid Shaver', model: 'QP2520/90', category: 'Personal Care', map: 49.00, msrp: 59.00, advertised: 39.00, violations: 4, status: 'Active', complianceHistory: [49, 49, 45, 45, 39, 39, 39] },
+      { sku: 'PH002', name: 'Philips Hue RGB Kit', model: 'HUE-RGB-4W', category: 'Lighting', map: 129.00, msrp: 149.00, advertised: 129.00, violations: 0, status: 'Active', complianceHistory: [129, 129, 129, 129, 129, 129, 129] }
+    ],
+    violations: [
+      { id: 'VIO-00201', sku: 'PH001', productName: 'Philips Hybrid Shaver', merchant: 'Best Deals', map: 49.00, advertised: 39.00, gap: -20.4, duration: '2 days', severity: 'Critical', status: 'New', detectedOn: 'Aug 24, 2026, 11:20 AM', listingUrl: 'https://www.amazon.com/dp/B0BPHSHV', timeline: [
+        { state: 'Detected', time: 'Aug 24, 2026, 11:20 AM', desc: 'Identified pricing drop of 20.4%.' }
+      ]}
+    ],
+    merchants: [
+      { name: 'Best Deals', channel: 'Amazon.in', sellers: 5, skus: 8, violations: 4, compliance: 65, risk: 'High', lastActive: '10 min ago' },
+      { name: 'Cloudtail', channel: 'Amazon.in', sellers: 1, skus: 14, violations: 0, compliance: 100, risk: 'Low', lastActive: '15 min ago' }
+    ],
+    promotions: []
+  },
+  'Kawasaki': {
+    statusLabel: 'Active',
+    products: [
+      { sku: 'KAW001', name: 'Kawasaki Badminton Racket', model: 'KAW-SP-BR', category: 'Sports', map: 35.00, msrp: 45.00, advertised: 29.00, violations: 1, status: 'Active', complianceHistory: [35, 35, 35, 32, 29, 29, 29] }
+    ],
+    violations: [
+      { id: 'VIO-00301', sku: 'KAW001', productName: 'Kawasaki Badminton Racket', merchant: 'XYZ Electronics (Amazon)', map: 35.00, advertised: 29.00, gap: -17.1, duration: '4 days', severity: 'Critical', status: 'New', detectedOn: 'Aug 23, 2026, 09:40 AM', listingUrl: 'https://www.amazon.com/dp/B0BKAW', timeline: [
+        { state: 'Detected', time: 'Aug 23, 2026, 09:40 AM', desc: 'Identified pricing drop of 17.1%.' }
+      ]}
+    ],
+    merchants: [
+      { name: 'XYZ Electronics (Amazon)', channel: 'Amazon.in', sellers: 6, skus: 5, violations: 1, compliance: 80, risk: 'Medium', lastActive: '1 hr ago' }
+    ],
+    promotions: []
+  },
+  'Citizen': {
+    statusLabel: 'Active',
+    products: [
+      { sku: 'CIT001', name: 'Citizen Eco-Drive Watch', model: 'CIT-BM8180', category: 'Watch', map: 175.00, msrp: 225.00, advertised: 175.00, violations: 0, status: 'Active', complianceHistory: [175, 175, 175, 175, 175, 175, 175] }
+    ],
+    violations: [],
+    merchants: [
+      { name: 'TechMart (Walmart)', channel: 'Retailer', sellers: 1, skus: 4, violations: 0, compliance: 100, risk: 'Low', lastActive: '2 hrs ago' }
+    ],
+    promotions: []
+  }
+};
+
+const initialCalendarEvents = {
+  '2026-08-23': [
+    { type: 'violation', desc: 'VIO-00123: Critical deviation on LG 65" C4 on Amazon.' }
+  ],
+  '2026-08-24': [
+    { type: 'violation', desc: 'VIO-00122: High deviation on LG 75" QNED on Best Buy.' }
+  ],
+  '2026-08-17': [
+    { type: 'rule', desc: 'Promo Launch: Temporary C4 OLED allowances activate.' }
+  ],
+  '2026-08-25': [
+    { type: 'exception', desc: 'Promo Expired: Allowed C4 window closes.' }
+  ]
+};
+
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+export default function App() {
+  // --------------------------------------------------------------------------
+  // SCREEN STATES: 'login', 'client-select', 'app'
+  // --------------------------------------------------------------------------
+  const [screen, setScreen] = useState('login');
+  const [selectedClient, setSelectedClient] = useState('LG');
+  const [currentView, setCurrentView] = useState('dashboard');
+  
+  // Subtabs state matching tabs of mosaic screens
+  const [subtabs, setSubtabs] = useState({
+    'mapping-center': 'Stage (Unmapped)',
+    'map-pricing': 'Promotions',
+    'merchants': 'Merchants',
+    'violations': 'All (24)',
+    'email-center': 'Email History',
+    'alerts': 'Active Alerts',
+    'settings': 'Client Settings',
+    'users-access': 'Users',
+    'reports': 'Scheduled Reports'
+  });
+
+  // Dynamic databases
+  const [dbState, setDbState] = useState(clientDatabases);
+  const [calendarEvents, setCalendarEvents] = useState(initialCalendarEvents);
+
+  // Active workspace references
+  const clientData = dbState[selectedClient];
+  const products = clientData.products;
+  const violations = clientData.violations;
+  const merchants = clientData.merchants;
+  const promotions = clientData.promotions || [];
+
+  // Filter States
+  const [selectedMarketplace, setSelectedMarketplace] = useState('all');
+  const [selectedDateRange, setSelectedDateRange] = useState('30');
+  
+  const [productSearch, setProductSearch] = useState('');
+  const [prodCategory, setProdCategory] = useState('all');
+  
+  const [violationSearch, setViolationSearch] = useState('');
+  const [vioSeverity, setVioSeverity] = useState('all');
+  
+  const [merchantSearch, setMerchantSearch] = useState('');
+
+  // active selected indices
+  const [activeViolationId, setActiveViolationId] = useState(null);
+  const [activeProductId, setActiveProductId] = useState('LG001');
+  const [activeMerchantName, setActiveMerchantName] = useState(null);
+
+  // Calendar
+  const [calendarYear, setCalendarYear] = useState(2026);
+  const [calendarMonth, setCalendarMonth] = useState(7); // August (0-indexed)
+
+  // Layout states
+  const [mobileSidebarActive, setMobileSidebarActive] = useState(false);
+  const [modals, setModals] = useState({ product: false, exception: false });
+  const [toasts, setToasts] = useState([]);
+
+  // Login inputs
+  const [loginEmail, setLoginEmail] = useState('operations@mirethos.com');
+  const [loginPassword, setLoginPassword] = useState('••••••••••••');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // DOM Canvas Refs
+  const violationsTimeCanvas = useRef(null);
+  const severityDonutCanvas = useRef(null);
+  const marketplaceBarCanvas = useRef(null);
+  const productPriceCanvas = useRef(null);
+  const merchantComplianceCanvas = useRef(null);
+
+  const activeCharts = useRef({});
+
+  // --------------------------------------------------------------------------
+  // TOAST HANDLER
+  // --------------------------------------------------------------------------
+  const showToast = (message, type = 'success', duration = 4000) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, duration);
+  };
+
+  const openModal = (type) => setModals(prev => ({ ...prev, [type]: true }));
+  const closeModal = (type) => setModals(prev => ({ ...prev, [type]: false }));
+  const openDrawer = (id) => setActiveViolationId(id);
+  const closeDrawer = () => setActiveViolationId(null);
+
+  const navigateTo = (view) => {
+    setCurrentView(view);
+    setMobileSidebarActive(false);
+  };
+
+  const setSubtab = (view, tab) => {
+    setSubtabs(prev => ({ ...prev, [view]: tab }));
+  };
+
+  // Sparkline generator
+  const drawSparkline = (dataPoints, strokeColor) => {
+    const width = 60;
+    const height = 18;
+    const padding = 2;
+    const min = Math.min(...dataPoints);
+    const max = Math.max(...dataPoints);
+    const range = max - min || 1;
+    
+    const points = dataPoints.map((val, index) => {
+      const x = padding + (index / (dataPoints.length - 1)) * (width - padding * 2);
+      const y = height - padding - ((val - min) / range) * (height - padding * 2);
+      return `${x},${y}`;
+    }).join(' ');
+
+    return (
+      <svg className="sparkline-svg" width={width} height={height}>
+        <polyline fill="none" stroke={strokeColor} strokeWidth="1.5" points={points} />
+      </svg>
+    );
+  };
+
+  // Calendar helpers
+  const handlePrevMonth = () => {
+    setCalendarMonth(prev => {
+      if (prev === 0) {
+        setCalendarYear(y => y - 1);
+        return 11;
+      }
+      return prev - 1;
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonth(prev => {
+      if (prev === 11) {
+        setCalendarYear(y => y + 1);
+        return 0;
+      }
+      return prev + 1;
+    });
+  };
+
+  const getCalendarDays = () => {
+    const days = [];
+    const firstDayIndex = new Date(calendarYear, calendarMonth, 1).getDay();
+    const totalDays = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push({ empty: true });
+    }
+
+    for (let day = 1; day <= totalDays; day++) {
+      const dateString = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const events = calendarEvents[dateString] || [];
+      const isToday = day === 25 && calendarMonth === 7 && calendarYear === 2026;
+      days.push({ day, isToday, events });
+    }
+
+    return days;
+  };
+
+  // --------------------------------------------------------------------------
+  // CHART REBUILD & CLEANUP
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    Object.values(activeCharts.current).forEach(c => {
+      if (c) c.destroy();
+    });
+    activeCharts.current = {};
+
+    if (screen !== 'app') return;
+
+    // 1. Dashboard Violations Over Time Chart
+    if (currentView === 'dashboard' && violationsTimeCanvas.current) {
+      const ctx = violationsTimeCanvas.current.getContext('2d');
+      const labels = Array.from({ length: 16 }, (_, i) => `${i + 10} Aug`);
+      const data = selectedClient === 'LG' 
+        ? [28, 30, 24, 25, 29, 32, 34, 40, 36, 31, 28, 25, 29, 35, 24, 24]
+        : [15, 18, 12, 14, 19, 21, 20, 25, 22, 18, 16, 14, 18, 22, 12, 12];
+
+      activeCharts.current.violationsTime = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Active Violations',
+            data,
+            borderColor: '#9C6149',
+            borderWidth: 2,
+            backgroundColor: 'rgba(156, 97, 73, 0.05)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointBackgroundColor: '#9C6149',
+            pointBorderColor: '#FFFFFF',
+            pointBorderWidth: 1.5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              grid: { color: '#EFE9E0' },
+              ticks: { color: '#7F7165', font: { family: 'Inter', size: 10 } }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#7F7165', font: { family: 'Inter', size: 9 } }
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Dashboard Severity Donut Chart
+    if (currentView === 'dashboard' && severityDonutCanvas.current) {
+      const ctx = severityDonutCanvas.current.getContext('2d');
+      activeCharts.current.severityDonut = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Critical', 'High', 'Medium', 'Low'],
+          datasets: [{
+            data: selectedClient === 'LG' ? [6, 8, 7, 3] : [3, 4, 3, 2],
+            backgroundColor: ['#b43a3a', '#9C6149', '#b26c15', '#7F7165'],
+            borderWidth: 2,
+            borderColor: '#FFFFFF'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    // 3. Dashboard Top Violating Merchants Bar Chart
+    if (currentView === 'dashboard' && marketplaceBarCanvas.current) {
+      const ctx = marketplaceBarCanvas.current.getContext('2d');
+      activeCharts.current.marketplaceBar = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['XYZ Electronics (Amazon)', 'Best Buy', 'TechMart (Walmart)', 'Others'],
+          datasets: [
+            {
+              label: 'Active Violations',
+              data: selectedClient === 'LG' ? [9, 6, 5, 4] : [4, 3, 3, 2],
+              backgroundColor: '#9C6149',
+              borderRadius: 2,
+              barThickness: 12
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              grid: { color: '#EFE9E0' },
+              ticks: { color: '#7F7165', font: { size: 10 } }
+            },
+            y: {
+              grid: { display: false },
+              ticks: { color: '#282524', font: { size: 10, weight: '600' } }
+            }
+          }
+        }
+      });
+    }
+
+    // 4. Product Detail Price History Chart
+    if (currentView === 'product-detail' && productPriceCanvas.current) {
+      const product = products.find(p => p.sku === activeProductId);
+      if (product) {
+        const ctx = productPriceCanvas.current.getContext('2d');
+        activeCharts.current.productPrice = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ['19 Aug', '20 Aug', '21 Aug', '22 Aug', '23 Aug', '24 Aug', '25 Aug'],
+            datasets: [
+              {
+                label: 'Advertised Price',
+                data: product.complianceHistory,
+                borderColor: '#9C6149',
+                borderWidth: 2,
+                backgroundColor: 'rgba(156, 97, 73, 0.05)',
+                fill: true,
+                tension: 0.1
+              },
+              {
+                label: 'MAP Floor',
+                data: Array(7).fill(product.map),
+                borderColor: '#7F7165',
+                borderDash: [5, 5],
+                borderWidth: 1.5,
+                fill: false,
+                pointRadius: 0
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } },
+            scales: {
+              y: { grid: { color: '#EFE9E0' } },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      }
+    }
+
+    // 5. Merchant Detail compliance chart
+    if (currentView === 'merchant-detail' && merchantComplianceCanvas.current) {
+      const merchant = merchants.find(m => m.name === activeMerchantName);
+      if (merchant) {
+        const ctx = merchantComplianceCanvas.current.getContext('2d');
+        activeCharts.current.merchantCompliance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ['Active Violations', 'Scanned SKUs', 'Compliant listings'],
+            datasets: [{
+              data: [merchant.violations, merchant.skus, Math.max(0, merchant.skus - merchant.violations)],
+              backgroundColor: ['#b43a3a', '#7F7165', '#9C6149'],
+              borderRadius: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { grid: { color: '#EFE9E0' } },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      }
+    }
+
+    return () => {
+      Object.values(activeCharts.current).forEach(c => {
+        if (c) c.destroy();
+      });
+      activeCharts.current = {};
+    };
+  }, [screen, currentView, activeProductId, activeMerchantName, selectedClient, products, violations]);
+
+  // --------------------------------------------------------------------------
+  // ACTIONS / MUTATORS
+  // --------------------------------------------------------------------------
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setTimeout(() => {
+      setIsLoggingIn(false);
+      setScreen('client-select');
+      showToast("Signed in as Administrator Fenil Dholakiya.", "success");
+    }, 1000);
+  };
+
+  const handleSelectClient = (client) => {
+    setSelectedClient(client);
+    setScreen('app');
+    setCurrentView('dashboard');
+    showToast(`Loaded ${client} workspace parameters.`, "success");
+  };
+
+  const sendNoticeAction = () => {
+    if (!activeViolationId) return;
+    
+    setDbState(prev => {
+      const nextDb = { ...prev };
+      nextDb[selectedClient].violations = nextDb[selectedClient].violations.map(v => {
+        if (v.id === activeViolationId) {
+          if (v.status === 'Resolved') return v;
+          const nowStr = formatDate(new Date());
+          const hasNotice = v.timeline.some(t => t.state === 'Notice Sent');
+          const newTimeline = hasNotice ? v.timeline : [
+            ...v.timeline,
+            { state: 'Notice Sent', time: nowStr, desc: `Enforcement warning email dispatched successfully to ${v.merchant}.` }
+          ];
+          return { ...v, status: 'Notice Sent', timeline: newTimeline };
+        }
+        return v;
+      });
+      return nextDb;
+    });
+
+    showToast("Dispatched compliance warnings alert to merchant manager.", 'success');
+  };
+
+  const resolveViolationAction = () => {
+    if (!activeViolationId) return;
+    const target = violations.find(v => v.id === activeViolationId);
+    if (!target) return;
+
+    setDbState(prev => {
+      const nextDb = { ...prev };
+      const clientObj = nextDb[selectedClient];
+
+      clientObj.violations = clientObj.violations.map(v => {
+        if (v.id === activeViolationId) {
+          const nowStr = formatDate(new Date());
+          const newTimeline = v.timeline.some(t => t.state === 'Resolved') ? v.timeline : [
+            ...v.timeline,
+            { state: 'Resolved', time: nowStr, desc: 'Operator resolved discrepancy after verified price restoration.' }
+          ];
+          return { ...v, status: 'Resolved', timeline: newTimeline };
+        }
+        return v;
+      });
+
+      clientObj.products = clientObj.products.map(p => {
+        if (p.sku === target.sku) {
+          return { ...p, advertised: p.map, violations: 0 };
+        }
+        return p;
+      });
+
+      clientObj.merchants = clientObj.merchants.map(m => {
+        if (m.name === target.merchant) {
+          const active = Math.max(0, m.violations - 1);
+          const compliance = Math.min(100, Math.round(((m.skus - active) / m.skus) * 100));
+          return { ...m, violations: active, compliance };
+        }
+        return m;
+      });
+
+      return nextDb;
+    });
+
+    showToast('Discrepancy resolved. Pricing back to compliance.', 'success');
+    closeDrawer();
+  };
+
+  const handleProductSubmit = (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const name = data.get('name');
+    const sku = data.get('sku');
+    const model = data.get('model');
+    const category = data.get('category');
+    const map = parseFloat(data.get('map'));
+    const msrp = parseFloat(data.get('msrp')) || map + 100;
+    const seller = data.get('seller');
+
+    const newProd = {
+      sku,
+      name,
+      model,
+      category,
+      map,
+      msrp,
+      advertised: map,
+      violations: 0,
+      status: 'Active',
+      complianceHistory: [map, map, map, map, map, map, map]
+    };
+
+    setDbState(prev => {
+      const nextDb = { ...prev };
+      const clientObj = nextDb[selectedClient];
+      
+      clientObj.products = [newProd, ...clientObj.products];
+      
+      const exists = clientObj.merchants.find(m => m.name === seller);
+      if (exists) {
+        clientObj.merchants = clientObj.merchants.map(m => m.name === seller ? { ...m, skus: m.skus + 1 } : m);
+      } else {
+        clientObj.merchants.push({
+          name: seller, channel: 'Retailer', sellers: 1, skus: 1, violations: 0, compliance: 100, risk: 'Low', lastActive: 'Just now'
+        });
+      }
+
+      return nextDb;
+    });
+
+    showToast(`SKU "${sku}" successfully registered for crawl monitors.`, 'success');
+    closeModal('product');
+    e.target.reset();
+  };
+
+  const handleExceptionSubmit = (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const seller = data.get('seller');
+    const scope = data.get('scope');
+    const discount = parseFloat(data.get('discount'));
+    const start = data.get('start');
+    const end = data.get('end');
+
+    showToast(`Promotional exception authorized for ${seller}.`, 'success');
+    closeModal('exception');
+    e.target.reset();
+  };
+
+  // --------------------------------------------------------------------------
+  // LIST FILTERS & SORT TRANSFORMATIONS
+  // --------------------------------------------------------------------------
+  let filteredProducts = products.filter(p => {
+    if (prodCategory !== 'all' && p.category !== prodCategory) return false;
+    if (productSearch) {
+      const q = productSearch.toLowerCase();
+      return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.model.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const filteredViolations = violations.filter(v => {
+    if (vioSeverity !== 'all' && v.severity !== vioSeverity) return false;
+    if (violationSearch) {
+      const q = violationSearch.toLowerCase();
+      return v.productName.toLowerCase().includes(q) || v.merchant.toLowerCase().includes(q) || v.id.toLowerCase().includes(q) || v.sku.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const filteredMerchants = merchants.filter(m => {
+    if (merchantSearch) {
+      const q = merchantSearch.toLowerCase();
+      return m.name.toLowerCase().includes(q) || m.channel.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const activeViolation = violations.find(v => v.id === activeViolationId);
+  const activeProduct = products.find(p => p.sku === activeProductId);
+  const activeMerchant = merchants.find(m => m.name === activeMerchantName);
+
+  // --------------------------------------------------------------------------
+  // VIEW: 1. LOGIN SCREEN
+  // --------------------------------------------------------------------------
+  if (screen === 'login') {
+    return (
+      <div className="login-wrapper" style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#0e1b2e',
+        fontFamily: 'Inter, sans-serif'
+      }}>
+        <div className="card login-card" style={{
+          width: '380px',
+          padding: '40px 30px',
+          borderRadius: '4px',
+          border: '1px solid rgba(255,255,255,0.05)',
+          backgroundColor: '#16253b',
+          color: '#EFE9E0',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px', justifyContent: 'center' }}>
+            <img src="/favicon.ico" alt="Mirethos Logo" style={{ width: '28px', height: '28px', backgroundColor: '#F9F6EF', padding: '2px', borderRadius: '4px' }} />
+            <div>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.5px' }}>MIRETHOS</h2>
+              <p style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px', color: '#7F7165', marginTop: '-2px' }}>MAP Portal Login</p>
+            </div>
+          </div>
+
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF', marginBottom: '5px' }}>Welcome Back</h3>
+          <p style={{ fontSize: '11px', color: '#7F7165', marginBottom: '20px' }}>Enter credentials to access strategic market intelligence.</p>
+
+          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <div className="form-group">
+              <label className="form-label" style={{ color: '#7F7165' }}>Business Email</label>
+              <input type="email" placeholder="name@company.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required className="form-input" style={{ backgroundColor: '#0e1b2e', border: '1px solid #7F7165', color: '#FFFFFF' }} />
+            </div>
+
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="form-label" style={{ color: '#7F7165' }}>Password</label>
+                <a href="#" style={{ fontSize: '10px', color: '#9C6149' }} onClick={e => { e.preventDefault(); showToast("Recovery portal loaded.", "info"); }}>Forgot?</a>
+              </div>
+              <input type="password" placeholder="Enter your password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required className="form-input" style={{ backgroundColor: '#0e1b2e', border: '1px solid #7F7165', color: '#FFFFFF' }} />
+            </div>
+
+            <label className="form-checkbox-label" style={{ fontSize: '11px', color: '#7F7165', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input type="checkbox" defaultChecked style={{ accentColor: '#9C6149' }} /> Remember me
+            </label>
+
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '10px 0', marginTop: '10px' }} disabled={isLoggingIn}>
+              {isLoggingIn ? 'Verifying...' : 'Sign In'}
+            </button>
+          </form>
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '25px', paddingTop: '15px', textAlign: 'center', fontSize: '10px', color: '#7F7165', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Secured by enterprise-grade encryption
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VIEW: 2. CLIENT SELECTION SCREEN
+  // --------------------------------------------------------------------------
+  if (screen === 'client-select') {
+    return (
+      <div className="client-select-wrapper" style={{
+        minHeight: '100vh',
+        backgroundColor: '#F9F6EF',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        fontFamily: 'Inter, sans-serif'
+      }}>
+        <div style={{ maxWidth: '640px', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '40px', justifyContent: 'center' }}>
+            <img src="/favicon.ico" alt="Mirethos Logo" style={{ width: '32px', height: '32px', padding: '3px', borderRadius: '4px', border: '1px solid #EFE9E0', backgroundColor: '#FFFFFF' }} />
+            <div>
+              <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#282524' }}>MIRETHOS</h1>
+              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: '#7F7165', marginTop: '-2px' }}>AI Market Intelligence Platform</p>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: '30px', border: '1px solid #EFE9E0', backgroundColor: '#FFFFFF' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#282524', marginBottom: '2px' }}>Select Client</h2>
+            <p style={{ fontSize: '12px', color: '#7F7165', marginBottom: '25px' }}>Choose a client to access the MAP Intelligence Portal</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+              {Object.keys(clientDatabases).map((client) => {
+                const data = clientDatabases[client];
+                return (
+                  <div key={client} className="card" style={{
+                    padding: '20px',
+                    border: '1px solid #EFE9E0',
+                    borderRadius: '4px',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => handleSelectClient(client)}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
+                      <span className={`badge ${data.statusLabel === 'Sandbox' ? 'badge-info' : 'badge-success'}`} style={{ fontSize: '8px' }}>{data.statusLabel}</span>
+                      <span style={{ fontSize: '16px', fontWeight: 800, color: '#9C6149' }}>{client}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', color: '#7F7165', marginBottom: '15px' }}>
+                      <span>• SKUs Monitored: {data.products.length}</span>
+                      <span>• Merchants Scanned: {data.merchants.length}</span>
+                    </div>
+                    <a href="#" style={{ fontSize: '11px', fontWeight: 600, color: '#9C6149', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      Open Workspace &rarr;
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: '30px' }}>
+            <button className="btn btn-xs btn-outline" onClick={() => setScreen('login')}>Back to Log In</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VIEW: 3. MAIN WORKSPACE PORTAL (APP SCREEN)
+  // --------------------------------------------------------------------------
+  return (
+    <div className="app-container">
+      
+      {/* SIDEBAR */}
+      <aside className={`sidebar ${mobileSidebarActive ? 'active' : ''}`}>
+        <div className="sidebar-brand">
+          <img src="/favicon.ico" alt="Mirethos Logo" className="logo-img" />
+          <div className="brand-text">
+            <span className="brand-name">MIRETHOS</span>
+            <span className="brand-sub">MAP Intelligence</span>
+          </div>
+          <button className="mobile-sidebar-close" onClick={() => setMobileSidebarActive(false)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '10px', color: '#7F7165', fontWeight: 600 }}>CLIENT</span>
+            <button className="btn btn-xs btn-outline" style={{ color: '#FFFFFF', padding: '2px 6px', fontSize: '9px' }} onClick={() => setScreen('client-select')}>Switch</button>
+          </div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
+            {selectedClient} ({clientData.statusLabel})
+          </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          <ul>
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                <span>Overview</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'products' || currentView === 'product-detail' ? 'active' : ''}`} onClick={() => navigateTo('products')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                <span>Product Summary</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'mapping-center' ? 'active' : ''}`} onClick={() => navigateTo('mapping-center')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Mapping Center</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'map-pricing' ? 'active' : ''}`} onClick={() => navigateTo('map-pricing')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                <span>MAP & Pricing</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'merchants' || currentView === 'merchant-detail' ? 'active' : ''}`} onClick={() => navigateTo('merchants')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                <span>Merchants (Sellers)</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'violations' ? 'active' : ''}`} onClick={() => navigateTo('violations')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+                <span className="flex-spread">
+                  <span>Violations</span>
+                  <span className="badge badge-error sidebar-count">24</span>
+                </span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'email-center' ? 'active' : ''}`} onClick={() => navigateTo('email-center')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+                <span className="flex-spread">
+                  <span>Email Center</span>
+                  <span className="badge badge-warning sidebar-count">14</span>
+                </span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'alerts' ? 'active' : ''}`} onClick={() => navigateTo('alerts')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span>Alerts</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'reports' ? 'active' : ''}`} onClick={() => navigateTo('reports')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Reports</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'users-access' ? 'active' : ''}`} onClick={() => navigateTo('users-access')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Users & Access</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#" className={`nav-item ${currentView === 'settings' ? 'active' : ''}`} onClick={() => navigateTo('settings')}>
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Settings</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+        
+        <div className="sidebar-user" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="user-avatar" style={{ backgroundColor: '#9C6149' }}>FD</div>
+            <div className="user-info">
+              <span className="user-name">Fenil Dholakiya</span>
+              <span className="user-role">Admin</span>
+            </div>
+          </div>
+          <button className="btn btn-xs btn-outline" style={{ border: 'none', color: '#9C6149', fontSize: '11px' }} onClick={() => { setScreen('login'); showToast("Signed out.", "info"); }}>
+            Exit
+          </button>
+        </div>
+      </aside>
+
+      {/* WORKSPACE */}
+      <div className="workspace-container">
+        
+        {/* HEADER */}
+        <header className="top-header">
+          <div className="header-left">
+            <button className="mobile-sidebar-open" onClick={() => setMobileSidebarActive(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <div className="breadcrumb">
+              <span>{currentView === 'dashboard' ? 'Dashboard' : currentView.replace('-', ' ')}</span>
+              <span className="breadcrumb-separator">-</span>
+              <span>{selectedClient} ({clientData.statusLabel})</span>
+            </div>
+            <h1 className="page-title" style={{ textTransform: 'capitalize' }}>
+              {currentView === 'dashboard' ? 'Overview' : currentView.replace('-', ' ')} - {selectedClient} ({clientData.statusLabel})
+            </h1>
+          </div>
+
+          <div className="header-actions">
+            <div className="last-updated">
+              <span className="dot pulse"></span>
+              <span>Scanner Active</span>
+            </div>
+
+            <div className="select-wrapper">
+              <select className="form-select select-sm" defaultValue="Aug 10 - Aug 25, 2026">
+                <option>Aug 10 - Aug 25, 2026</option>
+                <option>Last 30 Days</option>
+              </select>
+            </div>
+
+            <button className="btn btn-xs btn-outline">Filters</button>
+          </div>
+        </header>
+
+        {/* WORKSPACE VIEW CONTENT */}
+        <div className="view-content">
+
+          {/* VIEW: DASHBOARD */}
+          {currentView === 'dashboard' && (
+            <div className="view-panel active">
+              
+              {/* Dashboard KPIs */}
+              <div className="kpi-grid">
+                <div className="card kpi-card">
+                  <div className="kpi-header">
+                    <span className="kpi-label">MAP Compliance</span>
+                    <span className="trend trend-up">+2.0%</span>
+                  </div>
+                  <div className="kpi-value">94.2%</div>
+                  <div className="kpi-footer">
+                    <span className="kpi-context">vs yesterday</span>
+                    {drawSparkline([92.2, 92.5, 93.0, 93.5, 94.2, 94.2], '#2c5e3b')}
+                  </div>
+                </div>
+
+                <div className="card kpi-card clickable" onClick={() => navigateTo('violations')}>
+                  <div className="kpi-header">
+                    <span className="kpi-label">Active Violations</span>
+                    <span className="trend trend-down">-3</span>
+                  </div>
+                  <div className="kpi-value text-red">24</div>
+                  <div className="kpi-footer">
+                    <span className="kpi-context">vs yesterday</span>
+                    {drawSparkline([27, 28, 26, 25, 24, 24], '#b43a3a')}
+                  </div>
+                </div>
+
+                <div className="card kpi-card">
+                  <div className="kpi-header">
+                    <span className="kpi-label">SKUs Monitored</span>
+                    <span className="trend trend-neutral">+0</span>
+                  </div>
+                  <div className="kpi-value">10</div>
+                  <div className="kpi-footer">
+                    <span className="kpi-context">vs yesterday</span>
+                    {drawSparkline([10, 10, 10, 10, 10, 10], '#7F7165')}
+                  </div>
+                </div>
+
+                <div className="card kpi-card">
+                  <div className="kpi-header">
+                    <span className="kpi-label">Merchants Monitored</span>
+                    <span className="trend trend-neutral">+0</span>
+                  </div>
+                  <div className="kpi-value">3</div>
+                  <div className="kpi-footer">
+                    <span className="kpi-context">vs yesterday</span>
+                    {drawSparkline([3, 3, 3, 3, 3, 3], '#7F7165')}
+                  </div>
+                </div>
+
+                <div className="card kpi-card">
+                  <div className="kpi-header">
+                    <span className="kpi-label">Total Observations (24h)</span>
+                    <span className="trend trend-up">+18%</span>
+                  </div>
+                  <div className="kpi-value">1,248</div>
+                  <div className="kpi-footer">
+                    <span className="kpi-context">vs yesterday</span>
+                    {drawSparkline([1050, 1100, 1150, 1200, 1248, 1248], '#2c5e3b')}
+                  </div>
+                </div>
+
+                <div className="card kpi-card">
+                  <div className="kpi-header">
+                    <span className="kpi-label">Repeat Violators</span>
+                    <span className="trend trend-neutral">+0</span>
+                  </div>
+                  <div className="kpi-value">2</div>
+                  <div className="kpi-footer">
+                    <span className="kpi-context">vs yesterday</span>
+                    {drawSparkline([2, 2, 2, 2, 2, 2], '#7F7165')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Charts Row */}
+              <div className="dashboard-grid-2col">
+                <div className="card chart-card">
+                  <div className="card-header">
+                    <div>
+                      <h3 className="card-title">Violations Over Time</h3>
+                      <p className="card-subtitle">Daily count of detected deviations</p>
+                    </div>
+                  </div>
+                  <div className="chart-container">
+                    <canvas ref={violationsTimeCanvas}></canvas>
+                  </div>
+                </div>
+
+                <div className="dashboard-sidebar-grid">
+                  <div className="card chart-card">
+                    <div className="card-header">
+                      <h3 className="card-title">Violations by Severity</h3>
+                      <p className="card-subtitle">Distribution by deviation threshold</p>
+                    </div>
+                    <div className="severity-donut-wrapper">
+                      <div className="chart-container-donut">
+                        <canvas ref={severityDonutCanvas}></canvas>
+                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                          <span style={{ fontSize: '20px', fontWeight: 800, color: '#282524', display: 'block' }}>24</span>
+                          <span style={{ fontSize: '9px', color: '#7F7165', textTransform: 'uppercase' }}>Total</span>
+                        </div>
+                      </div>
+                      <div className="severity-legend">
+                        <div className="severity-legend-item">
+                          <div className="legend-dot-label"><span className="legend-dot bg-red"></span><span>Critical</span></div>
+                          <div><span className="legend-val">6 (25%)</span></div>
+                        </div>
+                        <div className="severity-legend-item">
+                          <div className="legend-dot-label"><span className="legend-dot bg-terracotta"></span><span>High</span></div>
+                          <div><span className="legend-val">8 (33%)</span></div>
+                        </div>
+                        <div className="severity-legend-item">
+                          <div className="legend-dot-label"><span className="legend-dot bg-orange"></span><span>Medium</span></div>
+                          <div><span className="legend-val">7 (29%)</span></div>
+                        </div>
+                        <div className="severity-legend-item">
+                          <div className="legend-dot-label"><span className="legend-dot bg-taupe"></span><span>Low</span></div>
+                          <div><span className="legend-val">3 (13%)</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bar and calendar row */}
+              <div className="dashboard-grid-2col margin-top">
+                <div className="card">
+                  <div className="card-header">
+                    <div>
+                      <h3 className="card-title">Top Violating Merchants</h3>
+                      <p className="card-subtitle">Highest frequency risk contributors</p>
+                    </div>
+                  </div>
+                  <div className="chart-container" style={{ height: '240px' }}>
+                    <canvas ref={marketplaceBarCanvas}></canvas>
+                  </div>
+                </div>
+
+                <div className="card calendar-card">
+                  <div className="card-header">
+                    <div>
+                      <h3 className="card-title">MAP & Pricing Calendar</h3>
+                      <p className="card-subtitle">Scanned event history & allowances</p>
+                    </div>
+                    <button className="btn btn-xs btn-outline" onClick={() => openModal('exception')}>+ Add Promo</button>
+                  </div>
+                  <div className="calendar-widget">
+                    <div className="calendar-header-days">
+                      <button className="calendar-nav-btn" onClick={handlePrevMonth}>&lt;</button>
+                      <span className="calendar-month-year">{monthNames[calendarMonth]} {calendarYear}</span>
+                      <button className="calendar-nav-btn" onClick={handleNextMonth}>&gt;</button>
+                    </div>
+                    <div className="calendar-weekdays">
+                      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+                    </div>
+                    <div className="calendar-days-grid">
+                      {getCalendarDays().map((d, index) => (
+                        d.empty ? (
+                          <div key={index} className="calendar-day empty"></div>
+                        ) : (
+                          <div key={index} className={`calendar-day ${d.isToday ? 'today' : ''}`} onClick={() => {
+                            if (d.events.length > 0) {
+                              const details = d.events.map(ev => `• ${ev.desc}`).join('\n');
+                              showToast(`Events:\n${details}`, 'success');
+                            }
+                          }}>
+                            <span>{d.day}</span>
+                            {d.events.length > 0 && (
+                              <div className="calendar-day-indicators">
+                                {d.events.map((ev, evIdx) => (
+                                  <span key={evIdx} className={`cal-dot cal-dot-${ev.type}`}></span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )))}
+                    </div>
+                    <div className="calendar-legend" style={{ borderTop: '1px solid #EFE9E0', marginTop: '10px', paddingTop: '8px' }}>
+                      <span className="legend-item"><span className="cal-dot cal-dot-violation"></span>Violation</span>
+                      <span className="legend-item"><span className="cal-dot cal-dot-rule"></span>Promo Alert</span>
+                      <span className="legend-item"><span className="cal-dot cal-dot-exception"></span>Expired</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Critical Violations */}
+              <div className="card margin-top">
+                <div className="card-header">
+                  <div>
+                    <h3 className="card-title">Recent Critical Violations</h3>
+                    <p className="card-subtitle">Active crawler mismatch violations requiring immediate operator review</p>
+                  </div>
+                  <button className="btn btn-xs btn-outline" onClick={() => navigateTo('violations')}>View All Violations</button>
+                </div>
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>SKU / Product</th>
+                        <th>Merchant</th>
+                        <th className="text-right">MAP Floor</th>
+                        <th className="text-right">Advertised</th>
+                        <th className="text-right">Gap</th>
+                        <th>Detected Time</th>
+                        <th>Severity</th>
+                        <th className="text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {violations.slice(0, 3).map((v, idx) => (
+                        <tr key={idx}>
+                          <td><strong>{v.sku}</strong> - {v.productName}</td>
+                          <td>{v.merchant}</td>
+                          <td className="text-right" style={{ fontWeight: 'bold' }}>{formatUSD(v.map)}</td>
+                          <td className="text-right text-red" style={{ fontWeight: 'bold' }}>{formatUSD(v.advertised)}</td>
+                          <td className="text-right text-red" style={{ fontWeight: 'bold' }}>{v.gap}%</td>
+                          <td>{v.detectedOn}</td>
+                          <td><span className="badge badge-error">{v.severity}</span></td>
+                          <td className="text-center">
+                            <button className="btn btn-xs btn-outline" onClick={() => openDrawer(v.id)}>Review</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* VIEW: PRODUCT SUMMARY */}
+          {currentView === 'products' && (
+            <div className="view-panel active">
+              <div className="card table-filter-card">
+                <div className="filter-row">
+                  <div className="search-input-wrapper">
+                    <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" className="form-input search-input" placeholder="Search SKU, Model, product name..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
+                  </div>
+                  <div className="filter-actions-group">
+                    <select className="form-select filter-select" value={prodCategory} onChange={e => setProdCategory(e.target.value)}>
+                      <option value="all">All Categories</option>
+                      <option value="TV">TV</option>
+                      <option value="Monitor">Monitor</option>
+                      <option value="Washer">Washer</option>
+                      <option value="Lighting">Lighting</option>
+                    </select>
+                    <button className="btn btn-outline" onClick={() => showToast("Exporting product database CSV.", "info")}>Import</button>
+                    <button className="btn btn-primary" onClick={() => openModal('product')}>+ Add SKU</button>
+                  </div>
+                </div>
+
+                <div className="table-container margin-top">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>Product Name</th>
+                        <th>Model / MPN</th>
+                        <th>Category</th>
+                        <th className="text-right">MAP Price</th>
+                        <th className="text-right">Current Price</th>
+                        <th className="text-center">Violations</th>
+                        <th>Status</th>
+                        <th className="text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.map((p, idx) => (
+                        <tr key={idx} className="clickable-row" onClick={() => {
+                          setActiveProductId(p.sku);
+                          navigateTo('product-detail');
+                        }}>
+                          <td><code>{p.sku}</code></td>
+                          <td><strong>{p.name}</strong></td>
+                          <td>{p.model}</td>
+                          <td>{p.category}</td>
+                          <td className="text-right" style={{ fontWeight: 'bold' }}>{formatUSD(p.map)}</td>
+                          <td className={`text-right ${p.violations > 0 ? 'text-red' : ''}`} style={{ fontWeight: 'bold' }}>{formatUSD(p.advertised)}</td>
+                          <td className={`text-center ${p.violations > 0 ? 'text-red' : ''}`} style={{ fontWeight: 'bold' }}>{p.violations}</td>
+                          <td><span className="badge badge-success">{p.status}</span></td>
+                          <td className="text-center">
+                            <button className="btn btn-xs btn-outline">Profile</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW: MAPPING CENTER */}
+          {currentView === 'mapping-center' && (
+            <div className="view-panel active">
+              
+              {/* TAB NAVIGATION */}
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['Stage (Unmapped)', 'Include (Mapped)', 'Exclude (Ignored)', 'Rules', 'History'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['mapping-center'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['mapping-center'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['mapping-center'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('mapping-center', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['mapping-center'] === 'Stage (Unmapped)' && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h3 className="card-title">Stage Listings</h3>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button className="btn btn-xs btn-outline">Auto Map Now</button>
+                      <button className="btn btn-xs btn-primary">Manual Map</button>
+                    </div>
+                  </div>
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Image</th>
+                          <th>Detected Product</th>
+                          <th>Merchant</th>
+                          <th className="text-right">Detected Price</th>
+                          <th>Possible Match</th>
+                          <th className="text-right">Confidence</th>
+                          <th className="text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span style={{ fontSize: '16px' }}>📺</span></td>
+                          <td><strong>LG OLED55C4 Series</strong></td>
+                          <td>XYZ Electronics</td>
+                          <td className="text-right" style={{ fontWeight: 'bold' }}>$1,499.00</td>
+                          <td>LG001 - LG 55" OLED C4</td>
+                          <td className="text-right" style={{ fontWeight: 'bold', color: '#2C5E3B' }}>98%</td>
+                          <td className="text-center" style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                            <button className="btn btn-xs btn-primary" onClick={() => showToast("Mapped successfully", "success")}>Map</button>
+                            <button className="btn btn-xs btn-outline">Exclude</button>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td><span style={{ fontSize: '16px' }}>📺</span></td>
+                          <td><strong>LG OLED65-C4 Smart TV</strong></td>
+                          <td>Best Buy</td>
+                          <td className="text-right" style={{ fontWeight: 'bold' }}>$1,899.00</td>
+                          <td>LG002 - LG 65" OLED C4</td>
+                          <td className="text-right" style={{ fontWeight: 'bold', color: '#2C5E3B' }}>91%</td>
+                          <td className="text-center" style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                            <button className="btn btn-xs btn-primary" onClick={() => showToast("Mapped successfully", "success")}>Map</button>
+                            <button className="btn btn-xs btn-outline">Exclude</button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['mapping-center'] !== 'Stage (Unmapped)' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {/* VIEW: MAP & PRICING */}
+          {currentView === 'map-pricing' && (
+            <div className="view-panel active">
+              
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['MAP Policies', 'Promotions', 'Pricing Calendar', 'Exceptions'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['map-pricing'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['map-pricing'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['map-pricing'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('map-pricing', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['map-pricing'] === 'Promotions' && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h3 className="card-title">Promotions Registry</h3>
+                    <button className="btn btn-xs btn-primary" onClick={() => openModal('exception')}>+ Add Promotion</button>
+                  </div>
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>SKU</th>
+                          <th>Product</th>
+                          <th className="text-right">Standard MAP</th>
+                          <th className="text-right">Promo Price</th>
+                          <th>Effective From</th>
+                          <th>Effective Until</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {promotions.map((p, idx) => (
+                          <tr key={idx}>
+                            <td><code>{p.sku}</code></td>
+                            <td><strong>{p.name}</strong></td>
+                            <td className="text-right">{formatUSD(p.map)}</td>
+                            <td className="text-right text-green" style={{ fontWeight: 'bold' }}>{formatUSD(p.promo)}</td>
+                            <td>{p.from}</td>
+                            <td>{p.until}</td>
+                            <td>
+                              <span className={`badge ${p.status === 'Active' ? 'badge-success' : 'badge-warning'}`}>
+                                {p.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['map-pricing'] !== 'Promotions' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {/* VIEW: MERCHANTS */}
+          {currentView === 'merchants' && (
+            <div className="view-panel active">
+              
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['Merchants', 'Authorization', 'Seller Contacts'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['merchants'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['merchants'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['merchants'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('merchants', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['merchants'] === 'Merchants' && (
+                <div className="card">
+                  <div className="filter-row" style={{ marginBottom: '15px' }}>
+                    <div className="search-input-wrapper">
+                      <input type="text" className="form-input search-input" placeholder="Search merchants..." value={merchantSearch} onChange={e => setMerchantSearch(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Merchant/Channel</th>
+                          <th>Marketplace</th>
+                          <th className="text-right">Scanned Sellers</th>
+                          <th className="text-right">SKUs</th>
+                          <th className="text-right">Violations</th>
+                          <th className="text-right">Compliance</th>
+                          <th className="text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredMerchants.map((m, idx) => (
+                          <tr key={idx} className="clickable-row" onClick={() => {
+                            setActiveMerchantName(m.name);
+                            navigateTo('merchant-detail');
+                          }}>
+                            <td><strong>{m.name}</strong></td>
+                            <td>{m.channel}</td>
+                            <td className="text-right">{m.sellers}</td>
+                            <td className="text-right">{m.skus}</td>
+                            <td className="text-right text-red" style={{ fontWeight: 'bold' }}>{m.violations}</td>
+                            <td className="text-right" style={{ fontWeight: 'bold' }}>{m.compliance}%</td>
+                            <td className="text-center">
+                              <button className="btn btn-xs btn-outline">Profile</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['merchants'] !== 'Merchants' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {/* VIEW: VIOLATIONS LOG */}
+          {currentView === 'violations' && (
+            <div className="view-panel active">
+              
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['All (24)', 'Critical (6)', 'High (8)', 'Medium (7)', 'Low (3)', 'Resolved (12)'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['violations'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['violations'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['violations'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('violations', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              <div className="card table-filter-card">
+                <div className="filter-row">
+                  <div className="search-input-wrapper">
+                    <input type="text" className="form-input search-input" placeholder="Search violation ID, product, SKU, merchant..." value={violationSearch} onChange={e => setViolationSearch(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="table-container margin-top">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Violation ID</th>
+                        <th>SKU / Product</th>
+                        <th>Merchant / Seller</th>
+                        <th className="text-right">MAP / Promo</th>
+                        <th className="text-right">Advertised</th>
+                        <th className="text-right">Gap</th>
+                        <th>Duration</th>
+                        <th>Severity</th>
+                        <th className="text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredViolations.map((v, idx) => (
+                        <tr key={idx}>
+                          <td><code>{v.id}</code></td>
+                          <td><strong>{v.sku}</strong> - {v.productName}</td>
+                          <td>{v.merchant}</td>
+                          <td className="text-right" style={{ fontWeight: 'bold' }}>{formatUSD(v.map)}</td>
+                          <td className="text-right text-red" style={{ fontWeight: 'bold' }}>{formatUSD(v.advertised)}</td>
+                          <td className="text-right text-red" style={{ fontWeight: 'bold' }}>{v.gap}%</td>
+                          <td>{v.duration}</td>
+                          <td>
+                            <span className={`badge ${v.severity === 'Critical' || v.severity === 'High' ? 'badge-error' : 'badge-warning'}`}>
+                              {v.severity}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <button className="btn btn-xs btn-outline" onClick={() => openDrawer(v.id)}>Review</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* VIEW: EMAIL CENTER */}
+          {currentView === 'email-center' && (
+            <div className="view-panel active">
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['Email History', 'Templates', 'Automation Rules'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['email-center'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['email-center'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['email-center'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('email-center', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['email-center'] === 'Email History' && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h3 className="card-title">Enforcement Correspondence Logs</h3>
+                    <button className="btn btn-xs btn-primary" onClick={() => showToast("Dispatched general check template.", "info")}>Compose Email</button>
+                  </div>
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Recipient</th>
+                          <th>Violation Reference</th>
+                          <th>Template</th>
+                          <th>Status</th>
+                          <th>Opened</th>
+                          <th>Response</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>Aug 25, 2026</td>
+                          <td>compliance@xyzelectronics.com</td>
+                          <td>VIO-00123</td>
+                          <td>Price Warning</td>
+                          <td><span className="badge badge-success">Delivered</span></td>
+                          <td>Yes</td>
+                          <td><span className="badge badge-warning">Pending</span></td>
+                        </tr>
+                        <tr>
+                          <td>Aug 24, 2026</td>
+                          <td>sales@bestbuy.com</td>
+                          <td>VIO-00122</td>
+                          <td>MAP Reminder</td>
+                          <td><span className="badge badge-success">Delivered</span></td>
+                          <td>Yes</td>
+                          <td>Received</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['email-center'] !== 'Email History' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW: ALERTS */}
+          {currentView === 'alerts' && (
+            <div className="view-panel active">
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['Active Alerts', 'Alert History'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['alerts'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['alerts'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['alerts'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('alerts', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['alerts'] === 'Active Alerts' && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h3 className="card-title">Trigger Rules Alert Configurations</h3>
+                    <button className="btn btn-xs btn-primary" onClick={() => showToast("Adding alert trigger.", "info")}>+ Add Alert Rule</button>
+                  </div>
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Alert Name</th>
+                          <th>Condition</th>
+                          <th>Channel</th>
+                          <th>Recipients</th>
+                          <th>Last Triggered</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><strong>Critical MAP Violation</strong></td>
+                          <td>Gap &gt; 15%</td>
+                          <td>Email + Slack</td>
+                          <td>ops-team@l-core.com</td>
+                          <td>Aug 24, 2026 11:20 AM</td>
+                          <td><span className="badge badge-success">Active</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['alerts'] !== 'Active Alerts' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW: REPORTS */}
+          {currentView === 'reports' && (
+            <div className="view-panel active">
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['Scheduled Reports', 'On-demand Reports'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['reports'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['reports'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['reports'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('reports', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['reports'] === 'Scheduled Reports' && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h3 className="card-title">Reports Schedule Config</h3>
+                    <button className="btn btn-xs btn-primary" onClick={() => showToast("Exporting catalog report.", "info")}>Schedule Report</button>
+                  </div>
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Report Name</th>
+                          <th>Frequency</th>
+                          <th>Recipients</th>
+                          <th>Last Run</th>
+                          <th>Format</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><strong>Daily MAP Violations</strong></td>
+                          <td>Daily</td>
+                          <td>ops-team@l-core.com</td>
+                          <td>Aug 25, 2026 08:00 AM</td>
+                          <td>Excel</td>
+                          <td><span className="badge badge-success">Active</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Weekly Compliance Summary</strong></td>
+                          <td>Weekly</td>
+                          <td>executive@l-core.com</td>
+                          <td>Aug 20, 2026 09:00 AM</td>
+                          <td>PDF</td>
+                          <td><span className="badge badge-success">Active</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['reports'] !== 'Scheduled Reports' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW: USERS & ACCESS */}
+          {currentView === 'users-access' && (
+            <div className="view-panel active">
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['Users', 'Roles', 'Permissions'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['users-access'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['users-access'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['users-access'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('users-access', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['users-access'] === 'Users' && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h3 className="card-title">User Registry and Access Logs</h3>
+                    <button className="btn btn-xs btn-primary" onClick={() => showToast("Adding user invite.", "info")}>+ Invite User</button>
+                  </div>
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>User</th>
+                          <th>Role</th>
+                          <th>Access Level</th>
+                          <th>Last Active</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><strong>Fenil Dholakiya</strong><br /><span className="text-muted font-xs">fenil.dholakiya@mirethos.com</span></td>
+                          <td>Admin</td>
+                          <td>Full Access</td>
+                          <td>Today, 10:15 AM</td>
+                          <td><span className="badge badge-success">Active</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Arjun Mehta</strong><br /><span className="text-muted font-xs">arjun@mirethos.com</span></td>
+                          <td>Compliance Officer</td>
+                          <td>MAP + Violations</td>
+                          <td>Yesterday, 04:30 PM</td>
+                          <td><span className="badge badge-success">Active</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['users-access'] !== 'Users' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW: SETTINGS */}
+          {currentView === 'settings' && (
+            <div className="view-panel active">
+              <div className="tab-strip" style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #EFE9E0', marginBottom: '20px' }}>
+                {['Client Settings', 'Monitoring', 'MAP Rules', 'Notifications', 'Data & Execution'].map(tabName => (
+                  <button key={tabName} className={`tab-item ${subtabs['settings'] === tabName ? 'active' : ''}`} style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: subtabs['settings'] === tabName ? '2px solid #9C6149' : 'none',
+                    color: subtabs['settings'] === tabName ? '#9C6149' : '#7F7165',
+                    cursor: 'pointer'
+                  }} onClick={() => setSubtab('settings', tabName)}>
+                    {tabName}
+                  </button>
+                ))}
+              </div>
+
+              {subtabs['settings'] === 'Client Settings' && (
+                <div className="card">
+                  <h3 className="card-title">Client Information Config</h3>
+                  <div className="margin-top" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <div className="form-group">
+                      <label className="form-label">Client Name</label>
+                      <input type="text" className="form-input text-dark" style={{ maxWidth: '300px' }} defaultValue={selectedClient} disabled />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Scanner Execution Interval</label>
+                      <select className="form-select" style={{ maxWidth: '200px' }} defaultValue="30">
+                        <option value="15">Every 15 Minutes</option>
+                        <option value="30">Every 30 Minutes</option>
+                        <option value="60">Every 1 Hour</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <button className="btn btn-primary" style={{ maxWidth: '150px' }} onClick={() => showToast("Settings updated.", "success")}>Save Changes</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {subtabs['settings'] !== 'Client Settings' && (
+                <div className="card">
+                  <p style={{ color: '#7F7165' }}>No active entries in this tab view context.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW: PRODUCT DETAIL */}
+          {currentView === 'product-detail' && activeProduct && (
+            <div className="view-panel active">
+              <div className="back-link-row">
+                <a href="#" className="back-link" onClick={(e) => { e.preventDefault(); navigateTo('products'); }}>
+                  &larr; Back to Product Summary
+                </a>
+              </div>
+              <div className="product-profile-layout margin-top">
+                <div className="card product-profile-card">
+                  <div className="product-profile-header">
+                    <div className="product-profile-img">LG</div>
+                    <div>
+                      <h2 className="product-profile-name">{activeProduct.name}</h2>
+                      <p className="product-profile-sku">SKU: {activeProduct.sku} | Model: {activeProduct.model}</p>
+                    </div>
+                  </div>
+                  <div className="profile-stats-grid">
+                    <div className="profile-stat">
+                      <span className="profile-stat-label">MAP Price</span>
+                      <span className="profile-stat-val text-dark">{formatUSD(activeProduct.map)}</span>
+                    </div>
+                    <div className="profile-stat">
+                      <span className="profile-stat-label">MSRP</span>
+                      <span className="profile-stat-val text-muted">{formatUSD(activeProduct.msrp)}</span>
+                    </div>
+                    <div className="profile-stat">
+                      <span className="profile-stat-label">Current Price</span>
+                      <span className={`profile-stat-val ${activeProduct.violations > 0 ? 'text-red' : 'text-dark'}`}>{formatUSD(activeProduct.advertised)}</span>
+                    </div>
+                    <div className="profile-stat">
+                      <span className="profile-stat-label">Active Violations</span>
+                      <span className="profile-stat-val text-red">{activeProduct.violations}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card chart-card">
+                  <div className="card-header">
+                    <h3 className="card-title">Crawl Price Trajectory (7 Days)</h3>
+                  </div>
+                  <div className="chart-container" style={{ height: '240px' }}>
+                    <canvas ref={productPriceCanvas}></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW: MERCHANT DETAIL */}
+          {currentView === 'merchant-detail' && activeMerchant && (
+            <div className="view-panel active">
+              <div className="back-link-row">
+                <a href="#" className="back-link" onClick={(e) => { e.preventDefault(); navigateTo('merchants'); }}>
+                  &larr; Back to Resellers Registry
+                </a>
+              </div>
+              <div className="product-profile-layout margin-top">
+                <div className="card product-profile-card">
+                  <div className="product-profile-header">
+                    <div className="product-profile-img seller-avatar-styled">
+                      {activeMerchant.name.substring(0, 3).toUpperCase()}
+                    </div>
+                    <div>
+                      <h2 className="product-profile-name">{activeMerchant.name}</h2>
+                      <p className="product-profile-sku">Storefront: {activeMerchant.channel}</p>
+                    </div>
+                  </div>
+                  <div className="profile-stats-grid">
+                    <div className="profile-stat">
+                      <span className="profile-stat-label">SKUs Monitored</span>
+                      <span className="profile-stat-val text-dark">{activeMerchant.skus}</span>
+                    </div>
+                    <div className="profile-stat">
+                      <span className="profile-stat-label">Active Violations</span>
+                      <span className="profile-stat-val text-red">{activeMerchant.violations}</span>
+                    </div>
+                    <div className="profile-stat">
+                      <span className="profile-stat-label">Compliance Index</span>
+                      <span className="profile-stat-val text-green">{activeMerchant.compliance}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card chart-card">
+                  <div className="card-header">
+                    <h3 className="card-title">Merchant Compliance Distribution</h3>
+                  </div>
+                  <div className="chart-container" style={{ height: '240px' }}>
+                    <canvas ref={merchantComplianceCanvas}></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* DETAILED DRAWERS MATCHING SCREEN 11 VIOLATION DETAIL */}
+      <div className={`drawer ${activeViolation ? 'active' : ''}`}>
+        <div className="drawer-overlay" onClick={closeDrawer}></div>
+        {activeViolation && (
+          <div className="drawer-content" style={{ width: '85%', maxWidth: '1100px' }}>
+            <div className="drawer-header">
+              <div>
+                <span className="drawer-meta" style={{ letterSpacing: '0.5px' }}>VIOLATION PROFILE</span>
+                <h2 className="drawer-title" style={{ fontSize: '20px', fontWeight: 800 }}>Violation Detail - {activeViolation.id}</h2>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '15px' }}>
+                <button className="btn btn-xs btn-outline" onClick={resolveViolationAction}>Resolve</button>
+                <button className="btn btn-xs btn-outline" onClick={() => showToast("Escalated to internal policy queue.", "info")}>Escalate</button>
+                <button className="btn btn-xs btn-primary" onClick={sendNoticeAction} disabled={activeViolation.status === 'Resolved'}>
+                  {activeViolation.status === 'Resolved' ? 'Enforced' : 'Send Notice'}
+                </button>
+              </div>
+              <button className="drawer-close" onClick={closeDrawer}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="drawer-body" style={{ padding: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: '20px', alignItems: 'start' }}>
+                
+                {/* COLUMN 1: VIOLATION INFORMATION CARD */}
+                <div className="card" style={{ padding: '16px' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#282524', borderBottom: '1px solid #EFE9E0', paddingBottom: '8px', marginBottom: '12px' }}>Violation Information</h3>
+                  <div className="detail-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div className="detail-item" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span className="detail-label" style={{ color: '#7F7165' }}>SKU / Product</span>
+                      <span className="detail-value text-dark" style={{ fontWeight: 600 }}>{activeViolation.sku} - {activeViolation.productName}</span>
+                    </div>
+                    <div className="detail-item" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span className="detail-label" style={{ color: '#7F7165' }}>Merchant</span>
+                      <span className="detail-value text-dark" style={{ fontWeight: 600 }}>{activeViolation.merchant}</span>
+                    </div>
+                    <div className="detail-item" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span className="detail-label" style={{ color: '#7F7165' }}>Applicable Price</span>
+                      <span className="detail-value text-dark" style={{ fontWeight: 600 }}>{formatUSD(activeViolation.map)}</span>
+                    </div>
+                    <div className="detail-item" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span className="detail-label" style={{ color: '#7F7165' }}>Advertised Price</span>
+                      <span className="detail-value text-red" style={{ fontWeight: 600 }}>{formatUSD(activeViolation.advertised)}</span>
+                    </div>
+                    <div className="detail-item" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span className="detail-label" style={{ color: '#7F7165' }}>Gap</span>
+                      <span className="detail-value text-red" style={{ fontWeight: 600 }}>{activeViolation.gap}%</span>
+                    </div>
+                    <div className="detail-item" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span className="detail-label" style={{ color: '#7F7165' }}>Detected On</span>
+                      <span className="detail-value" style={{ fontWeight: 600 }}>{activeViolation.detectedOn}</span>
+                    </div>
+                    <div className="detail-item" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span className="detail-label" style={{ color: '#7F7165' }}>Severity</span>
+                      <span className="badge badge-error">{activeViolation.severity}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* COLUMN 2: CAPTURED SCREENSHOT EVIDENCE */}
+                <div className="card" style={{ padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #EFE9E0', paddingBottom: '8px', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#282524' }}>Evidence</h3>
+                    <a href={activeViolation.listingUrl} className="evidence-link" target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#9C6149' }}>
+                      View Full Screenshot &nearr;
+                    </a>
+                  </div>
+                  <div className="mock-screenshot" style={{ height: '240px', background: '#0e1b2e', borderRadius: '4px', position: 'relative', overflow: 'hidden', padding: '10px' }}>
+                    <div className="screenshot-meta" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#7F7165', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px', marginBottom: '10px' }}>
+                      <span>IP: 184.28.110.15</span>
+                      <span>TS: {activeViolation.detectedOn}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '180px', color: '#FFFFFF' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 800 }}>{activeViolation.productName}</span>
+                      <span style={{ fontSize: '24px', fontWeight: 900, color: '#b43a3a', margin: '10px 0' }}>{formatUSD(activeViolation.advertised)}</span>
+                      <span style={{ fontSize: '9px', textTransform: 'uppercase', color: '#7F7165' }}>Sold By: {activeViolation.merchant}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* COLUMN 3: TIMELINE PROGRESSION */}
+                <div className="card" style={{ padding: '16px' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#282524', borderBottom: '1px solid #EFE9E0', paddingBottom: '8px', marginBottom: '12px' }}>Timeline</h3>
+                  <div className="timeline" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    {[
+                      { state: 'Detected', label: 'System crawl identified price discrepancy.' },
+                      { state: 'Under Review', label: 'Assigned to policy validation queue.' },
+                      { state: 'Seller Responded', label: 'Merchant submitted pricing exceptions.' },
+                      { state: 'Pending Resolve', label: 'Awaiting operator final check.' }
+                    ].map((step, idx) => {
+                      let activeIndex = 0;
+                      if (activeViolation.status === 'Under Review') activeIndex = 1;
+                      if (activeViolation.status === 'Notice Sent') activeIndex = 2;
+                      if (activeViolation.status === 'Resolved') activeIndex = 3;
+
+                      const isDone = idx <= activeIndex;
+                      const isCurrent = idx === activeIndex;
+                      const recorded = activeViolation.timeline.find(t => t.state === step.state);
+
+                      return (
+                        <div key={idx} className={`timeline-item ${isCurrent ? 'active' : ''} ${isDone ? 'completed' : ''}`} style={{
+                          display: 'flex',
+                          gap: '10px',
+                          position: 'relative'
+                        }}>
+                          <span className="timeline-dot" style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: isDone ? '#9C6149' : '#EFE9E0',
+                            marginTop: '4px',
+                            zIndex: 10
+                          }}></span>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: isDone ? '#282524' : '#7F7165' }}>{step.state}</span>
+                            <span style={{ fontSize: '10px', color: '#7F7165' }}>{recorded ? recorded.desc : step.label}</span>
+                            {recorded && <span style={{ fontSize: '8px', color: '#9C6149', marginTop: '2px' }}>{recorded.time}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ADD PRODUCT MODAL */}
+      <div className={`modal ${modals.product ? 'active' : ''}`}>
+        <div className="modal-overlay" onClick={() => closeModal('product')}></div>
+        <div className="modal-content">
+          <div className="modal-header">
+            <h3 className="modal-title">Add Monitored SKU</h3>
+            <button className="modal-close" onClick={() => closeModal('product')}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <form onSubmit={handleProductSubmit}>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">SKU Code *</label>
+                <input type="text" name="sku" className="form-input" required placeholder={`e.g. ${selectedClient.toUpperCase()}006`} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Product Name *</label>
+                <input type="text" name="name" className="form-input" required placeholder="e.g. LG UltraGear Curved Monitor" />
+              </div>
+              <div className="form-row">
+                <div className="form-group col-6">
+                  <label className="form-label">Model / MPN *</label>
+                  <input type="text" name="model" className="form-input" required placeholder="OLED-X-MODEL" />
+                </div>
+                <div className="form-group col-6">
+                  <label className="form-label">Category</label>
+                  <input type="text" name="category" className="form-input" defaultValue="TV" />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group col-6">
+                  <label className="form-label">MAP Price ($) *</label>
+                  <input type="number" step="0.01" name="map" className="form-input" required placeholder="1499.00" />
+                </div>
+                <div className="form-group col-6">
+                  <label className="form-label">MSRP ($)</label>
+                  <input type="number" step="0.01" name="msrp" className="form-input" placeholder="1799.00" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Merchant Storefront *</label>
+                <input type="text" name="seller" className="form-input" required defaultValue="XYZ Electronics (Amazon)" />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={() => closeModal('product')}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Add SKU</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* ADD EXCEPTION MODAL */}
+      <div className={`modal ${modals.exception ? 'active' : ''}`}>
+        <div className="modal-overlay" onClick={() => closeModal('exception')}></div>
+        <div className="modal-content">
+          <div className="modal-header">
+            <h3 className="modal-title">New Pricing Allowance Promotion</h3>
+            <button className="modal-close" onClick={() => closeModal('exception')}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <form onSubmit={handleExceptionSubmit}>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Merchant Name *</label>
+                <input type="text" name="seller" className="form-input" required placeholder="e.g. Best Buy" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Product SKU *</label>
+                <input type="text" name="scope" className="form-input" required placeholder="LG002" />
+              </div>
+              <div className="form-row">
+                <div className="form-group col-6">
+                  <label className="form-label">Allowed Promo Price ($) *</label>
+                  <input type="number" step="0.01" name="discount" className="form-input" required placeholder="1699.00" />
+                </div>
+                <div className="form-group col-6">
+                  <label className="form-label">Start Date *</label>
+                  <input type="date" name="start" className="form-input" required defaultValue="2026-08-25" />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={() => closeModal('exception')}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Create Promo</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* TOAST alerts */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast toast-${t.type} show`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  );
+}

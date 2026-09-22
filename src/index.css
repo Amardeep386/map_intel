@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-ivory: var(--bg-primary);      /* Backgrounds */
+  --color-brand-beige: var(--border-color);    /* Borders */
+  --color-brand-taupe: var(--text-muted);      /* Muted text */
+  --color-brand-copper: var(--accent-coral);   /* Primary accent */
+  --color-brand-charcoal: var(--text-primary); /* Dark text/headings */
+  --color-brand-sidebar: var(--card-bg);       /* Sidebar background */
+  --color-brand-white: var(--card-bg);         /* Card Backgrounds */
+  --color-brand-olive: var(--accent-sage);     /* Secondary accent */
+  
+  --font-sans: 'Outfit', sans-serif;
+}

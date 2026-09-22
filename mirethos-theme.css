@@ -1,0 +1,256 @@
+/*
+ * Mirethos Core Stylesheet (mirethos-theme.css)
+ * This contains all custom CSS variables (light and dark mode), typography setup,
+ * global overlays, micro-animations, custom scrollbars, selections, magnetic buttons, 
+ * and spotlight cards.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Reenie+Beanie&display=swap');
+
+:root {
+  /* Creamy Sand Light Theme */
+  --bg-primary: #FAF6EE;
+  --text-primary: #3C2F2F;
+  --text-muted: #827064;
+  --card-bg: #FFFFFF;
+  --accent-coral: var(--accent-brand, #A65E44);
+  --accent-sage: #F0E6D2;
+  --accent-lavender: #EADEC9;
+  --glow-color-rgb: 166, 94, 68;
+  --border-color: rgba(60, 47, 47, 0.08);
+  --shadow-soft: 0 4px 20px -2px rgba(60, 47, 47, 0.05), 0 2px 8px -1px rgba(60, 47, 47, 0.03);
+
+  /* Map to Tailwind Theme Variables */
+  --color-brand-ivory: var(--bg-primary);
+  --color-brand-beige: var(--border-color);
+  --color-brand-taupe: var(--text-muted);
+  --color-brand-copper: var(--accent-coral);
+  --color-brand-charcoal: var(--text-primary);
+  --color-brand-sidebar: var(--bg-primary);
+  --color-brand-white: var(--card-bg);
+  --color-brand-olive: var(--accent-sage);
+}
+
+:root.dark, body.dark {
+  /* Enhanced Chocolate Dark Theme (Matching Light Theme) */
+  --bg-primary: #17110F;         /* Rich Espresso background */
+  --text-primary: #FAF6EE;       /* Warm off-white text to match light bg */
+  --text-muted: #A9998E;         /* Warm muted taupe */
+  --card-bg: #221916;            /* Deep Cocoa for elevated cards */
+  --accent-coral: var(--accent-brand, #E38663);       /* Vibrant Terracotta/Coral for primary actions */
+  --accent-sage: #53423B;        /* Earthy brown for secondary elements */
+  --accent-lavender: #4A3A34;    /* Deeper earthy tone for variety */
+  --glow-color-rgb: 227, 134, 99;
+  --border-color: rgba(250, 246, 238, 0.08); /* Subtle warm glass border */
+  --shadow-soft: 0 8px 32px -4px rgba(0, 0, 0, 0.6), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+
+  /* Map to Tailwind Theme Variables */
+  --color-brand-ivory: var(--bg-primary);
+  --color-brand-beige: var(--border-color);
+  --color-brand-taupe: var(--text-muted);
+  --color-brand-copper: var(--accent-coral);
+  --color-brand-charcoal: var(--text-primary);
+  --color-brand-sidebar: var(--bg-primary);
+  --color-brand-white: var(--card-bg);
+  --color-brand-olive: var(--accent-sage);
+}
+
+/* Base Body Styling */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  transition: background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1), color 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Selection Color Override */
+::selection {
+  background: var(--accent-coral);
+  color: #292524;
+}
+
+/* Custom Scrollbar override */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-coral);
+}
+
+/* SVG Grain overlay layer */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Mouse-Revealed Background Grid overlay */
+#grid-bg {
+  background-image: 
+    linear-gradient(rgba(166, 94, 68, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(166, 94, 68, 0.08) 1px, transparent 1px);
+  background-size: 50px 50px;
+  mask-image: radial-gradient(300px circle at var(--grid-mouse-x, -1000px) var(--grid-mouse-y, -1000px), black 20%, transparent 80%);
+  -webkit-mask-image: radial-gradient(300px circle at var(--grid-mouse-x, -1000px) var(--grid-mouse-y, -1000px), black 20%, transparent 80%);
+  will-change: mask-image, -webkit-mask-image;
+}
+
+body.dark #grid-bg {
+  background-image: 
+    linear-gradient(rgba(223, 154, 125, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(223, 154, 125, 0.05) 1px, transparent 1px);
+}
+
+/* Utility Animations */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+/* Float Animations for Cards */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(1.5deg); }
+}
+@keyframes float-slower {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(12px) rotate(-1.5deg); }
+}
+.animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
+.animate-float-slower { animation: float-slower 8s ease-in-out infinite; }
+
+/* Blob blur animations */
+@keyframes float-blob-1 {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-12px) scale(1.03); }
+}
+@keyframes float-blob-2 {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(12px) scale(0.97); }
+}
+.animate-blob-1 { animation: float-blob-1 8s ease-in-out infinite; }
+.animate-blob-2 { animation: float-blob-2 10s ease-in-out infinite; }
+
+/* No scrollbar helpers */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Pulse Accent indicator */
+@keyframes pulse-coral {
+  0% { box-shadow: 0 0 0 0 rgba(255, 183, 178, 0.4); }
+  70% { box-shadow: 0 0 0 15px rgba(255, 183, 178, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 183, 178, 0); }
+}
+.animate-pulse-coral { animation: pulse-coral 2s infinite; }
+
+/* Magnetic Button sweep effect */
+.btn-magnetic {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.1s ease-out;
+}
+.btn-magnetic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  transform: translateX(-100%);
+  transition: none;
+  pointer-events: none;
+}
+.btn-magnetic:hover::after {
+  transform: translateX(100%);
+  transition: transform 0.8s ease-in-out;
+}
+
+/* Magic Bento Spotlight Card styling */
+.magic-card {
+  --spotlight-radius: 300px;
+  will-change: transform;
+  transform-style: preserve-3d;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.magic-card:hover {
+  border-color: rgba(var(--glow-color-rgb), 0.3) !important;
+  box-shadow: 0 10px 30px -10px rgba(var(--glow-color-rgb), 0.1);
+}
+
+.spotlight-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(var(--spotlight-radius) circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
+      rgba(var(--glow-color-rgb), 0.08),
+      transparent 80%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+.magic-card:hover .spotlight-overlay { opacity: 1; }
+
+.border-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: radial-gradient(var(--spotlight-radius) circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
+      rgba(var(--glow-color-rgb), 0.5),
+      transparent 40%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 2;
+}
+.magic-card:hover .border-glow { opacity: 1; }
+
+/* Font Family Helper Mappings */
+.font-sans {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.font-cursive {
+  font-family: 'Reenie Beanie', cursive;
+}
+
+/* Custom circular clip path transition */
+::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  animation: clipPathReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  mix-blend-mode: normal;
+}
+@keyframes clipPathReveal {
+  from {
+    clip-path: circle(0% at var(--click-x, 50%) var(--click-y, 50%));
+  }
+  to {
+    clip-path: circle(150% at var(--click-x, 50%) var(--click-y, 50%));
+  }
+}
+
+.no-transition,
+.no-transition * {
+  transition: none !important;
+}
