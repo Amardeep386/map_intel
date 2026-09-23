@@ -20,15 +20,17 @@ export function currencyFrom(raw: string | null | undefined): string | null {
 
 export function normalizeAvailability(raw: unknown): { availability: Availability; qty: number | null } {
   if (raw === null || raw === undefined) return { availability: 'unknown', qty: null };
-  const t = String(raw).toLowerCase().replace(/\s+/g, ' ').trim();
+  // Enum-style values (Walmart's OUT_OF_STOCK, NOT_AVAILABLE, PRE_ORDER) become plain words first,
+  // so "not available" is caught before the looser "available" in-stock match.
+  const t = String(raw).toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t) return { availability: 'unknown', qty: null };
   const only = t.match(/only (\d+) left/);
   if (only) return { availability: 'limited', qty: Number.parseInt(only[1], 10) };
-  if (/(pre-?order|preorder)/.test(t)) return { availability: 'preorder', qty: null };
-  if (/(out ?of ?stock|outofstock|sold ?out|soldout|currently unavailable|unavailable|discontinued|not available|coming soon)/.test(t))
+  if (/pre ?order/.test(t)) return { availability: 'preorder', qty: null };
+  if (/(out ?of ?stock|sold ?out|currently unavailable|unavailable|discontinued|not available|coming soon)/.test(t))
     return { availability: 'out_of_stock', qty: null };
-  if (/(limited|low ?stock|limitedavailability)/.test(t)) return { availability: 'limited', qty: null };
-  if (/(in ?stock|instock|in_stock|available|add to cart|ships|pickup today)/.test(t)) return { availability: 'in_stock', qty: null };
+  if (/(limited|low ?stock)/.test(t)) return { availability: 'limited', qty: null };
+  if (/(in ?stock|available|add to cart|ships|pickup today)/.test(t)) return { availability: 'in_stock', qty: null };
   return { availability: 'unknown', qty: null };
 }
 

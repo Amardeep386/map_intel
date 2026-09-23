@@ -7,7 +7,7 @@ import { closeBrowser } from '../collector/browser.js';
 import { collectListing, type CollectOutcome } from '../collector/collect.js';
 import { createCrawlRun, enqueueRun, selectListings, type RunScope } from '../collector/runs.js';
 import { closeDb, withSystem } from '../lib/db.js';
-import { collectQueue } from '../lib/queue.js';
+import { closeQueue } from '../lib/queue.js';
 
 const { values } = parseArgs({
   options: {
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     } else {
       const { crawlRunId, jobs } = await enqueueRun(scope);
       console.log(`queued crawl run ${crawlRunId} with ${jobs} jobs; the worker will process them`);
-      await collectQueue().close();
+      await closeQueue();
     }
   } finally {
     await closeBrowser();

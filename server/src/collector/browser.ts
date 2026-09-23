@@ -20,6 +20,9 @@ async function newContext(adapter: SourceAdapter, javaScriptEnabled: boolean): P
     timezoneId: 'America/New_York',
     viewport: { width: 1366, height: 900 },
     javaScriptEnabled,
+    // Re-rendering stored HTML (JS off) happens on about:blank, where the page's own CSP meta tag
+    // (written for the retailer's origin) would block its CSS and images. Live fetches keep CSP.
+    bypassCSP: !javaScriptEnabled,
   });
   if (adapter.cookies?.length) {
     await ctx.addCookies(adapter.cookies.map((c) => ({ ...c, path: '/' })));

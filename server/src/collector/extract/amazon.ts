@@ -105,5 +105,7 @@ export function detectAmazonBlock(html: string, status: number): BlockReason {
   if (/action="\/errors\/validateCaptcha"/i.test(html) || /<title[^>]*>\s*(Robot Check|Amazon\.com)\s*<\/title>/i.test(html) && !/id="productTitle"/.test(html))
     return 'captcha';
   if (status === 503 && /api-services-support@amazon\.com|sorry! something went wrong/i.test(html)) return 'access_denied';
+  // Outside the US Amazon may hide the buy box: "This item cannot be shipped to your selected delivery location."
+  if (/cannot be shipped to your selected delivery location/i.test(html)) return 'geo_interstitial';
   return genericBlock(html, status);
 }

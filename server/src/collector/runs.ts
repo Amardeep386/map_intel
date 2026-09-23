@@ -45,12 +45,21 @@ export async function enqueueRun(scope: RunScope, trigger: 'manual' | 'schedule'
   const listingIds = await selectListings(scope);
   const crawlRunId = await createCrawlRun(scope, listingIds.length, trigger);
   const queue = collectQueue();
-  await queue.addBulk(
-    listingIds.map((listingId) => ({
-      name: 'collect-listing',
-      data: { listingId, crawlRunId },
-      opts: { jobId: `${crawlRunId}:${listingId}` },
-    })),
-  );
+  try {
+    await queue.addBulk(
+      listingIds.map((listingId) => ({
+        name: 'collect-listing',
+        data: { listingId, crawlRunId },
+        // BullMQ rejects custom job ids that contain ':'
+        opts: { jobId: `${crawlRunId}_${listingId}` },
+      })),
+    );
+  } catch (err) {
+    // Don't leave a run stuck in 'running' when nothing was queued.
+    await withSystem((db) =>
+      db.query(`UPDATE crawl_run SET status = 'failed', finished_at = now() WHERE id = $1`, [crawlRunId]),
+    ).catch(() => undefined);
+    throw err;
+  }
   return { crawlRunId, jobs: listingIds.length };
 }

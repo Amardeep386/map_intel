@@ -1,5 +1,5 @@
 // Minimal robots.txt check (User-agent: * group, longest-match Allow/Disallow, * and $ wildcards).
-// Results are cached per host for 12 hours.
+// Results are cached per host for 12 hours (15 minutes when robots.txt was unreachable).
 
 interface Rule {
   allow: boolean;
@@ -7,8 +7,9 @@ interface Rule {
   length: number;
 }
 
-const cache = new Map<string, { rules: Rule[]; fetchedAt: number }>();
+const cache = new Map<string, { rules: Rule[]; unreachable: string | null; expiresAt: number }>();
 const TTL_MS = 12 * 3_600_000;
+const UNREACHABLE_TTL_MS = 15 * 60_000;
 
 function toRegex(path: string): RegExp {
   const anchored = path.endsWith('$');
@@ -52,24 +53,34 @@ export function isAllowed(rules: Rule[], pathAndQuery: string): boolean {
   return best ? best.allow : true;
 }
 
-export async function robotsAllows(url: string, userAgent: string): Promise<boolean> {
+/**
+ * Follows RFC 9309 §2.3.1: 2xx -> parse rules; 4xx -> no rules (allowed); 5xx or network error ->
+ * robots.txt is "unreachable" and the whole site is treated as disallowed. Unreachable results are
+ * cached for a short time only, so the next run tries again.
+ */
+export async function robotsCheck(url: string, userAgent: string): Promise<{ allowed: boolean; reason: string }> {
   const u = new URL(url);
   const now = Date.now();
   let entry = cache.get(u.host);
-  if (!entry || now - entry.fetchedAt > TTL_MS) {
+  if (!entry || now > entry.expiresAt) {
     let rules: Rule[] = [];
+    let unreachable: string | null = null;
     try {
       const res = await fetch(`${u.protocol}//${u.host}/robots.txt`, {
         headers: { 'user-agent': userAgent },
         signal: AbortSignal.timeout(15_000),
       });
       if (res.ok) rules = parseRobots(await res.text());
-    } catch {
-      // Unreachable robots.txt: treat as no rules (standard behaviour), but log it.
-      console.warn(`[robots] could not read robots.txt for ${u.host}`);
+      else if (res.status >= 500) unreachable = `HTTP ${res.status}`;
+    } catch (err) {
+      unreachable = err instanceof Error ? err.message : String(err);
     }
-    entry = { rules, fetchedAt: now };
+    if (unreachable) console.warn(`[robots] robots.txt for ${u.host} unreachable (${unreachable}): treating site as disallowed`);
+    entry = { rules, unreachable, expiresAt: now + (unreachable ? UNREACHABLE_TTL_MS : TTL_MS) };
     cache.set(u.host, entry);
   }
-  return isAllowed(entry.rules, u.pathname + u.search);
+  if (entry.unreachable) return { allowed: false, reason: `robots.txt unreachable (${entry.unreachable}); site treated as disallowed` };
+  return isAllowed(entry.rules, u.pathname + u.search)
+    ? { allowed: true, reason: '' }
+    : { allowed: false, reason: 'robots.txt disallows this URL for User-agent: *' };
 }

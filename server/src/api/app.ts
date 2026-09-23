@@ -30,7 +30,11 @@ export class HttpError extends Error {
 /** Throws 403 unless the user is a platform admin or a member of the account. Returns the role. */
 export async function assertAccountAccess(user: TokenClaims, accountId: string): Promise<string> {
   if (!/^[0-9a-f-]{36}$/i.test(accountId)) throw new HttpError(404, 'account not found');
-  if (user.role === 'admin') return 'Administrator';
+  if (user.role === 'admin') {
+    const exists = await withSystem(async (db) => (await db.query('SELECT 1 FROM account WHERE id = $1', [accountId])).rowCount);
+    if (!exists) throw new HttpError(404, 'account not found');
+    return 'Administrator';
+  }
   const role = await withSystem(async (db) => {
     const { rows } = await db.query<{ role: string }>(
       'SELECT role FROM account_membership WHERE account_id = $1 AND user_id = $2',

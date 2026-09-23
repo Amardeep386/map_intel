@@ -6,7 +6,7 @@ import { bestBuyApiEnabled, bestBuyApiLookup } from './bestbuyApi.js';
 import { browserFetch, renderScreenshot } from './browser.js';
 import { modelMatches } from './extract/common.js';
 import { httpFetch } from './http.js';
-import { robotsAllows } from './robots.js';
+import { robotsCheck } from './robots.js';
 import { adapterFor } from './sources.js';
 import type { BlockReason, Extracted, FetchResult } from './types.js';
 
@@ -40,8 +40,14 @@ function datePath(d: Date): string {
   return `${iso.slice(0, 4)}/${iso.slice(5, 7)}/${iso.slice(8, 10)}`;
 }
 
+// One line per error: drop ANSI colour codes and Playwright's multi-line "Call log:" tail.
 function errMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg
+    .replace(/\u001b\[[0-9;]*m/g, '')
+    .split(/\n\s*Call log:/)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export async function collectListing(listingId: string, crawlRunId: string | null): Promise<CollectOutcome> {
@@ -61,7 +67,8 @@ export async function collectListing(listingId: string, crawlRunId: string | nul
   const notes: string[] = [];
 
   // 1. robots.txt
-  if (config.COLLECT_RESPECT_ROBOTS && !(await robotsAllows(listing.url, config.COLLECT_USER_AGENT))) {
+  const robots = config.COLLECT_RESPECT_ROBOTS ? await robotsCheck(listing.url, config.COLLECT_USER_AGENT) : null;
+  if (robots && !robots.allowed) {
     return persist({
       listing,
       observationId,
@@ -71,7 +78,7 @@ export async function collectListing(listingId: string, crawlRunId: string | nul
       extracted: null,
       fetch: null,
       method: null,
-      error: 'robots.txt disallows this URL for User-agent: *',
+      error: robots.reason,
       evidence: null,
     });
   }

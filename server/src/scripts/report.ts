@@ -29,6 +29,15 @@ interface Row {
   url: string;
 }
 
+// Older rows may hold multi-line errors with ANSI colour codes (Playwright call logs).
+function oneLine(s: string): string {
+  return s
+    .replace(/\u001b\[[0-9;]*m/g, '')
+    .split(/\n\s*Call log:/)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function csvCell(v: unknown): string {
   const s = v === null || v === undefined ? '' : v instanceof Date ? v.toISOString() : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -93,7 +102,9 @@ async function main(): Promise<void> {
     '',
     '## Problems',
     '',
-    ...rows.filter((r) => r.status !== 'ok' && r.error).map((r) => `- **${r.product_code} · ${r.source}** (${r.status}): ${r.error}`),
+    ...rows
+      .filter((r) => r.status !== 'ok' && r.error)
+      .map((r) => `- **${r.product_code} · ${r.source}** (${r.status}): ${oneLine(r.error!)}`),
     '',
   ];
 

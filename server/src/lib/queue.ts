@@ -16,11 +16,13 @@ export function redisConnection(): Redis {
 }
 
 let queue: Queue<CollectJob> | null = null;
+let queueConnection: Redis | null = null;
 
 export function collectQueue(): Queue<CollectJob> {
   if (!queue) {
+    queueConnection = redisConnection();
     queue = new Queue<CollectJob>(COLLECT_QUEUE, {
-      connection: redisConnection(),
+      connection: queueConnection,
       defaultJobOptions: {
         attempts: 2,
         backoff: { type: 'exponential', delay: 60_000 },
@@ -30,6 +32,14 @@ export function collectQueue(): Queue<CollectJob> {
     });
   }
   return queue;
+}
+
+/** BullMQ does not close a connection it was handed, so close both (lets CLI scripts exit). */
+export async function closeQueue(): Promise<void> {
+  await queue?.close();
+  await queueConnection?.quit().catch(() => undefined);
+  queue = null;
+  queueConnection = null;
 }
 
 export async function redisHealthy(): Promise<boolean> {

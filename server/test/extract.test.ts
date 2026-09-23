@@ -5,7 +5,7 @@ import { extractAmazon, detectAmazonBlock } from '../src/collector/extract/amazo
 import { extractBestBuy, detectBestBuyBlock } from '../src/collector/extract/bestbuy.js';
 import { modelMatches, normalizeAvailability, parsePrice } from '../src/collector/extract/common.js';
 import { extractWalmart, detectWalmartBlock } from '../src/collector/extract/walmart.js';
-import { isAllowed, parseRobots } from '../src/collector/robots.js';
+import { isAllowed, parseRobots, robotsCheck } from '../src/collector/robots.js';
 import { channelSkuFromUrl } from '../src/collector/sources.js';
 
 test('parsePrice', () => {
@@ -23,6 +23,28 @@ test('normalizeAvailability', () => {
   assert.equal(normalizeAvailability('https://schema.org/OutOfStock'.split('/').pop()).availability, 'out_of_stock');
   assert.equal(normalizeAvailability('IN_STOCK').availability, 'in_stock');
   assert.equal(normalizeAvailability('SOLD_OUT'.replace('_', ' ')).availability, 'out_of_stock');
+  // Walmart enum values: NOT_AVAILABLE used to fall through to the "available" in-stock match
+  assert.equal(normalizeAvailability('OUT_OF_STOCK').availability, 'out_of_stock');
+  assert.equal(normalizeAvailability('NOT_AVAILABLE').availability, 'out_of_stock');
+  assert.equal(normalizeAvailability('PRE_ORDER').availability, 'preorder');
+});
+
+test('walmart: marketplace item out of stock (trimmed from LG-P07 WM4000HWA page)', () => {
+  const product = {
+    name: 'LG 4.5 cu. ft. Front Load Washer, WM4000HWA',
+    availabilityStatus: 'OUT_OF_STOCK',
+    availabilityStatusV2: { display: 'Out of stock', value: 'OUT_OF_STOCK' },
+    fulfillmentType: 'MARKETPLACE',
+    sellerDisplayName: 'Locust Apl',
+    priceInfo: { currentPrice: { price: 947, currencyUnit: 'USD' } },
+  };
+  const html = `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+    props: { pageProps: { initialData: { data: { product } } } },
+  })}</script></html>`;
+  const x = extractWalmart(html);
+  assert.equal(x.price, 947);
+  assert.equal(x.availability, 'out_of_stock');
+  assert.equal(x.sellerName, 'Locust Apl');
 });
 
 test('modelMatches ignores punctuation and region suffix', () => {
@@ -61,6 +83,17 @@ test('amazon: third-party seller id and captcha page', () => {
   assert.equal(x.sellerId, 'A2XYZ123');
   const captcha = '<html><title>Amazon.com</title><form action="/errors/validateCaptcha"></form></html>';
   assert.equal(detectAmazonBlock(captcha, 200), 'captcha');
+});
+
+test('amazon: no buy box when shipping to a non-US address (trimmed from SAM-P08 page seen from India)', () => {
+  const html = `<html><head><title>Amazon.com: Samsung 65-Inch Class The Frame Pro</title></head><body>
+    <span id="glow-ingress-line2">India</span>
+    <span id="productTitle"> Samsung 65-Inch Class The Frame Pro LS03HW </span>
+    <div id="exports_desktop_undeliverable_buybox"><span>This item cannot be shipped to your selected delivery location. Please choose a different delivery location.</span></div>
+  </body></html>`;
+  const x = extractAmazon(html);
+  assert.equal(x.price, null);
+  assert.equal(detectAmazonBlock(html, 200), 'geo_interstitial');
 });
 
 test('walmart: __NEXT_DATA__ product', () => {
@@ -114,6 +147,28 @@ test('robots.txt parsing', () => {
   assert.equal(isAllowed(rules, '/search?q=tv'), false);
   assert.equal(isAllowed(rules, '/search/help'), true);
   assert.equal(isAllowed(rules, '/dp/B0?ref=x'), false);
+});
+
+test('robots.txt: 5xx or network error means disallow (RFC 9309), 404 means allow', async () => {
+  const realFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response('oops', { status: 503 })) as typeof fetch;
+    const r5 = await robotsCheck('https://r5.example/ip/1', 'ua');
+    assert.equal(r5.allowed, false);
+    assert.match(r5.reason, /unreachable \(HTTP 503\)/);
+
+    globalThis.fetch = (async () => {
+      throw new TypeError('fetch failed');
+    }) as typeof fetch;
+    const rn = await robotsCheck('https://rnet.example/ip/1', 'ua');
+    assert.equal(rn.allowed, false);
+    assert.match(rn.reason, /unreachable \(fetch failed\)/);
+
+    globalThis.fetch = (async () => new Response('not here', { status: 404 })) as typeof fetch;
+    assert.equal((await robotsCheck('https://r404.example/ip/1', 'ua')).allowed, true);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test('channel SKU from URL', () => {
