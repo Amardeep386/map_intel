@@ -1,0 +1,49 @@
+# Render blueprint (not deployed yet). Postgres = Neon, Redis = Upstash, files = S3: set their
+# connection strings as environment variables in the Render dashboard (sync: false = secret).
+services:
+  - type: web
+    name: map-intel-api
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    region: ohio            # US region: retailers show US prices and stock to US IPs
+    plan: starter
+    healthCheckPath: /health
+    preDeployCommand: node dist/scripts/migrate.js
+    envVars:
+      - { key: NODE_ENV, value: production }
+      - { key: PORT, value: "4000" }
+      - { key: CORS_ORIGINS, sync: false }          # e.g. https://map-intel.vercel.app
+      - { key: DATABASE_URL, sync: false }          # Neon pooled connection string
+      - { key: DATABASE_SSL, value: "true" }
+      - { key: REDIS_URL, sync: false }             # Upstash rediss:// URL
+      - { key: S3_REGION, sync: false }
+      - { key: S3_BUCKET, sync: false }
+      - { key: S3_ACCESS_KEY_ID, sync: false }
+      - { key: S3_SECRET_ACCESS_KEY, sync: false }
+      - { key: S3_FORCE_PATH_STYLE, value: "false" }
+      - { key: S3_OBJECT_LOCK_DAYS, value: "365" }
+      - { key: JWT_SECRET, generateValue: true }
+
+  - type: worker
+    name: map-intel-collector
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    dockerCommand: node dist/worker/index.js
+    region: ohio
+    plan: starter
+    envVars:
+      - { key: NODE_ENV, value: production }
+      - { key: DATABASE_URL, sync: false }
+      - { key: DATABASE_SSL, value: "true" }
+      - { key: REDIS_URL, sync: false }
+      - { key: S3_REGION, sync: false }
+      - { key: S3_BUCKET, sync: false }
+      - { key: S3_ACCESS_KEY_ID, sync: false }
+      - { key: S3_SECRET_ACCESS_KEY, sync: false }
+      - { key: S3_FORCE_PATH_STYLE, value: "false" }
+      - { key: S3_OBJECT_LOCK_DAYS, value: "365" }
+      - { key: JWT_SECRET, sync: false }            # copy from the API service
+      - { key: COLLECT_EGRESS_LABEL, value: render-ohio }
+      - { key: BESTBUY_API_KEY, sync: false }

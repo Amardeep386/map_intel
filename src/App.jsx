@@ -11,6 +11,7 @@ import {
 import lgLogo from "./assets/lg.png";
 import philipsLogo from "./assets/philips.png";
 import kawasakiLogo from "./assets/kawasaki.png";
+import { api } from "./api/client.js";
 
 // ---------- Format Currency Utility (USD) ----------
 const formatUSD = (number) => {
@@ -20,92 +21,6 @@ const formatUSD = (number) => {
     maximumFractionDigits: 2
   }).format(number);
 };
-
-// ---------- Mock data matching mosaic registry ----------
-const CLIENTS = [
-  { name: "LG", status: "Sandbox", skus: 10, merchants: 3, live: true },
-  { name: "Philips", status: "Active", skus: 24, merchants: 7, live: false },
-  { name: "Kawasaki", status: "Active", skus: 18, merchants: 5, live: false },
-  { name: "Citizen", status: "Active", skus: 12, merchants: 4, live: false },
-];
-
-const SKUS = [
-  { id: "LG-001", name: 'LG 55" OLED C4', model: "OLED55C4PUA", category: "TV", map: 1499, current: 1395, violations: 3, status: "Active" },
-  { id: "LG-002", name: 'LG 65" OLED C4', model: "OLED65C4PUA", category: "TV", map: 1799, current: 1799, violations: 0, status: "Active" },
-  { id: "LG-003", name: 'LG 27" UltraGear Monitor', model: "27GP850-B", category: "Monitor", map: 349, current: 299, violations: 4, status: "Active" },
-  { id: "LG-004", name: 'LG 75" QNED85', model: "75QNED85UQA", category: "TV", map: 1699, current: 1549, violations: 2, status: "Active" },
-  { id: "LG-005", name: "LG WM3600HWA Washer", model: "WM3600HWA", category: "Appliance", map: 1149, current: 1095, violations: 1, status: "Active" },
-  { id: "LG-006", name: 'LG 34" UltraWide Monitor', model: "34WP65C-B", category: "Monitor", map: 449, current: 449, violations: 0, status: "Active" },
-  { id: "LG-007", name: "LG French Door Refrigerator", model: "LRFVS3006S", category: "Appliance", map: 2199, current: 1999, violations: 2, status: "Active" },
-  { id: "LG-008", name: "LG Soundbar SN7Y", model: "SN7Y", category: "Audio", map: 349, current: 299, violations: 1, status: "Active" },
-  { id: "LG-009", name: 'LG 43" QNED80', model: "43QNED80URA", category: "TV", map: 549, current: 549, violations: 0, status: "Paused" },
-  { id: "LG-010", name: "LG UltraGear 34GP63A", model: "34GP63A-B", category: "Monitor", map: 379, current: 329, violations: 1, status: "Active" },
-];
-
-const MERCHANTS = [
-  { name: "XYZ Electronics", type: "Marketplace (Amazon)", tracked: 10, violations: 8, compliance: 74 },
-  { name: "Best Buy", type: "Retailer", tracked: 8, violations: 4, compliance: 96 },
-  { name: "TechMart", type: "Marketplace (Walmart)", tracked: 5, violations: 3, compliance: 88 },
-];
-
-const VIOLATIONS = [
-  { id: "VIO-0123", sku: "LG-001", product: 'LG 55" OLED C4', merchant: "XYZ Electronics (Amazon)", map: 1499, advertised: 1395, gap: -6.9, duration: "6h", severity: "Critical", status: "Open" },
-  { id: "VIO-0124", sku: "LG-003", product: 'LG 27" UltraGear Monitor', merchant: "XYZ Electronics (Amazon)", map: 349, advertised: 299, gap: -14.3, duration: "2d", severity: "Critical", status: "Open" },
-  { id: "VIO-0125", sku: "LG-005", product: "LG WM3600HWA Washer", merchant: "Best Buy", map: 1149, advertised: 1095, gap: -4.7, duration: "1d", severity: "Medium", status: "Notified" },
-  { id: "VIO-0126", sku: "LG-004", product: 'LG 75" QNED85', merchant: "TechMart (Walmart)", map: 1699, advertised: 1549, gap: -8.8, duration: "3d", severity: "High", status: "Open" },
-  { id: "VIO-0127", sku: "LG-008", product: "LG Soundbar SN7Y", merchant: "XYZ Electronics (Amazon)", map: 349, advertised: 299, gap: -14.3, duration: "12h", severity: "High", status: "Resolved" },
-  { id: "VIO-0128", sku: "LG-007", product: "LG French Door Refrigerator", merchant: "Best Buy", map: 2199, advertised: 1999, gap: -9.1, duration: "5d", severity: "Critical", status: "Open" },
-  { id: "VIO-0129", sku: "LG-010", product: "LG UltraGear 34GP63A", merchant: "TechMart (Walmart)", map: 379, advertised: 329, gap: -13.2, duration: "2d", severity: "Medium", status: "Notified" },
-  { id: "VIO-0130", sku: "LG-001", product: 'LG 55" OLED C4', merchant: "Best Buy", map: 1499, advertised: 1450, gap: -3.3, duration: "4h", severity: "Low", status: "Open" },
-];
-
-const MAPPING_STAGE = [
-  { product: "LG 55 OLED C4 Series", merchant: "XYZ Electronics (Amazon)", price: 1395, match: "LG-001", confidence: 98 },
-  { product: "LG OLED C4 55 inch TV", merchant: "Best Buy", price: 1450, match: "LG-001", confidence: 95 },
-  { product: 'LG 27" UltraGear Monitor', merchant: "TechMart (Walmart)", price: 299, match: "LG-003", confidence: 99 },
-  { product: "LG Soundbar SN7Y", merchant: "XYZ Electronics (Amazon)", price: 299, match: null, confidence: 61 },
-];
-
-const MAPPING_INCLUDE = [
-  { product: 'LG 55" OLED C4', merchant: "XYZ Electronics (Amazon)", url: "amazon.com/8OCIH3F3Q8", mappedOn: "Aug 23, 2026", by: "Auto Rule" },
-  { product: 'LG 27" UltraGear Monitor', merchant: "Best Buy", url: "bestbuy.com/site/6577865", mappedOn: "Aug 22, 2026", by: "Auto Rule" },
-  { product: "LG WM3600HWA Washer", merchant: "TechMart (Walmart)", url: "walmart.com/ip/7a9f10e3", mappedOn: "Aug 21, 2026", by: "Analyst" },
-];
-
-const MAPPING_EXCLUDE = [
-  { product: "LG Soundbar SN7Y", merchant: "XYZ Electronics (Amazon)", reason: "Accessory", excludedOn: "Aug 21, 2026" },
-  { product: "LG Remote Control", merchant: "Best Buy", reason: "Accessory", excludedOn: "Aug 22, 2026" },
-  { product: 'LG 55" OLED C3 (Old Model)', merchant: "TechMart (Walmart)", reason: "Out of scope", excludedOn: "Aug 21, 2026" },
-];
-
-const PROMOTIONS = [
-  { sku: 'LG 55" OLED C4', standard: 1499, promo: 1399, from: "Aug 17, 2026", until: "Aug 23, 2026", status: "Active" },
-  { sku: 'LG 27" UltraGear Monitor', standard: 349, promo: 299, from: "Sep 01, 2026", until: "Sep 07, 2026", status: "Scheduled" },
-];
-
-const EMAILS = [
-  { date: "Aug 23, 2026", seller: "XYZ Electronics", violation: "VIO-0123", template: "First Warning", status: "Delivered", opened: "Yes", response: "Pending" },
-  { date: "Aug 22, 2026", seller: "TechMart", violation: "VIO-0124", template: "MAP Notice", status: "Delivered", opened: "No", response: "Awaited" },
-  { date: "Aug 21, 2026", seller: "Best Buy", violation: "VIO-0125", template: "MAP Reminder", status: "Delivered", opened: "Yes", response: "Resolved" },
-];
-
-const REPORTS = [
-  { name: "Daily MAP Violations", freq: "Daily", recipients: "map-room@lg.com", lastRun: "Aug 23, 08:00 AM", format: "Excel" },
-  { name: "Weekly Compliance Summary", freq: "Weekly", recipients: "leadership@lg.com", lastRun: "Aug 18, 06:00 AM", format: "PDF" },
-  { name: "Unauthorized Sellers", freq: "Weekly", recipients: "channel@lg.com", lastRun: "Aug 18, 06:00 AM", format: "Excel" },
-];
-
-const ALERTS = [
-  { name: "Critical MAP violation", condition: "Gap > 10%", channel: "Email + Dashboard", recipients: "map-room@lg.com" },
-  { name: "New unauthorized seller", condition: "New seller detected", channel: "Email", recipients: "channel@lg.com" },
-  { name: "Promotion ending soon", condition: "Ends in 2 days", channel: "Dashboard", recipients: "map-room@lg.com" },
-];
-
-const USERS = [
-  { name: "Fenil Dholaviya", role: "Client Admin", access: "Full Access", lastActive: "Today, 10:15 AM", status: "Active" },
-  { name: "analyst@mirethos.com", role: "MAP Analyst", access: "MAP + Violations", lastActive: "Today, 09:48 AM", status: "Active" },
-  { name: "viewer@lg.com", role: "Viewer", access: "Read Only", lastActive: "Yesterday, 04:30 PM", status: "Active" },
-];
 
 const SEVERITY_COLORS = { Critical: "#dc2626", High: "#ea580c", Medium: "#f59e0b", Low: "#64748B" };
 const SEVERITY_BG = { Critical: "bg-red-50 text-red-700 border-red-200", High: "bg-orange-50 text-orange-700 border-orange-200", Medium: "bg-amber-50 text-amber-700 border-amber-200", Low: "bg-slate-50 text-slate-700 border-slate-200" };
@@ -117,20 +32,8 @@ const STATUS_BG = {
   Resolved: "bg-emerald-50 text-emerald-700 border-emerald-200",
   Scheduled: "bg-blue-50 text-blue-700 border-blue-200",
   Delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Expired: "bg-slate-50 text-slate-700 border-slate-200",
 };
-
-const SEVERITY_DIST = [
-  { name: "Critical", value: 5, color: SEVERITY_COLORS.Critical },
-  { name: "High", value: 8, color: SEVERITY_COLORS.High },
-  { name: "Medium", value: 7, color: SEVERITY_COLORS.Medium },
-  { name: "Low", value: 4, color: SEVERITY_COLORS.Low },
-];
-
-const TREND = [
-  { day: "Aug 16", count: 10 }, { day: "Aug 17", count: 13 }, { day: "Aug 18", count: 18 },
-  { day: "Aug 19", count: 20 }, { day: "Aug 20", count: 24 }, { day: "Aug 21", count: 24 },
-  { day: "Aug 22", count: 24 },
-];
 
 // ---------- Small building blocks ----------
 function Pill({ text, tone }) {
@@ -177,9 +80,9 @@ function PageHeader({ title, subtitle, action }) {
   );
 }
 
-function PrimaryButton({ children, onClick }) {
+function PrimaryButton({ children, onClick, type }) {
   return (
-    <button onClick={onClick} className="inline-flex items-center gap-1.5 bg-brand-copper hover:bg-brand-copper/90 text-brand-white text-sm font-medium px-3.5 py-2 rounded-lg transition-colors cursor-pointer">
+    <button type={type || "button"} onClick={onClick} className="inline-flex items-center gap-1.5 bg-brand-copper hover:bg-brand-copper/90 text-brand-white text-sm font-medium px-3.5 py-2 rounded-lg transition-colors cursor-pointer">
       {children}
     </button>
   );
@@ -199,19 +102,13 @@ function SearchBox({ value, onChange, placeholder }) {
   );
 }
 
-function MerchantLogo({ name }) {
+// Logos come from the source record (source.logo_url), never from third-party logo lookups.
+function MerchantLogo({ name, logoUrl }) {
   const [error, setError] = useState(false);
-  let domain = null;
-  const lowerName = name.toLowerCase();
-  if (lowerName.includes("amazon")) domain = "amazon.com";
-  else if (lowerName.includes("best buy")) domain = "bestbuy.com";
-  else if (lowerName.includes("walmart")) domain = "walmart.com";
-  else if (lowerName.includes("target")) domain = "target.com";
-
-  if (domain && !error) {
+  if (logoUrl && !error) {
     return (
       <span className="inline-flex items-center gap-1.5">
-        <img src={`https://logo.clearbit.com/${domain}`} alt={name} className="w-4 h-4 rounded-full object-contain bg-brand-white border border-brand-beige" onError={() => setError(true)} />
+        <img src={logoUrl} alt={name} className="w-4 h-4 rounded-full object-contain bg-brand-white border border-brand-beige" onError={() => setError(true)} />
         <span>{name}</span>
       </span>
     );
@@ -231,9 +128,8 @@ function ClientLogo({ name, className }) {
   if (lowerName === "lg") src = lgLogo;
   else if (lowerName === "philips") src = philipsLogo;
   else if (lowerName === "kawasaki") src = kawasakiLogo;
-  else src = `https://logo.clearbit.com/${lowerName}.com`;
 
-  if (!error) {
+  if (src && !error) {
     return (
       <div className={`flex items-center justify-center overflow-hidden bg-brand-white ${className || "w-5 h-5 rounded-sm"}`}>
         <img 
@@ -272,12 +168,14 @@ function Table({ columns, children }) {
 
 // ---------- Views ----------
 function OverviewView({ onOpenViolation, clientName }) {
-  const { db } = React.useContext(DataContext);
-  const clientData = db[clientName];
+  const { db, shared, chartColors } = React.useContext(DataContext);
+  const clientData = db[clientName] || EMPTY_WORKSPACE;
   const { skus, violations, merchants } = clientData;
+  const severityDist = shared.severityDist.map((d) => ({ ...d, color: SEVERITY_COLORS[d.name] }));
+  const tooltipStyle = { background: chartColors.card, border: `1px solid ${chartColors.grid}`, borderRadius: 8, color: chartColors.text, fontSize: 12 };
 
   const topMerchants = [...merchants].sort((a, b) => b.violations - a.violations);
-  const maxV = Math.max(...topMerchants.map((m) => m.violations));
+  const maxV = Math.max(1, ...topMerchants.map((m) => m.violations));
   
   const activeViolationsCount = violations.filter(v => v.status === "Open" || v.status === "Notified").length;
 
@@ -302,15 +200,15 @@ function OverviewView({ onOpenViolation, clientName }) {
           <div className="flex items-center justify-center">
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
-                <Pie data={SEVERITY_DIST} dataKey="value" innerRadius={40} outerRadius={65} paddingAngle={2}>
-                  {SEVERITY_DIST.map((d, i) => <Cell key={i} fill={d.color} />)}
+                <Pie data={severityDist} dataKey="value" innerRadius={40} outerRadius={65} paddingAngle={2} stroke={chartColors.card}>
+                  {severityDist.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: chartColors.text }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-3 justify-center mt-1">
-            {SEVERITY_DIST.map((d) => (
+            {severityDist.map((d) => (
               <div key={d.name} className="flex items-center gap-1.5 text-xs text-brand-taupe">
                 <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
                 {d.name} ({d.value})
@@ -320,12 +218,12 @@ function OverviewView({ onOpenViolation, clientName }) {
         </Card>
         <Card title="Violations over time" className="md:col-span-2">
           <ResponsiveContainer width="100%" height={190}>
-            <LineChart data={TREND} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 'dataMax + 2']} tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-              <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="#2563EB" strokeWidth={2} dot={{ r: 3 }} />
+            <LineChart data={shared.trend} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: chartColors.muted }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 'dataMax + 2']} tick={{ fontSize: 11, fill: chartColors.muted }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: chartColors.text }} labelStyle={{ color: chartColors.muted }} />
+              <Line type="monotone" dataKey="count" stroke={chartColors.accent} strokeWidth={2} dot={{ r: 3, fill: chartColors.accent, stroke: chartColors.accent }} />
             </LineChart>
           </ResponsiveContainer>
         </Card>
@@ -369,7 +267,7 @@ function OverviewView({ onOpenViolation, clientName }) {
 
 function ProductSummaryView({ clientName, onAddSkuClick }) {
   const { db } = React.useContext(DataContext);
-  const skus = db[clientName].skus;
+  const skus = (db[clientName] || EMPTY_WORKSPACE).skus;
   const [q, setQ] = useState("");
   const filtered = skus.filter((s) => (s.name + s.model + s.id).toLowerCase().includes(q.toLowerCase()));
   return (
@@ -386,14 +284,14 @@ function ProductSummaryView({ clientName, onAddSkuClick }) {
               <td className="py-2 px-3 text-brand-charcoal font-medium">{s.name}</td>
               <td className="py-2 px-3 text-brand-taupe">{s.model}</td>
               <td className="py-2 px-3 text-brand-taupe">{s.category}</td>
-              <td className="py-2 px-3 text-brand-charcoal">${s.map.toLocaleString()}</td>
-              <td className={`py-2 px-3 font-semibold ${s.current < s.map ? "text-red-600" : "text-brand-charcoal"}`}>${s.current.toLocaleString()}</td>
+              <td className="py-2 px-3 text-brand-charcoal">{s.map != null ? `$${s.map.toLocaleString()}` : "—"}</td>
+              <td className={`py-2 px-3 font-semibold ${s.current != null && s.map != null && s.current < s.map ? "text-red-600" : "text-brand-charcoal"}`}>{s.current != null ? `$${s.current.toLocaleString()}` : "—"}</td>
               <td className="py-2 px-3">{s.violations > 0 ? <Pill text={s.violations} tone="bg-red-50 text-red-700 border-red-200" /> : <span className="text-brand-taupe">0</span>}</td>
               <td className="py-2 px-3"><Pill text={s.status} tone={STATUS_BG[s.status]} /></td>
             </tr>
           ))}
         </Table>
-        <div className="text-xs text-brand-taupe mt-3">Showing {filtered.length} of {SKUS.length} SKUs</div>
+        <div className="text-xs text-brand-taupe mt-3">Showing {filtered.length} of {skus.length} SKUs</div>
       </Card>
     </div>
   );
@@ -401,7 +299,7 @@ function ProductSummaryView({ clientName, onAddSkuClick }) {
 
 function MappingCenterView({ clientName }) {
   const { db, setDb } = React.useContext(DataContext);
-  const { mappingStage, mappingInclude, mappingExclude } = db[clientName];
+  const { mappingStage, mappingInclude, mappingExclude } = db[clientName] || EMPTY_WORKSPACE;
 
   const handleMap = (item) => {
     setDb(prev => {
@@ -522,19 +420,21 @@ function MappingCenterView({ clientName }) {
 }
 
 function PricingView({ clientName, onAddPromoClick }) {
+  const { db } = React.useContext(DataContext);
+  const promotions = (db[clientName] || EMPTY_WORKSPACE).promotions;
   return (
     <div>
       <PageHeader title={`MAP & Pricing — ${clientName} (Sandbox)`} action={<PrimaryButton onClick={onAddPromoClick}><Plus className="w-4 h-4" /> Add promotion</PrimaryButton>} />
       <Card title="Promotions">
         <Table columns={["SKU", "Standard MAP", "Promo price", "Effective from", "Effective until", "Status"]}>
-          {PROMOTIONS.map((p, i) => (
+          {promotions.map((p, i) => (
             <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
               <td className="py-2 px-3 text-brand-charcoal font-semibold">{p.sku}</td>
-              <td className="py-2 px-3 text-brand-charcoal">${p.standard}</td>
+              <td className="py-2 px-3 text-brand-charcoal">{p.standard != null ? `$${p.standard}` : "—"}</td>
               <td className="py-2 px-3 text-emerald-700 font-bold">${p.promo}</td>
               <td className="py-2 px-3 text-brand-taupe">{p.from}</td>
               <td className="py-2 px-3 text-brand-taupe">{p.until}</td>
-              <td className="py-2 px-3"><Pill text={p.status} tone={p.status === "Active" ? STATUS_BG.Active : STATUS_BG.Scheduled} /></td>
+              <td className="py-2 px-3"><Pill text={p.status} tone={STATUS_BG[p.status] || STATUS_BG.Scheduled} /></td>
             </tr>
           ))}
         </Table>
@@ -549,7 +449,7 @@ function PricingView({ clientName, onAddPromoClick }) {
 // ------------------- Violations View -------------------
 function ViolationsView({ onOpenViolation, clientName }) {
   const { db } = React.useContext(DataContext);
-  const violations = db[clientName].violations;
+  const violations = (db[clientName] || EMPTY_WORKSPACE).violations;
   const [q, setQ] = useState("");
   const filtered = violations.filter((v) => (v.product + v.merchant + v.id).toLowerCase().includes(q.toLowerCase()));
   return (
@@ -583,7 +483,7 @@ function ViolationsView({ onOpenViolation, clientName }) {
 }
 
 // ------------------- Detailed Three Column Violation Drawer (Matches Screen 11 Detail) -------------------
-function ViolationDrawer({ violation, onClose, onSendWarning, onResolve }) {
+function ViolationDrawer({ violation, onClose, onSendWarning, onResolve, onEscalate }) {
   if (!violation) return null;
   const v = violation;
   return (
@@ -649,7 +549,11 @@ function ViolationDrawer({ violation, onClose, onSendWarning, onResolve }) {
                 </a>
               </div>
               <div className="bg-brand-charcoal rounded-lg h-44 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden border border-brand-beige">
-                <div className="absolute top-2 left-2 text-[9px] text-brand-taupe font-mono">IP: 184.28.110.15</div>
+                <div className="absolute top-2 left-2 right-2 text-[9px] text-brand-taupe font-mono text-left truncate">
+                  {v.evidence
+                    ? `Captured ${new Date(v.evidence.capturedAt).toLocaleString()} · SHA-256 ${v.evidence.sha256.slice(0, 12)}…`
+                    : "Sample data · no capture stored"}
+                </div>
                 <div className="text-brand-white font-bold text-xs truncate max-w-[200px]">{v.product}</div>
                 <div className="text-2xl font-black text-red-600 my-2">${v.advertised}</div>
                 <div className="text-[10px] text-brand-taupe uppercase tracking-wide">Sold By: <MerchantLogo name={v.merchant} /></div>
@@ -685,13 +589,13 @@ function ViolationDrawer({ violation, onClose, onSendWarning, onResolve }) {
 
         {/* Action Controls */}
         <div className="flex justify-end gap-3 border-t border-brand-beige pt-4 mt-6">
-          <button onClick={() => { onResolve(v.id); showToast("Discrepancy marked resolved.", "success"); }} className="text-sm font-semibold border border-brand-taupe rounded-lg px-4 py-2 text-brand-charcoal hover:bg-brand-beige cursor-pointer">
+          <button onClick={() => onResolve(v.id)} className="text-sm font-semibold border border-brand-taupe rounded-lg px-4 py-2 text-brand-charcoal hover:bg-brand-beige cursor-pointer">
             Mark Resolved
           </button>
-          <button onClick={() => showToast("Escalated to brand manager dashboard queue.", "info")} className="text-sm font-semibold border border-brand-beige rounded-lg px-4 py-2 text-brand-charcoal hover:bg-brand-beige cursor-pointer">
+          <button onClick={() => onEscalate(v.id)} className="text-sm font-semibold border border-brand-beige rounded-lg px-4 py-2 text-brand-charcoal hover:bg-brand-beige cursor-pointer">
             Escalate
           </button>
-          <PrimaryButton onClick={() => { onSendWarning(v.id); showToast("Dispatched compliance warnings alert to merchant manager.", "success"); }}>
+          <PrimaryButton onClick={() => onSendWarning(v.id)}>
             Send Warning Notice
           </PrimaryButton>
         </div>
@@ -702,12 +606,13 @@ function ViolationDrawer({ violation, onClose, onSendWarning, onResolve }) {
 }
 
 function EmailCenterView({ clientName }) {
+  const { shared } = React.useContext(DataContext);
   return (
     <div>
       <PageHeader title={`Email Center — ${clientName} (Sandbox)`} action={<PrimaryButton><Mail className="w-4 h-4" /> Compose email</PrimaryButton>} />
       <Card>
         <Table columns={["Date", "Seller", "Violation Reference", "Template", "Status", "Opened", "Response"]}>
-          {EMAILS.map((e, i) => (
+          {shared.emails.map((e, i) => (
             <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
               <td className="py-2 px-3 text-brand-taupe">{e.date}</td>
               <td className="py-2 px-3 text-brand-charcoal font-semibold">{e.seller}</td>
@@ -726,7 +631,7 @@ function EmailCenterView({ clientName }) {
 
 function MerchantsView({ clientName }) {
   const { db } = React.useContext(DataContext);
-  const merchants = db[clientName].merchants;
+  const merchants = (db[clientName] || EMPTY_WORKSPACE).merchants;
   return (
     <div>
       <PageHeader title={`Merchants (Sellers) — ${clientName} (Sandbox)`} />
@@ -750,12 +655,13 @@ function MerchantsView({ clientName }) {
 }
 
 function ReportsView({ clientName }) {
+  const { shared } = React.useContext(DataContext);
   return (
     <div>
       <PageHeader title={`Reports — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Schedule report</PrimaryButton>} />
       <Card>
         <Table columns={["Report name", "Frequency", "Recipients", "Last run", "Format"]}>
-          {REPORTS.map((r, i) => (
+          {shared.reports.map((r, i) => (
             <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
               <td className="py-2 px-3 text-brand-charcoal font-semibold">{r.name}</td>
               <td className="py-2 px-3 text-brand-taupe">{r.freq}</td>
@@ -771,12 +677,13 @@ function ReportsView({ clientName }) {
 }
 
 function AlertsView({ clientName }) {
+  const { shared } = React.useContext(DataContext);
   return (
     <div>
       <PageHeader title={`Alerts — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Add rule</PrimaryButton>} />
       <Card>
         <Table columns={["Alert name", "Condition", "Channel", "Recipients"]}>
-          {ALERTS.map((a, i) => (
+          {shared.alertRules.map((a, i) => (
             <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
               <td className="py-2 px-3 text-brand-charcoal font-semibold">{a.name}</td>
               <td className="py-2 px-3 text-brand-taupe">{a.condition}</td>
@@ -815,12 +722,13 @@ function SettingsView({ clientName }) {
 }
 
 function UsersView({ clientName }) {
+  const { shared } = React.useContext(DataContext);
   return (
     <div>
       <PageHeader title={`Users & Access — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Invite user</PrimaryButton>} />
       <Card>
         <Table columns={["User", "Role", "Access level", "Last active", "Status"]}>
-          {USERS.map((u, i) => (
+          {shared.users.map((u, i) => (
             <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
               <td className="py-2 px-3 text-brand-charcoal font-semibold">{u.name}</td>
               <td className="py-2 px-3 text-brand-taupe">{u.role}</td>
@@ -836,11 +744,8 @@ function UsersView({ clientName }) {
 }
 
 function AuditLogView({ clientName }) {
-  const rows = [
-    { time: "Today, 10:15 AM", user: "Fenil Dholaviya", action: "Sent violation email for VIO-0123" },
-    { time: "Today, 09:50 AM", user: "Auto Rule", action: "Mapped LG-003 to XYZ Electronics" },
-    { time: "Yesterday, 04:12 PM", user: "analyst@mirethos.com", action: "Excluded LG Remote Control from tracking" },
-  ];
+  const { shared } = React.useContext(DataContext);
+  const rows = shared.audit;
   return (
     <div>
       <PageHeader title={`Audit Log — ${clientName} (Sandbox)`} />
@@ -866,10 +771,10 @@ const NAV = [
   { id: "mapping", label: "Mapping Center", icon: Shuffle },
   { id: "pricing", label: "MAP & Pricing", icon: DollarSign },
   { id: "merchants", label: "Merchants (Sellers)", icon: Store },
-  { id: "violations", label: "Violations", icon: AlertTriangle, badge: 24 },
+  { id: "violations", label: "Violations", icon: AlertTriangle },
   { id: "email", label: "Email Center", icon: Mail },
   { id: "reports", label: "Reports", icon: FileText },
-  { id: "alerts", label: "Alerts", icon: Bell, badge: 3 },
+  { id: "alerts", label: "Alerts", icon: Bell },
   { id: "settings", label: "Settings", icon: SettingsIcon },
   { id: "users", label: "Users & Access", icon: Users },
   { id: "audit", label: "Audit Log", icon: ClipboardList },
@@ -877,38 +782,39 @@ const NAV = [
 
 export const DataContext = React.createContext(null);
 
-const generateInitialData = () => {
-  const db = {};
-  CLIENTS.forEach(client => {
-    const isLg = client.name === "LG";
-    db[client.name] = {
-      skus: isLg ? [...SKUS] : SKUS.map((s, i) => ({ ...s, id: `${client.name}-00${i+1}`, name: `${client.name} Product ${i+1}`, violations: Math.floor(Math.random() * 3) })).slice(0, client.skus),
-      violations: isLg ? [...VIOLATIONS] : VIOLATIONS.map((v, i) => ({ ...v, id: `VIO-${Math.random().toString(36).substr(2, 5).toUpperCase()}`, sku: `${client.name}-00${i+1}`, product: `${client.name} Product ${i+1}` })).slice(0, client.merchants * 2),
-      merchants: [...MERCHANTS],
-      mappingStage: isLg ? [...MAPPING_STAGE] : [],
-      mappingInclude: isLg ? [...MAPPING_INCLUDE] : [],
-      mappingExclude: isLg ? [...MAPPING_EXCLUDE] : []
-    };
-  });
-  return db;
+const EMPTY_WORKSPACE = { skus: [], violations: [], merchants: [], mappingStage: [], mappingInclude: [], mappingExclude: [], promotions: [] };
+const EMPTY_SHARED = { emails: [], reports: [], alertRules: [], alertUnread: 0, users: [], audit: [], severityDist: [], trend: [] };
+const DEFAULT_CHART_COLORS = { grid: "rgba(60, 47, 47, 0.08)", muted: "#827064", text: "#3C2F2F", card: "#FFFFFF", accent: "#A65E44" };
+
+const BRAND_COLORS = {
+  LG: { light: "#A50034", dark: "#FF4D6D" },
+  Philips: { light: "#0066A1", dark: "#3B82F6" },
+  Kawasaki: { light: "#1F2937", dark: "#6EE7B7" },
+  Citizen: { light: "#475569", dark: "#94A3B8" },
+  Apple: { light: "#3A3A3C", dark: "#A1A1A6" },
+  Samsung: { light: "#1428A0", dark: "#6B8BFF" },
 };
 
+const initials = (name) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+
+// Local calendar date as YYYY-MM-DD (en-CA formats dates that way).
+const todayIso = (offsetDays = 0) => new Date(Date.now() + offsetDays * 86_400_000).toLocaleDateString("en-CA");
+
 export default function App() {
-  const [db, setDb] = useState(generateInitialData);
+  // Workspace data per client name, plus lists shared by several screens. Loaded through the API client.
+  const [db, setDb] = useState({});
+  const [shared, setShared] = useState(EMPTY_SHARED);
+  const [clients, setClients] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   // Screen Router States: 'login', 'client-select', 'app'
   const [screen, setScreen] = useState('login');
   const [activeClient, setActiveClient] = useState("LG");
   
   const [isDark, setIsDark] = useState(false);
+  const [chartColors, setChartColors] = useState(DEFAULT_CHART_COLORS);
   useEffect(() => {
-    const brandColors = {
-      LG: { light: "#A50034", dark: "#FF4D6D" },
-      Philips: { light: "#0066A1", dark: "#3B82F6" },
-      Kawasaki: { light: "#1F2937", dark: "#6EE7B7" },
-      Citizen: { light: "#475569", dark: "#94A3B8" }
-    };
-    
-    const colors = brandColors[activeClient] || { light: "#A65E44", dark: "#E38663" };
+    const accent = clients.find((c) => c.name === activeClient)?.accent;
+    const colors = (accent?.light && accent) || BRAND_COLORS[activeClient] || { light: "#A65E44", dark: "#E38663" };
     document.documentElement.style.setProperty('--accent-brand', isDark ? colors.dark : colors.light);
 
     if (isDark) {
@@ -918,7 +824,18 @@ export default function App() {
       document.documentElement.classList.remove('dark');
       document.body.classList.remove('dark');
     }
-  }, [isDark, activeClient]);
+
+    // Charts read the live theme tokens so they follow light/dark mode and the client accent.
+    const css = getComputedStyle(document.documentElement);
+    const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+    setChartColors({
+      grid: token('--border-color', DEFAULT_CHART_COLORS.grid),
+      muted: token('--text-muted', DEFAULT_CHART_COLORS.muted),
+      text: token('--text-primary', DEFAULT_CHART_COLORS.text),
+      card: token('--card-bg', DEFAULT_CHART_COLORS.card),
+      accent: (isDark ? colors.dark : colors.light) || DEFAULT_CHART_COLORS.accent,
+    });
+  }, [isDark, activeClient, clients]);
   
   const [view, setView] = useState("overview");
   const [clientOpen, setClientOpen] = useState(false);
@@ -927,17 +844,21 @@ export default function App() {
   // Forms modals
   const [modals, setModals] = useState({ product: false, exception: false });
   const [toasts, setToasts] = useState([]);
+  const toastSeq = React.useRef(0);
 
-  // Login variables
+  // Login variables (the mock sign-in keeps its demo values; the real API needs a real password)
   const [loginEmail, setLoginEmail] = useState('operations@mirethos.com');
-  const [loginPassword, setLoginPassword] = useState('••••••••••••');
+  const [loginPassword, setLoginPassword] = useState(api.isMock ? '••••••••••••' : '');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Client configuration
-  const client = CLIENTS.find((c) => c.name === activeClient);
+  const client = clients.find((c) => c.name === activeClient) || clients[0] || { name: activeClient, status: "Sandbox", skus: 0, merchants: 0 };
+  const workspace = db[client.name] || EMPTY_WORKSPACE;
+  const activeViolationsCount = workspace.violations.filter((v) => v.status === "Open" || v.status === "Notified").length;
+  const navBadges = { violations: activeViolationsCount, alerts: shared.alertUnread };
 
   const showToast = (message, type = 'success', duration = 4000) => {
-    const id = Date.now();
+    const id = ++toastSeq.current;
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -948,14 +869,37 @@ export default function App() {
     setModals(prev => ({ ...prev, [type]: false }));
   };
 
-  const handleLoginSubmit = (e) => {
+  const updateWorkspace = (clientName, fn) => {
+    setDb(prev => ({ ...prev, [clientName]: fn(prev[clientName] || EMPTY_WORKSPACE) }));
+  };
+
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    setTimeout(() => {
-      setIsLoggingIn(false);
+    try {
+      const user = await api.login(loginEmail, loginPassword);
+      const list = await api.listClients();
+      const workspaces = await Promise.all(list.map((c) => api.loadWorkspace(c)));
+      const nextDb = {};
+      list.forEach((c, i) => { nextDb[c.name] = workspaces[i]; });
+      setShared(await api.loadShared());
+      setClients(list);
+      setDb(nextDb);
+      setCurrentUser(user);
+      if (list.length && !list.some((c) => c.name === activeClient)) setActiveClient(list[0].name);
       setScreen('client-select');
       showToast("Credentials authorized.", "success");
-    }, 1000);
+    } catch (err) {
+      showToast(err.message || "Sign in failed.", "info");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    api.logout();
+    setScreen('login');
+    showToast("Logged out of session.", "info");
   };
 
   const handleSelectClient = (clientName) => {
@@ -965,74 +909,84 @@ export default function App() {
     showToast(`Loaded ${clientName} portal sandbox.`, "success");
   };
 
-  const handleSendWarning = (violationId) => {
-    setDb(prev => {
-      const clientData = prev[activeClient];
-      return {
-        ...prev,
-        [activeClient]: {
-          ...clientData,
-          violations: clientData.violations.map(v => 
-            v.id === violationId ? { ...v, status: "Notified" } : v
-          )
-        }
-      }
-    });
+  const setViolationStatus = (violationId, status) => {
+    updateWorkspace(activeClient, (clientData) => ({
+      ...clientData,
+      violations: clientData.violations.map(v => v.id === violationId ? { ...v, status } : v),
+    }));
+  };
+
+  const handleSendWarning = async (violationId) => {
+    await api.sendWarning(activeClient, violationId);
+    setViolationStatus(violationId, "Notified");
     showToast(`Notice sent for violation ID ${violationId}`, "success");
     setViolation(null); // Close the drawer
   };
 
-  const handleResolveViolation = (violationId) => {
-    setDb(prev => {
-      const clientData = prev[activeClient];
-      return {
-        ...prev,
-        [activeClient]: {
-          ...clientData,
-          violations: clientData.violations.map(v => 
-            v.id === violationId ? { ...v, status: "Resolved" } : v
-          )
-        }
-      }
-    });
+  const handleResolveViolation = async (violationId) => {
+    await api.resolveViolation(activeClient, violationId);
+    setViolationStatus(violationId, "Resolved");
     showToast(`Violation ID ${violationId} resolved successfully.`, "success");
     setViolation(null); // Close the drawer
   };
 
-  const handleProductSubmit = (e) => {
-    e.preventDefault();
-    const data = new FormData(e.target);
-    const sku = data.get('sku');
-    const name = data.get('name');
-    const model = data.get('model');
-    const category = data.get('category');
-    
-    setDb(prev => {
-      const clientData = prev[activeClient];
-      return {
-        ...prev,
-        [activeClient]: {
-          ...clientData,
-          skus: [
-            { id: sku, name, model, category, map: 999, current: 999, violations: 0, status: "Active" },
-            ...clientData.skus
-          ]
-        }
-      }
-    });
-
-    showToast(`SKU "${sku}" successfully registered for crawl monitors.`, 'success');
-    closeModal('product');
-    e.target.reset();
+  const handleEscalateViolation = async (violationId) => {
+    await api.escalateViolation(activeClient, violationId);
+    showToast("Escalated to brand manager dashboard queue.", "info");
   };
 
-  const handleExceptionSubmit = (e) => {
+  const handleProductSubmit = async (e) => {
     e.preventDefault();
-    const data = new FormData(e.target);
-    const seller = data.get('seller');
-    showToast(`Pricing allowance exception authorized for ${seller}.`, 'success');
+    const form = e.target;
+    const data = new FormData(form);
+    const num = (key) => {
+      const v = String(data.get(key) ?? '').trim();
+      return v === '' ? null : Number.parseFloat(v);
+    };
+    const sku = String(data.get('sku')).trim();
+    const entry = {
+      sku,
+      name: String(data.get('name')).trim(),
+      model: String(data.get('model')).trim(),
+      category: String(data.get('category') ?? '').trim(),
+      map: num('map'),
+      msrp: num('msrp'),
+    };
+    if (workspace.skus.some((s) => s.id.toLowerCase() === sku.toLowerCase())) {
+      showToast(`SKU "${sku}" already exists for ${activeClient}.`, 'info');
+      return;
+    }
+    try {
+      const row = await api.addSku(client, entry);
+      updateWorkspace(activeClient, (clientData) => ({ ...clientData, skus: [row, ...clientData.skus] }));
+      showToast(`SKU "${sku}" successfully registered for crawl monitors.`, 'success');
+      closeModal('product');
+      form.reset();
+    } catch (err) {
+      showToast(err.message || "Could not add the SKU.", 'info');
+    }
+  };
+
+  const handleExceptionSubmit = async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = new FormData(form);
+    const entry = {
+      seller: String(data.get('seller')).trim(),
+      scope: String(data.get('scope')).trim(),
+      promo: Number.parseFloat(String(data.get('discount'))),
+      start: String(data.get('start')),
+      end: String(data.get('end')),
+    };
+    if (entry.end < entry.start) {
+      showToast("The end date must be on or after the start date.", 'info');
+      return;
+    }
+    const promo = await api.addPromotion(client, entry, workspace.skus);
+    updateWorkspace(activeClient, (clientData) => ({ ...clientData, promotions: [promo, ...(clientData.promotions || [])] }));
+    showToast(`Pricing allowance exception authorized for ${entry.seller}.`, 'success');
     closeModal('exception');
-    e.target.reset();
+    form.reset();
   };
 
   const mainContent = useMemo(() => {
@@ -1122,7 +1076,7 @@ export default function App() {
             <p className="text-xs text-brand-taupe mb-5">Choose a client to access the MAP Intelligence Portal</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {CLIENTS.map((c) => (
+              {clients.map((c) => (
                 <div key={c.name} className="bg-brand-white border border-brand-beige hover:border-brand-copper/50 rounded-xl p-4 transition-all cursor-pointer shadow-sm"
                   onClick={() => handleSelectClient(c.name)}>
                   <div className="flex justify-between items-start mb-4">
@@ -1155,7 +1109,7 @@ export default function App() {
   // RENDER: WORKSPACE PORTAL SHELL
   // --------------------------------------------------------------------------
   return (
-    <DataContext.Provider value={{ db, setDb }}>
+    <DataContext.Provider value={{ db, setDb, shared, chartColors }}>
       <div className="flex h-screen bg-brand-ivory font-sans text-brand-charcoal select-none">
       
       {/* Sidebar */}
@@ -1179,7 +1133,7 @@ export default function App() {
           </button>
           {clientOpen && (
             <div className="absolute left-3 right-3 top-full mt-1 bg-brand-white border border-brand-beige rounded-lg overflow-hidden z-10 shadow-xl">
-              {CLIENTS.map((c) => (
+              {clients.map((c) => (
                 <button key={c.name} onClick={() => { setActiveClient(c.name); setClientOpen(false); }}
                   className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-beige flex justify-between items-center cursor-pointer ${c.name === activeClient ? "text-brand-charcoal font-bold" : "text-brand-taupe"}`}>
                   <div className="flex items-center gap-2">
@@ -1205,7 +1159,7 @@ export default function App() {
                 }`}>
                 <Icon className="w-4 h-4" />
                 <span className="flex-1 text-left">{n.label}</span>
-                {n.badge ? <span className="text-[9px] font-bold bg-brand-copper text-brand-white rounded-full px-1.5 py-0.5">{n.badge}</span> : null}
+                {navBadges[n.id] ? <span className="text-[9px] font-bold bg-brand-copper text-brand-white rounded-full px-1.5 py-0.5">{navBadges[n.id]}</span> : null}
               </button>
             );
           })}
@@ -1214,13 +1168,13 @@ export default function App() {
         {/* Bottom User Avatar */}
         <div className="px-4 py-3 border-t border-brand-beige flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-brand-copper flex items-center justify-center text-xs text-brand-white font-bold">FD</div>
+            <div className="w-7 h-7 rounded-full bg-brand-copper flex items-center justify-center text-xs text-brand-white font-bold">{initials(currentUser?.name || "Fenil Dholaviya")}</div>
             <div className="text-[11px]">
-              <div className="text-brand-charcoal font-bold">Fenil Dholaviya</div>
-              <div className="text-brand-taupe">Admin</div>
+              <div className="text-brand-charcoal font-bold">{currentUser?.name || "Fenil Dholaviya"}</div>
+              <div className="text-brand-taupe">{currentUser?.role === "member" ? "Member" : "Admin"}</div>
             </div>
           </div>
-          <button onClick={() => { setScreen('login'); showToast("Logged out of session.", "info"); }} className="text-[10px] text-brand-copper hover:underline cursor-pointer">
+          <button onClick={handleLogout} className="text-[10px] text-brand-copper hover:underline cursor-pointer">
             Exit
           </button>
         </div>
@@ -1230,7 +1184,7 @@ export default function App() {
       <div className="flex-1 overflow-y-auto p-6 bg-brand-ivory">{mainContent}</div>
 
       {/* Slide-out drawer details */}
-      <ViolationDrawer violation={violation} onClose={() => setViolation(null)} onSendWarning={handleSendWarning} onResolve={handleResolveViolation} />
+      <ViolationDrawer violation={violation} onClose={() => setViolation(null)} onSendWarning={handleSendWarning} onResolve={handleResolveViolation} onEscalate={handleEscalateViolation} />
 
       {/* Floating Theme Toggle */}
       <button 
@@ -1251,7 +1205,7 @@ export default function App() {
 
           <div className="mb-4 p-3 bg-brand-ivory border border-brand-beige rounded-lg text-center">
             <p className="text-xs text-brand-taupe mb-2">Want to add multiple SKUs at once?</p>
-            <button type="button" onClick={() => alert('Bulk upload feature coming soon!')} className="text-xs font-semibold bg-brand-white border border-brand-beige rounded px-3 py-1.5 text-brand-copper hover:bg-brand-beige cursor-pointer w-full flex items-center justify-center gap-2">
+            <button type="button" onClick={() => showToast('Bulk upload arrives with catalogue import (Phase 2a).', 'info')} className="text-xs font-semibold bg-brand-white border border-brand-beige rounded px-3 py-1.5 text-brand-copper hover:bg-brand-beige cursor-pointer w-full flex items-center justify-center gap-2">
               <FileText className="w-3.5 h-3.5" />
               Upload CSV / Excel
             </button>
@@ -1327,7 +1281,13 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-brand-taupe mb-1">Start Date *</label>
-                <input type="date" name="start" required defaultValue="2026-08-25" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
+                <input type="date" name="start" required defaultValue={todayIso()} className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-brand-taupe mb-1">End Date *</label>
+                <input type="date" name="end" required defaultValue={todayIso(7)} className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-brand-beige pt-3">

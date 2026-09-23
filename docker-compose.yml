@@ -1,0 +1,93 @@
+# Local stack for MAP Intel.
+#
+#   docker compose up -d postgres redis minio minio-init     # just the infrastructure (then run API/worker with npm)
+#   docker compose --profile app up -d --build               # infrastructure + API + collector worker in containers
+#
+# Ports: Postgres 5432, Redis 6379, MinIO API 9000, MinIO console 9001, API 4000.
+
+name: map-intel
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mapintel
+      POSTGRES_USER: mapintel
+      POSTGRES_PASSWORD: mapintel
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapintel -d mapintel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: mapintel
+      MINIO_ROOT_PASSWORD: mapintel-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Creates the evidence bucket with Object Lock (write-once support) enabled.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 mapintel mapintel-secret &&
+      mc mb --ignore-existing --with-lock local/mapintel-evidence &&
+      echo 'bucket ready'"
+    restart: "no"
+
+  api:
+    profiles: ["app"]
+    build: ./server
+    env_file: ./server/.env
+    environment:
+      DATABASE_URL: postgres://mapintel:mapintel@postgres:5432/mapintel
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+    ports: ["4000:4000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    # Apply migrations on start, then run the API.
+    command: ["sh", "-c", "node dist/scripts/migrate.js && node dist/api/index.js"]
+
+  worker:
+    profiles: ["app"]
+    build: ./server
+    env_file: ./server/.env
+    environment:
+      DATABASE_URL: postgres://mapintel:mapintel@postgres:5432/mapintel
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+    depends_on:
+      api: { condition: service_started }
+    command: ["node", "dist/worker/index.js"]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
