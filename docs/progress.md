@@ -5,7 +5,7 @@
 ## Current status
 - **Phase:** P0 Groundwork **done** (verified 23 Sep 2026; follow-ups closed 24 Sep 2026, including browser Steps 4.2 and 5).
 - **Last updated:** 24 Sep 2026 (Claude Code: P0 follow-ups)
-- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). Local commits `0ce6d4e` (baseline), `eccdcd8` (verification fixes), `f1a4462` (context docs) and the P0 follow-ups commit; **not pushed**.
+- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). Branch `main`, pushed to `origin/main` on 24 Sep 2026 (up to `cb90fd0`: P0 baseline, verification fixes, context docs, P0 follow-ups, APL-P10 seed).
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Live portal:** front-end with API client layer. Mock mode by default; `VITE_USE_MOCK=false` switches sign-in, clients and Product Summary to the API.
 - **Next step:**
@@ -74,7 +74,7 @@
 
 ## Log
 ### 24 Sep 2026 — P0 follow-ups (Claude Code)
-- **Commits:** `f1a4462` (context docs) and the follow-ups commit; not pushed.
+- **Commits:** `f1a4462` (context docs), `f0ec35d` (follow-ups), `cb90fd0` (APL-P10 seed); all P0 commits pushed to `origin/main`.
 - **Browser checks:** Step 4.2 PASS (4/4 live pages match the report); Step 5 PASS (sign in, client list, Product Summary, Add SKU survives refresh). Details in `docs/phase0-verification.md`.
 - **Admin password rotated** with the new `server` script `npm run admin:set-password`. It never prints the password. `SEED_ADMIN_PASSWORD` must now be at least 12 characters.
 - **Seed:** `pilot-skus.json` has a `retired` entry per product; `seed.ts` sets those listings to `Retired`, keeping their observations and evidence. LG-P09 Amazon and SAM-P03 Walmart retired; Neon has 80 Included and 2 Retired listings.
