@@ -26,6 +26,8 @@ interface SeedFile {
     model: string;
     msrp?: number;
     urls: Record<string, string | null>;
+    // Listings found to be wrong: kept (their observations and evidence stay) but set to Retired.
+    retired?: Record<string, { url: string; reason: string }>;
   }[];
 }
 
@@ -61,6 +63,7 @@ async function main(): Promise<void> {
     }
 
     let listings = 0;
+    let retired = 0;
     for (const p of seed.products) {
       const accountId = accountIds.get(p.account);
       if (!accountId) throw new Error(`unknown account ${p.account} for ${p.code}`);
@@ -101,6 +104,16 @@ async function main(): Promise<void> {
         }
         listings++;
       }
+
+      for (const [sourceCode, { url }] of Object.entries(p.retired ?? {})) {
+        const sourceId = sourceIds.get(sourceCode);
+        if (!sourceId) throw new Error(`unknown source ${sourceCode}`);
+        const { rowCount } = await db.query(
+          `UPDATE listing SET state = 'Retired' WHERE source_id = $1 AND url = $2 AND product_id = $3 AND state <> 'Retired'`,
+          [sourceId, url, productId],
+        );
+        retired += rowCount ?? 0;
+      }
     }
 
     if (config.SEED_ADMIN_EMAIL && config.SEED_ADMIN_PASSWORD) {
@@ -116,7 +129,7 @@ async function main(): Promise<void> {
       console.log('SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set: no admin user created');
     }
 
-    console.log(`seeded ${seed.accounts.length} accounts, ${seed.sources.length} sources, ${seed.products.length} products, ${listings} listings`);
+    console.log(`seeded ${seed.accounts.length} accounts, ${seed.sources.length} sources, ${seed.products.length} products, ${listings} listings, ${retired} listings retired`);
   });
   await closeDb();
 }

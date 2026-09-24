@@ -8,4 +8,8 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
+  // Only scan the app's entry for dependencies, not the reference prototype in docs/reference/
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
 })

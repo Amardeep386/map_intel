@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* docs/reference/ holds the prototype (reference code, not part of the app): keep its classes out of the build */
+@source not "../docs/reference";
 
 @theme {
   --color-brand-ivory: var(--bg-primary);      /* Backgrounds */

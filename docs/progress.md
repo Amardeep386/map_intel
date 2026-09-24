@@ -3,16 +3,15 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P0 Groundwork **done** (verified 23 Sep 2026). Two browser checks remain as follow-ups (Steps 4.2 and 5 in `docs/phase0-verification.md`).
-- **Last updated:** 24 Sep 2026 (planning chat: repo docs added)
-- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). Local commits `0ce6d4e` (baseline) and `eccdcd8` (verification fixes); **not pushed**.
+- **Phase:** P0 Groundwork **done** (verified 23 Sep 2026; follow-ups closed 24 Sep 2026, including browser Steps 4.2 and 5).
+- **Last updated:** 24 Sep 2026 (Claude Code: P0 follow-ups)
+- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). Local commits `0ce6d4e` (baseline), `eccdcd8` (verification fixes), `f1a4462` (context docs) and the P0 follow-ups commit; **not pushed**.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Live portal:** front-end with API client layer. Mock mode by default; `VITE_USE_MOCK=false` switches sign-in, clients and Product Summary to the API.
 - **Next step:**
-  1. Commit the new `CLAUDE.md` and `docs/` files.
-  2. Do the two browser checks (4.2 and 5) and rotate the admin password.
-  3. Decide on US egress for the collector (see Open questions).
-  4. Start Phase 1 in Claude Code (prompt in `docs/prompts.md`).
+  1. Supply URLs for the 10 missing SKU/retailer pairs (Known issues).
+  2. Decide on US egress for the collector (see Open questions).
+  3. Start Phase 1 in Claude Code (prompt in `docs/prompts.md`).
 
 ## Decisions so far
 | # | Decision | Date | Where decided |
@@ -53,18 +52,35 @@
 
 ## Known issues carried forward
 - **Collector blocked from India on Amazon and Best Buy.** Needs US egress; see Open questions.
-- **Seed data fixes.**
-  - LG-P09's Amazon ASIN is dead.
-  - SAM-P03's Walmart URL points to a different colour variant (…KWXAR, not …KAXAR).
-  - 8 SKU/retailer pairs have no listing.
-- **Admin password is weak.** It was also typed into a chat, so rotate it.
+- **10 SKU/retailer pairs have no listing** (8 never found, plus 2 retired on 24 Sep). URLs needed from you:
+
+  | SKU | Model | Needs |
+  |---|---|---|
+  | LG-P04 | 65QNED75BUA | Amazon |
+  | LG-P09 | S90TY | Amazon (dead ASIN `B0FKB4VTDY` retired) |
+  | LG-P09 | S90TY | Walmart |
+  | LG-P10 | 16U55U-H.AU77U3 | Walmart |
+  | APL-P10 | MEQX4LW/A | Amazon |
+  | APL-P10 | MEQX4LW/A | Walmart |
+  | SAM-P02 | SM-S942UZKEXAA | Amazon |
+  | SAM-P03 | SM-R640NZKAXAR | Walmart (…KWXAR variant URL retired) |
+  | SAM-P07 | QN65QN90FAFXZA | Amazon |
+  | SAM-P07 | QN65QN90FAFXZA | Walmart |
+- **Only the main offer is collected.** Walmart LG-P01 had 5 other sellers that were not captured. MAP monitoring needs all offers on a listing (Phase 2b).
+- **Test SKU `TEST-P0-STEP5` (LG) is `Retired`, not deleted.** Its MAP row is protected by `map_price_no_delete`. Product Summary still lists Retired products; filter them in Phase 1/2a.
 - **Neon owner role has BYPASSRLS.** Tenant isolation relies on the API switching to `mapintel_tenant`, which is verified (10/10). In Phase 1, give the API its own non-owner database role.
 - **Upstash command limits.** Run the worker only when needed until production.
-- **Browser checks outstanding.** Step 4.2 (live pages vs report) and Step 5 (portal in API mode: sign in, Product Summary, add SKU persists).
 - **Mock screens.** Screens for later phases still show mock data in API mode.
-- **Lint warnings.** 9 remain (6 unused names, 3 React-hook notes); none is a bug.
+- **Lint warnings.** 11 remain: 9 in the portal (6 unused names, 3 React-hook notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 24 Sep 2026 — P0 follow-ups (Claude Code)
+- **Commits:** `f1a4462` (context docs) and the follow-ups commit; not pushed.
+- **Browser checks:** Step 4.2 PASS (4/4 live pages match the report); Step 5 PASS (sign in, client list, Product Summary, Add SKU survives refresh). Details in `docs/phase0-verification.md`.
+- **Admin password rotated** with the new `server` script `npm run admin:set-password`. It never prints the password. `SEED_ADMIN_PASSWORD` must now be at least 12 characters.
+- **Seed:** `pilot-skus.json` has a `retired` entry per product; `seed.ts` sets those listings to `Retired`, keeping their observations and evidence. LG-P09 Amazon and SAM-P03 Walmart retired; Neon has 80 Included and 2 Retired listings.
+- **`docs/reference/` excluded** from oxlint (`.oxlintrc.json`), Tailwind scanning (`src/index.css`: CSS 39.0 → 31.9 kB) and the Vite dependency scan (`vite.config.js`).
+
 ### 24 Sep 2026 — Planning chat
 - Added `CLAUDE.md`, `docs/plan.md`, `docs/architecture.md`, `docs/prompts.md`, this file, and `docs/reference/` (blueprint, prototype, prototype source) so Claude Code has full context in the repo.
 - Phase kickoff prompts rewritten for Claude Code in Cursor.

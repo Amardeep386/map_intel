@@ -17,6 +17,7 @@
     "test": "tsx --test test/*.test.ts",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
+    "admin:set-password": "tsx src/scripts/set-admin-password.ts",
     "storage:init": "tsx src/scripts/storage-init.ts",
     "collect": "tsx src/scripts/collect.ts",
     "collect:report": "tsx src/scripts/report.ts",

@@ -20,12 +20,12 @@ Infrastructure (option b, no Docker): Neon Postgres 18.6 (pooler host, SSL), Ups
 | 3.6 | API with curl | PASS: `/health` ok (db, redis, storage); seed admin login gives a token; `/accounts` = Apple, LG, Samsung; 10 products each; wrong password → 401; no token / bad token → 401; unknown account → 404 (after fix 1) |
 | 3.7 | RLS + append-only (pg script, all in rolled-back transactions) | PASS 10/10: `mapintel_tenant` has no superuser or BYPASSRLS; RLS enabled and forced on product, product_identifier, map_price, account_membership; as LG only LG's 10 products are visible; filtering on Apple's id returns 0; inserting an Apple product is refused; no account set → 0 rows; UPDATE and DELETE on `observation` are refused by the trigger (even as system) |
 | 4.1 | Smoke test (`--inline --account lg --limit 3`) | PASS: Walmart ok $1,599.99, in stock, Walmart.com; Amazon blocked (bot check); Best Buy failed (connection dropped) |
-| 4.2 | Compare with live pages | PARTIAL: checked against the captured evidence (see "Spot checks"); side-by-side comparison with the live pages in your browser not done yet |
+| 4.2 | Compare with live pages | PASS (24 Sep): 4/4 live pages match the report on price, stock, main seller and model (Walmart LG-P01, APL-P06, LG-P02; Amazon SAM-P04). No price drift since 23 Sep. See "Live page checks" |
 | 4.3 | Evidence hashes | PASS: smoke run 4/4 files, full run **104/104** files (52 captures × HTML + PNG). Downloaded file SHA-256 = `evidence` table = S3 `ChecksumSHA256` = object metadata. The S3 SHA-256 checksum works on AWS, so nothing was dropped |
 | 4.4 | Full run (`--inline`, 82 listings) + `collect:report` | DONE in 23 min: 27 ok, 2 partial, 21 blocked, 31 failed, 1 not_found. Table below |
 | 4.5 | Queue path (worker + `collect -- --account apple --source bestbuy_us`) | PASS after fixes 6–7: worker processed 10/10 jobs; crawl_run `finished`; 10 observations for 10 listings (no duplicates despite a worker restart). Worker stopped afterwards |
 | 4.6 | India findings | Recorded under "Findings from India"; nothing was bypassed |
-| 5 | Portal in API mode | API side PASS: `.env.local` (`VITE_USE_MOCK=false`) is served, CORS allows `localhost:5173`, and products return a current price for 26/30 SKUs with MAP null. **Browser walkthrough not done yet:** sign in, client list, Product Summary, Add SKU survives refresh |
+| 5 | Portal in API mode | PASS (24 Sep): signed in with the rotated admin password; client list = Apple, LG, Samsung; LG Product Summary shows 10 SKUs, prices for LG-P01–P08, none for LG-P09/P10 (no successful capture), MAP "—"; Add SKU `TEST-P0-STEP5` survived a refresh. The test SKU is set to `Retired` (not deleted: its MAP row is protected by `map_price_no_delete`) |
 | 6 | This document + commit | Done (local commit, not pushed) |
 
 ## Bugs found and fixed
@@ -65,6 +65,23 @@ This run started before fixes 4–5, so on a re-run expect Walmart LG-P07 → `o
 - **Walmart SAM-P03**: the page's model is `SM-R640NZKWXAR`, but the seed has `SM-R640NZKAXAR`. The seeded URL is a different colour variant, and `model_match=false` flags it correctly.
 - **Amazon bot pages**: "Click the button below to continue shopping" interstitial and captcha pages. Recorded as `blocked` with no price, and never clicked through.
 
+### Live page checks (24 Sep 2026, your browser, from India)
+
+| Listing | Report (23 Sep) | Live page | Result |
+|---|---|---|---|
+| Walmart LG-P01 | $1,599.99, in stock, Walmart.com | Same; model OLED65C6PUA. **5 more sellers** offer the item | Match |
+| Walmart APL-P06 | $442.00, in stock, Datavision Computer Video | Same | Match |
+| Walmart LG-P02 | $1,499.99, in stock, Beach Camera | Same | Match |
+| Amazon SAM-P04 | $289.99, in stock, Amazon.com | Same | Match |
+
+The collector records only the main ("Add to cart") offer. Other sellers' offers on the same listing are not captured (see Remaining known issues).
+
+## Follow-ups done on 24 Sep 2026
+
+- Seed admin password rotated with the new `npm run admin:set-password` (reads `SEED_ADMIN_PASSWORD`, never prints it). Config now requires at least 12 characters. Wrong password still gives 401.
+- Seed fixes: LG-P09 Amazon (dead ASIN) and SAM-P03 Walmart (colour variant) are set to `Retired` via a new `retired` entry in `pilot-skus.json`; observations and evidence kept. Neon now has 80 Included and 2 Retired listings.
+- `docs/reference/` is excluded from lint (`.oxlintrc.json`), from Tailwind class scanning (`src/index.css`, CSS 39.0 → 31.9 kB) and from Vite's dependency scan.
+
 ## Findings from India
 
 - **Best Buy is unreachable.** Product pages *and* the homepage have the connection dropped (`fetch failed` / timeout, Chromium `ERR_HTTP2_PROTOCOL_ERROR`, curl exit 56). robots.txt is reachable from Node (322 rules; product pages allowed), so this is an edge block, not robots. Recorded as `failed`, 0/30 captured.
@@ -83,6 +100,7 @@ This run started before fixes 4–5, so on a re-run expect Walmart LG-P07 → `o
 - Neon's owner role has BYPASSRLS. Tenant isolation relies on the API switching to `mapintel_tenant` for account queries (verified); `withSystem` code paths are not RLS-protected by design.
 - `pg` warns that `sslmode=require` will change meaning in pg v9. Use `sslmode=verify-full` in `DATABASE_URL` to keep today's certificate checks.
 - The portal refuses duplicate SKU codes case-insensitively, but the database unique key is case-sensitive.
+- Only the main offer on a listing is collected. Walmart LG-P01 had 5 other sellers that were not captured; for MAP monitoring those offers matter (Phase 2b).
 - The smoke-run Walmart screenshot (captured before fix 2) is unstyled. It stays because evidence is append-only; its hash is still valid.
 
 ## Decisions for you
@@ -90,7 +108,7 @@ This run started before fixes 4–5, so on a re-run expect Walmart LG-P07 → `o
 1. **US egress for collection.** Best Buy (0/30) and most of Amazon can't be collected from India. Options: run the worker in a US region (e.g. Render Ohio) and re-run the PoC from there, or use a US proxy. Neither is set up.
 2. **Best Buy Products API.** Set `BESTBUY_API_KEY` for price and stock. The collector still fetches the page for evidence, which fails from India.
 3. **Amazon approach** (part of legal review Decision 5): even with polite delays, 81% of pages hit bot checks. Consider an official or licensed source (Product Advertising / SP-API, or a data provider) rather than page fetching.
-4. **Seed data fixes:** LG-P09 Amazon ASIN `B0FKB4VTDY` is dead. SAM-P03 Walmart URL (`/ip/19035974776`) is the `SM-R640NZKWXAR` variant, not `…KAXAR`: repoint it or accept the variant.
+4. **Seed data fixes:** done 24 Sep (both listings retired). Replacement URLs are among the 10 pairs listed in `docs/progress.md`.
 5. **MAP values:** none are seeded, so MAP shows "—". Provide the MAP list for the pilot SKUs.
-6. **Admin password:** the seed admin password is very weak. Change it before anything leaves your machine, and consider a minimum length in `SEED_ADMIN_PASSWORD` validation.
-7. **Remaining browser checks:** Step 4.2 (compare a few live pages with the report) and Step 5 (sign in with API mode on, check Product Summary, Add SKU survives refresh).
+6. **Admin password:** done 24 Sep (rotated; minimum 12 characters enforced).
+7. **Remaining browser checks:** done 24 Sep (Steps 4.2 and 5 pass).

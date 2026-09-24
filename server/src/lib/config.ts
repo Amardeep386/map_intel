@@ -35,7 +35,7 @@ const schema = z.object({
   JWT_TTL_HOURS: int(12),
 
   SEED_ADMIN_EMAIL: z.string().optional(),
-  SEED_ADMIN_PASSWORD: z.string().optional(),
+  SEED_ADMIN_PASSWORD: z.string().min(12, 'SEED_ADMIN_PASSWORD must be at least 12 characters').optional(),
   SEED_ADMIN_NAME: z.string().default('Mirethos Operations'),
 
   COLLECT_MIN_DELAY_MS: int(15000),
