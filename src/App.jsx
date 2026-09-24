@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
-  Search, Plus, ChevronDown, ExternalLink, X, Check, ChevronLeft, ChevronRight,
-  Eye, MapPin, Ban, Sparkles, Lock, Moon, Sun
+  Plus, ChevronDown, ExternalLink, X, ChevronLeft, ChevronRight,
+  Eye, MapPin, Ban, Sparkles, Lock, Moon, Sun, Radar
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -12,6 +12,10 @@ import lgLogo from "./assets/lg.png";
 import philipsLogo from "./assets/philips.png";
 import kawasakiLogo from "./assets/kawasaki.png";
 import { api } from "./api/client.js";
+import { Card, KPI, PageHeader, Pill, PrimaryButton, SearchBox, Table } from "./ui.jsx";
+import { WorkspaceContext } from "./workspace.js";
+import { SourcesTermsView } from "./views/SourcesTermsView.jsx";
+import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 
 // ---------- Format Currency Utility (USD) ----------
 const formatUSD = (number) => {
@@ -36,72 +40,6 @@ const STATUS_BG = {
 };
 
 // ---------- Small building blocks ----------
-function Pill({ text, tone }) {
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${tone || "bg-slate-100 text-slate-600 border-slate-200"}`}>
-      {text}
-    </span>
-  );
-}
-
-function KPI({ label, value, sub, subTone }) {
-  return (
-    <div className="bg-brand-white border border-brand-beige rounded-xl p-4 flex-1 min-w-[150px]">
-      <div className="text-xs text-brand-taupe mb-1">{label}</div>
-      <div className="text-2xl font-bold text-brand-charcoal">{value}</div>
-      {sub && <div className={`text-xs mt-1 ${subTone || "text-brand-taupe"}`}>{sub}</div>}
-    </div>
-  );
-}
-
-function Card({ title, action, children, className }) {
-  return (
-    <div className={`bg-brand-white border border-brand-beige rounded-xl p-4 ${className || ""}`}>
-      {title && (
-        <div className="flex items-center justify-between mb-3 border-b border-brand-beige pb-2">
-          <h3 className="text-sm font-semibold text-brand-charcoal">{title}</h3>
-          {action}
-        </div>
-      )}
-      {children}
-    </div>
-  );
-}
-
-function PageHeader({ title, subtitle, action }) {
-  return (
-    <div className="flex items-center justify-between mb-5 border-b border-brand-beige pb-3">
-      <div>
-        <h1 className="text-lg font-bold text-brand-charcoal">{title}</h1>
-        {subtitle && <p className="text-sm text-brand-taupe mt-0.5">{subtitle}</p>}
-      </div>
-      {action}
-    </div>
-  );
-}
-
-function PrimaryButton({ children, onClick, type }) {
-  return (
-    <button type={type || "button"} onClick={onClick} className="inline-flex items-center gap-1.5 bg-brand-copper hover:bg-brand-copper/90 text-brand-white text-sm font-medium px-3.5 py-2 rounded-lg transition-colors cursor-pointer">
-      {children}
-    </button>
-  );
-}
-
-function SearchBox({ value, onChange, placeholder }) {
-  return (
-    <div className="relative">
-      <Search className="w-4 h-4 text-brand-taupe absolute left-3 top-1/2 -translate-y-1/2" />
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder || "Search..."}
-        className="pl-9 pr-3 py-2 text-sm border border-brand-beige rounded-lg w-72 focus:outline-none focus:ring-2 focus:ring-brand-copper/30 focus:border-brand-copper bg-brand-white text-brand-charcoal"
-      />
-    </div>
-  );
-}
-
 // Logos come from the source record (source.logo_url), never from third-party logo lookups.
 function MerchantLogo({ name, logoUrl }) {
   const [error, setError] = useState(false);
@@ -147,23 +85,6 @@ function ClientLogo({ name, className }) {
   }
   
   return <div className={`flex items-center justify-center font-bold text-brand-white bg-brand-copper ${className || "w-5 h-5 rounded-sm"}`}>{name.charAt(0)}</div>;
-}
-
-function Table({ columns, children }) {
-  return (
-    <div className="overflow-x-auto border border-brand-beige rounded-lg">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="border-b border-brand-beige text-left text-xs text-brand-charcoal bg-brand-beige">
-            {columns.map((c) => (
-              <th key={c} className="py-2 px-3 font-semibold whitespace-nowrap">{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-brand-beige">{children}</tbody>
-      </table>
-    </div>
-  );
 }
 
 // ---------- Views ----------
@@ -697,69 +618,80 @@ function AlertsView({ clientName }) {
   );
 }
 
-function SettingsView({ clientName }) {
+// ---------- Accept an invite (opened from an invite link) ----------
+function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
+  const [invite, setInvite] = useState(null);
+  const [error, setError] = useState(null);
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.getInvite(inviteToken)
+      .then((i) => { setInvite(i); setName(i.name || ""); })
+      .catch((err) => setError(err.message || "This invite link is not valid."));
+  }, [inviteToken]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (password.length < 12) return showToast("Use at least 12 characters.", "info");
+    if (password !== confirm) return showToast("The two passwords do not match.", "info");
+    setBusy(true);
+    try {
+      await onAccepted(await api.acceptInvite(inviteToken, password, name));
+    } catch (err) {
+      showToast(err.message || "Could not accept the invite.", "info");
+    } finally {
+      setBusy(false);
+    }
+    return undefined;
+  };
+
+  const inputCls = "w-full px-3 py-2 text-sm border border-brand-taupe rounded-lg bg-brand-charcoal text-white focus:outline-none focus:ring-2 focus:ring-brand-copper/30";
+  const open = invite && invite.state === "open";
   return (
-    <div>
-      <PageHeader title={`Settings — ${clientName} (Sandbox)`} action={<PrimaryButton><Check className="w-4 h-4" /> Save changes</PrimaryButton>} />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card title="Client information">
-          <div className="space-y-3 text-sm">
-            <div><div className="text-xs text-brand-taupe mb-1">Client name</div><div className="text-brand-charcoal font-medium">{clientName} Electronics (Sandbox)</div></div>
-            <div><div className="text-xs text-brand-taupe mb-1">Region</div><div className="text-brand-charcoal font-medium">North America</div></div>
-            <div><div className="text-xs text-brand-taupe mb-1">Currency</div><div className="text-brand-charcoal font-medium">USD — US Dollar</div></div>
+    <div className="min-vh-100 flex items-center justify-center bg-brand-charcoal font-sans" style={{ minHeight: '100vh' }}>
+      <div className="bg-brand-sidebar border border-white/10 rounded-xl p-8 w-96 shadow-2xl text-brand-white">
+        <div className="flex items-center gap-2.5 mb-6 justify-center">
+          <img src="/favicon.ico" alt="Mirethos Logo" className="w-7 h-7 bg-brand-white p-1 rounded-md" />
+          <div>
+            <span className="text-white text-base font-bold tracking-wide">MIRETHOS</span>
+            <span className="text-[9px] text-brand-taupe uppercase tracking-wider block -mt-1">MAP Portal Invitation</span>
           </div>
-        </Card>
-        <Card title="Other settings">
-          <div className="space-y-3 text-sm">
-            <div><div className="text-xs text-brand-taupe mb-1">Default scrape frequency</div><div className="text-brand-charcoal font-medium">Daily</div></div>
-            <div><div className="text-xs text-brand-taupe mb-1">MAP tolerance</div><div className="text-brand-charcoal font-medium">1%</div></div>
-            <div><div className="text-xs text-brand-taupe mb-1">Approval required before sending emails</div><div className="text-brand-charcoal font-medium">Enabled</div></div>
-          </div>
-        </Card>
+        </div>
+        {!invite && !error && <p className="text-xs text-brand-taupe text-center">Checking your invite…</p>}
+        {(error || (invite && !open)) && (
+          <>
+            <h3 className="text-base font-semibold text-white mb-1">This link can't be used</h3>
+            <p className="text-xs text-brand-taupe mb-5">{error || `This invite has ${invite.state === "used" ? "already been used" : invite.state}. Ask the person who invited you for a new link.`}</p>
+            <button onClick={onCancel} className="w-full py-2.5 bg-brand-copper hover:bg-brand-copper/90 text-white rounded-lg text-sm font-semibold cursor-pointer">Go to sign in</button>
+          </>
+        )}
+        {open && (
+          <>
+            <h3 className="text-base font-semibold text-white mb-1">Join {invite.account}</h3>
+            <p className="text-xs text-brand-taupe mb-5">You were invited as <b className="text-white">{invite.role}</b> ({invite.email}). Choose a password to finish.</p>
+            <form onSubmit={submit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-brand-taupe mb-1">Your name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-brand-taupe mb-1">Password (at least 12 characters)</label>
+                <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-brand-taupe mb-1">Repeat password</label>
+                <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required className={inputCls} />
+              </div>
+              <button type="submit" disabled={busy} className="w-full py-2.5 bg-brand-copper hover:bg-brand-copper/90 text-white rounded-lg text-sm font-semibold transition-colors cursor-pointer mt-2 disabled:opacity-50">
+                {busy ? "Setting up…" : "Accept invite"}
+              </button>
+            </form>
+          </>
+        )}
       </div>
-    </div>
-  );
-}
-
-function UsersView({ clientName }) {
-  const { shared } = React.useContext(DataContext);
-  return (
-    <div>
-      <PageHeader title={`Users & Access — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Invite user</PrimaryButton>} />
-      <Card>
-        <Table columns={["User", "Role", "Access level", "Last active", "Status"]}>
-          {shared.users.map((u, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{u.name}</td>
-              <td className="py-2 px-3 text-brand-taupe">{u.role}</td>
-              <td className="py-2 px-3 text-brand-taupe">{u.access}</td>
-              <td className="py-2 px-3 text-brand-taupe">{u.lastActive}</td>
-              <td className="py-2 px-3"><Pill text={u.status} tone={STATUS_BG.Active} /></td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
-function AuditLogView({ clientName }) {
-  const { shared } = React.useContext(DataContext);
-  const rows = shared.audit;
-  return (
-    <div>
-      <PageHeader title={`Audit Log — ${clientName} (Sandbox)`} />
-      <Card>
-        <Table columns={["Time", "User", "Action"]}>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-taupe">{r.time}</td>
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{r.user}</td>
-              <td className="py-2 px-3 text-brand-charcoal">{r.action}</td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
     </div>
   );
 }
@@ -769,15 +701,16 @@ const NAV = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "product", label: "Product Summary", icon: Package },
   { id: "mapping", label: "Mapping Center", icon: Shuffle },
+  { id: "sources", label: "Sources & Terms", icon: Radar, needs: "sources.read" },
   { id: "pricing", label: "MAP & Pricing", icon: DollarSign },
   { id: "merchants", label: "Merchants (Sellers)", icon: Store },
   { id: "violations", label: "Violations", icon: AlertTriangle },
   { id: "email", label: "Email Center", icon: Mail },
   { id: "reports", label: "Reports", icon: FileText },
   { id: "alerts", label: "Alerts", icon: Bell },
-  { id: "settings", label: "Settings", icon: SettingsIcon },
-  { id: "users", label: "Users & Access", icon: Users },
-  { id: "audit", label: "Audit Log", icon: ClipboardList },
+  { id: "settings", label: "Settings", icon: SettingsIcon, needs: "settings.read" },
+  { id: "users", label: "Users & Access", icon: Users, needs: "users.read" },
+  { id: "audit", label: "Audit Log", icon: ClipboardList, needs: "audit.read" },
 ];
 
 export const DataContext = React.createContext(null);
@@ -806,8 +739,10 @@ export default function App() {
   const [shared, setShared] = useState(EMPTY_SHARED);
   const [clients, setClients] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
-  // Screen Router States: 'login', 'client-select', 'app'
-  const [screen, setScreen] = useState('login');
+  // Screen Router States: 'invite', 'login', 'client-select', 'app'
+  // An invite link (?invite=<token>) opens the accept-invite screen instead of sign-in.
+  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'));
+  const [screen, setScreen] = useState(() => (inviteToken ? 'invite' : 'login'));
   const [activeClient, setActiveClient] = useState("LG");
   
   const [isDark, setIsDark] = useState(false);
@@ -852,18 +787,28 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Client configuration
-  const client = clients.find((c) => c.name === activeClient) || clients[0] || { name: activeClient, status: "Sandbox", skus: 0, merchants: 0 };
+  const client = useMemo(
+    () => clients.find((c) => c.name === activeClient) || clients[0] || { name: activeClient, status: "Sandbox", skus: 0, merchants: 0 },
+    [clients, activeClient],
+  );
   const workspace = db[client.name] || EMPTY_WORKSPACE;
   const activeViolationsCount = workspace.violations.filter((v) => v.status === "Open" || v.status === "Notified").length;
   const navBadges = { violations: activeViolationsCount, alerts: shared.alertUnread };
+  const actions = useMemo(() => api.actionsFor(currentUser, client), [currentUser, client]);
+  const nav = useMemo(() => NAV.filter((n) => !n.needs || actions.includes(n.needs)), [actions]);
+  const accountRole = currentUser?.accounts?.find((a) => a.id === client.id)?.role;
+  // Switching to an account where the current screen isn't allowed shows the Overview instead.
+  const currentView = nav.some((n) => n.id === view) ? view : "overview";
 
-  const showToast = (message, type = 'success', duration = 4000) => {
+  // Stable, so screens that load data on mount don't reload on every render.
+  const showToast = React.useCallback((message, type = 'success', duration = 4000) => {
     const id = ++toastSeq.current;
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, duration);
-  };
+  }, []);
+  const workspaceCtx = useMemo(() => ({ client, actions, showToast }), [client, actions, showToast]);
 
   const closeModal = (type) => {
     setModals(prev => ({ ...prev, [type]: false }));
@@ -873,21 +818,25 @@ export default function App() {
     setDb(prev => ({ ...prev, [clientName]: fn(prev[clientName] || EMPTY_WORKSPACE) }));
   };
 
+  // After sign-in (or accepting an invite): load the accounts and open the client picker.
+  const enterPortal = async (user) => {
+    const list = await api.listClients();
+    const workspaces = await Promise.all(list.map((c) => api.loadWorkspace(c)));
+    const nextDb = {};
+    list.forEach((c, i) => { nextDb[c.name] = workspaces[i]; });
+    setShared(await api.loadShared());
+    setClients(list);
+    setDb(nextDb);
+    setCurrentUser(user);
+    if (list.length && !list.some((c) => c.name === activeClient)) setActiveClient(list[0].name);
+    setScreen('client-select');
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setIsLoggingIn(true);
     try {
-      const user = await api.login(loginEmail, loginPassword);
-      const list = await api.listClients();
-      const workspaces = await Promise.all(list.map((c) => api.loadWorkspace(c)));
-      const nextDb = {};
-      list.forEach((c, i) => { nextDb[c.name] = workspaces[i]; });
-      setShared(await api.loadShared());
-      setClients(list);
-      setDb(nextDb);
-      setCurrentUser(user);
-      if (list.length && !list.some((c) => c.name === activeClient)) setActiveClient(list[0].name);
-      setScreen('client-select');
+      await enterPortal(await api.login(loginEmail, loginPassword));
       showToast("Credentials authorized.", "success");
     } catch (err) {
       showToast(err.message || "Sign in failed.", "info");
@@ -990,26 +939,42 @@ export default function App() {
   };
 
   const mainContent = useMemo(() => {
-    switch (view) {
+    switch (currentView) {
       case "overview": return <OverviewView onOpenViolation={setViolation} clientName={client.name} />;
       case "product": return <ProductSummaryView clientName={client.name} onAddSkuClick={() => setModals(prev => ({ ...prev, product: true }))} />;
       case "mapping": return <MappingCenterView clientName={client.name} />;
+      case "sources": return <SourcesTermsView skus={workspace.skus} />;
       case "pricing": return <PricingView clientName={client.name} onAddPromoClick={() => setModals(prev => ({ ...prev, exception: true }))} />;
       case "merchants": return <MerchantsView clientName={client.name} />;
       case "violations": return <ViolationsView onOpenViolation={setViolation} clientName={client.name} />;
       case "email": return <EmailCenterView clientName={client.name} />;
       case "reports": return <ReportsView clientName={client.name} />;
       case "alerts": return <AlertsView clientName={client.name} />;
-      case "settings": return <SettingsView clientName={client.name} />;
-      case "users": return <UsersView clientName={client.name} />;
-      case "audit": return <AuditLogView clientName={client.name} />;
+      case "settings": return <SettingsView />;
+      case "users": return <UsersView />;
+      case "audit": return <AuditLogView />;
       default: return null;
     }
-  }, [view, client]);
+  }, [currentView, client, workspace.skus]);
 
   // --------------------------------------------------------------------------
   // RENDER: WELCOME LOGIN
   // --------------------------------------------------------------------------
+  if (screen === 'invite') {
+    return (
+      <InviteAcceptScreen
+        inviteToken={inviteToken}
+        onAccepted={async (user) => {
+          window.history.replaceState(null, '', window.location.pathname);
+          await enterPortal(user);
+          showToast("Welcome! Your account is ready.", "success");
+        }}
+        onCancel={() => { window.history.replaceState(null, '', window.location.pathname); setScreen('login'); }}
+        showToast={showToast}
+      />
+    );
+  }
+
   if (screen === 'login') {
     return (
       <div className="min-vh-100 flex items-center justify-center bg-brand-charcoal font-sans" style={{ minHeight: '100vh' }}>
@@ -1110,6 +1075,7 @@ export default function App() {
   // --------------------------------------------------------------------------
   return (
     <DataContext.Provider value={{ db, setDb, shared, chartColors }}>
+    <WorkspaceContext.Provider value={workspaceCtx}>
       <div className="flex h-screen bg-brand-ivory font-sans text-brand-charcoal select-none">
       
       {/* Sidebar */}
@@ -1149,9 +1115,9 @@ export default function App() {
 
         {/* Navigation list */}
         <nav className="flex-1 overflow-y-auto py-2">
-          {NAV.map((n) => {
+          {nav.map((n) => {
             const Icon = n.icon;
-            const active = view === n.id;
+            const active = currentView === n.id;
             return (
               <button key={n.id} onClick={() => setView(n.id)}
                 className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors border-l-2 cursor-pointer ${
@@ -1171,7 +1137,7 @@ export default function App() {
             <div className="w-7 h-7 rounded-full bg-brand-copper flex items-center justify-center text-xs text-brand-white font-bold">{initials(currentUser?.name || "Fenil Dholaviya")}</div>
             <div className="text-[11px]">
               <div className="text-brand-charcoal font-bold">{currentUser?.name || "Fenil Dholaviya"}</div>
-              <div className="text-brand-taupe">{currentUser?.role === "member" ? "Member" : "Admin"}</div>
+              <div className="text-brand-taupe">{accountRole ?? (currentUser?.role === "member" ? "Member" : "Admin")}</div>
             </div>
           </div>
           <button onClick={handleLogout} className="text-[10px] text-brand-copper hover:underline cursor-pointer">
@@ -1309,6 +1275,7 @@ export default function App() {
       </div>
 
     </div>
+    </WorkspaceContext.Provider>
     </DataContext.Provider>
   );
 }

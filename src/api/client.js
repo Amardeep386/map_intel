@@ -9,11 +9,13 @@
 //   VITE_API_URL                   -> backend base URL (default http://localhost:4000)
 //
 // Phase map for the mock parts: violations/overview/reports/alerts -> P3, enforcement/emails -> P4,
-// sellers/mapping/promotions -> P2a, users/audit/settings -> P1.
+// sellers/mapping/promotions -> P2a. Sources & Terms, Settings, Users & Access and Audit Log are
+// real from P1 (with an in-memory stand-in, ./mock/config.js, in mock mode).
 
 import {
   ALERT_EVENTS, ALERTS, AUDIT_LOG, CLIENTS, EMAILS, REPORTS, SEVERITY_DIST, TREND, USERS, mockWorkspace,
 } from "./mock/data.js";
+import { mockConfig } from "./mock/config.js";
 
 export const USE_MOCK = String(import.meta.env.VITE_USE_MOCK ?? "true").toLowerCase() !== "false";
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
@@ -31,6 +33,17 @@ export class ApiError extends Error {
   }
 }
 
+const ALL_ACTIONS = [
+  "account.read", "catalogue.read", "catalogue.write", "observations.read", "settings.read", "settings.write",
+  "sources.read", "sources.write", "terms.read", "terms.write", "schedules.read", "schedules.write",
+  "users.read", "users.manage", "audit.read", "credentials.read", "credentials.write",
+];
+
+const qs = (params) => {
+  const q = new URLSearchParams(Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null && v !== ""));
+  return q.toString() ? `?${q}` : "";
+};
+
 async function request(path, { method = "GET", body } = {}) {
   let res;
   try {
@@ -45,6 +58,7 @@ async function request(path, { method = "GET", body } = {}) {
   } catch {
     throw new ApiError(0, `Cannot reach the MAP Intel API at ${API_URL}. Is the backend running?`);
   }
+  if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data.error || `Request failed (${res.status})`);
   return data;
@@ -92,7 +106,31 @@ export const api = {
     const data = await request("/auth/login", { method: "POST", body: { email, password } });
     token = data.token;
     try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
-    return data.user;
+    return this.me();
+  },
+
+  /** The signed-in user with each account's role and allowed actions. */
+  async me() {
+    if (USE_MOCK) return { id: "mock", email: "fenil@mirethos.com", name: "Fenil Dholaviya", role: "admin", accounts: [] };
+    return request("/auth/me");
+  },
+
+  /** What the user may do in one account (mock mode: everything). */
+  actionsFor(user, client) {
+    if (USE_MOCK) return ALL_ACTIONS;
+    return user?.accounts?.find((a) => a.id === client?.id)?.actions ?? [];
+  },
+
+  // ---------------- Invites (public) ----------------
+  async getInvite(inviteToken) {
+    return request(`/auth/invite/${encodeURIComponent(inviteToken)}`);
+  },
+
+  async acceptInvite(inviteToken, password, name) {
+    const data = await request("/auth/accept-invite", { method: "POST", body: { token: inviteToken, password, name: name || undefined } });
+    token = data.token;
+    try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+    return this.me();
   },
 
   logout() {
@@ -186,6 +224,79 @@ export const api = {
       severityDist: SEVERITY_DIST,
       trend: TREND,
     };
+  },
+
+  // ---------------- Sources & Terms (P1) ----------------
+  subscriptions(client) {
+    return USE_MOCK ? mockConfig.subscriptions(client) : request(`/accounts/${client.id}/subscriptions`);
+  },
+  setSubscription(client, code, body) {
+    return USE_MOCK ? mockConfig.setSubscription(client, code, body) : request(`/accounts/${client.id}/subscriptions/${code}`, { method: "PUT", body });
+  },
+  matrix(client) {
+    return USE_MOCK ? mockConfig.matrix(client) : request(`/accounts/${client.id}/matrix`);
+  },
+  setMatrixCell(client, groupId, category, body) {
+    return USE_MOCK
+      ? mockConfig.setCell(client, groupId, category, body)
+      : request(`/accounts/${client.id}/matrix/${groupId}/${encodeURIComponent(category)}`, { method: "PUT", body });
+  },
+  termGroups(client) {
+    return USE_MOCK ? mockConfig.termGroups(client) : request(`/accounts/${client.id}/term-groups`);
+  },
+  terms(client, query) {
+    return USE_MOCK ? mockConfig.terms(client, query) : request(`/accounts/${client.id}/terms${qs(query)}`);
+  },
+  updateTerm(client, termId, body) {
+    return USE_MOCK ? mockConfig.updateTerm(client, termId, body) : request(`/accounts/${client.id}/terms/${termId}`, { method: "PATCH", body });
+  },
+  /** body: { dryRun, group, template, identifierTypes, products: { category } }. skus: mock mode only. */
+  generateTerms(client, body, skus = []) {
+    return USE_MOCK ? mockConfig.generate(client, body, skus) : request(`/accounts/${client.id}/terms/generate`, { method: "POST", body });
+  },
+  importTerms(client, body) {
+    return USE_MOCK ? mockConfig.importTerms(client, body) : request(`/accounts/${client.id}/terms/import`, { method: "POST", body });
+  },
+  schedules(client) {
+    return USE_MOCK ? mockConfig.schedules(client) : request(`/accounts/${client.id}/schedules`);
+  },
+  createSchedule(client, body) {
+    return USE_MOCK ? mockConfig.createSchedule(client, body) : request(`/accounts/${client.id}/schedules`, { method: "POST", body });
+  },
+  updateSchedule(client, scheduleId, body) {
+    return USE_MOCK ? mockConfig.updateSchedule(client, scheduleId, body) : request(`/accounts/${client.id}/schedules/${scheduleId}`, { method: "PATCH", body });
+  },
+
+  // ---------------- Settings, users, audit (P1) ----------------
+  settings(client) {
+    return USE_MOCK ? mockConfig.settings(client) : request(`/accounts/${client.id}/settings`);
+  },
+  updateSettings(client, body) {
+    return USE_MOCK ? mockConfig.updateSettings(client, body) : request(`/accounts/${client.id}/settings`, { method: "PATCH", body });
+  },
+  users(client) {
+    return USE_MOCK ? mockConfig.users(client) : request(`/accounts/${client.id}/users`);
+  },
+  inviteUser(client, body) {
+    return USE_MOCK ? mockConfig.invite(client, body) : request(`/accounts/${client.id}/users/invite`, { method: "POST", body });
+  },
+  changeUserRole(client, userId, role) {
+    return USE_MOCK ? mockConfig.changeRole(client, userId, role) : request(`/accounts/${client.id}/users/${userId}`, { method: "PATCH", body: { role } });
+  },
+  removeUser(client, userId) {
+    return USE_MOCK ? mockConfig.removeUser(client, userId) : request(`/accounts/${client.id}/users/${userId}`, { method: "DELETE" });
+  },
+  revokeInvite(client, inviteId) {
+    return USE_MOCK ? mockConfig.revokeInvite(client, inviteId) : request(`/accounts/${client.id}/invites/${inviteId}`, { method: "DELETE" });
+  },
+  credentials(client) {
+    return USE_MOCK ? mockConfig.credentials(client) : request(`/accounts/${client.id}/credentials`);
+  },
+  addCredential(client, body) {
+    return USE_MOCK ? mockConfig.addCredential(client, body) : request(`/accounts/${client.id}/credentials`, { method: "POST", body });
+  },
+  audit(client, query) {
+    return USE_MOCK ? mockConfig.audit(client) : request(`/accounts/${client.id}/audit${qs(query)}`);
   },
 
   // ---------------- Evidence (real when the backend is on) ----------------
