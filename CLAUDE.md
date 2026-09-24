@@ -45,6 +45,9 @@ npm run dev                 # portal, http://localhost:5173 (mock data by defaul
 cd server && npm run dev    # API, http://localhost:4000
 cd server && npm run dev:worker
 cd server && npm run db:migrate && npm run db:seed
-cd server && npm test
+cd server && npm test        # unit tests (no database)
+cd server && npm run test:db # RLS, roles, audit, vault, config routes against Neon as mapintel_api (slow from India)
+cd server && npm run exit:p1 # Phase 1 exit test: configures LG, Apple, Samsung through the API
 ```
 Dev services: Neon (Postgres), Upstash (Redis), AWS S3. No Docker on this PC.
+Two database connections: `DATABASE_URL` (owner: migrations, seed, worker, scripts via `withSystem`) and `DATABASE_URL_API` (role `mapintel_api`: API routes via `withTenant` / `withApi`). API code must never use `withSystem` (a test checks this). Every API route declares `config: { permission }` (see `server/src/lib/permissions.ts`) and every change writes `recordAudit` in the same transaction.

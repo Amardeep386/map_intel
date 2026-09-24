@@ -3,15 +3,17 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P0 Groundwork **done** (verified 23 Sep 2026; follow-ups closed 24 Sep 2026, including browser Steps 4.2 and 5).
-- **Last updated:** 24 Sep 2026 (Claude Code: P0 follow-ups)
-- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). Branch `main`, pushed to `origin/main` on 24 Sep 2026 (up to `cb90fd0`: P0 baseline, verification fixes, context docs, P0 follow-ups, APL-P10 seed).
+- **Phase:** P1 Foundation **done** (exit test 30/30 and browser checks passed, 24 Sep 2026). P0 done 23 Sep 2026.
+- **Last updated:** 24 Sep 2026 (Claude Code: Phase 1)
+- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` at `e7ee4dc` (P0). Phase 1 is on branch `phase-1-foundation` (`e37bbf7` to the docs commit), **not pushed or merged**.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
-- **Live portal:** front-end with API client layer. Mock mode by default; `VITE_USE_MOCK=false` switches sign-in, clients and Product Summary to the API.
+- **Live portal:** front-end with API client layer. Mock mode by default; `VITE_USE_MOCK=false` switches sign-in, clients, Product Summary, Sources & Terms, Settings, Users & Access and Audit Log to the API.
+- **Env (server/.env, never committed):** `DATABASE_URL` (owner: migrations, seed, worker), `DATABASE_URL_API` (role `mapintel_api`: the API), `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL` (invite links). The same variables are listed in `render.yaml`.
 - **Next step:**
-  1. Check the 3 unconfirmed Amazon ASINs from a US browser; the other 6 missing pairs stay empty for now (Known issues).
-  2. Decide on US egress for the collector (see Open questions).
-  3. Start Phase 1 in Claude Code (prompt in `docs/prompts.md`).
+  1. Review Phase 1 (review prompt in `docs/prompts.md`), then merge `phase-1-foundation` into `main` and push.
+  2. Decide on US egress for the collector (Open questions); it gates Phase 2b.
+  3. Check the 3 unconfirmed Amazon ASINs from a US browser (Known issues).
+  4. Start Phase 2a and/or 2b (prompts in `docs/prompts.md`).
 
 ## Decisions so far
 | # | Decision | Date | Where decided |
@@ -26,6 +28,11 @@
 | 8 | Backend stack: Fastify + TypeScript, `pg`, BullMQ, AWS SDK v3, JWT auth with bcrypt, Playwright for the headless fallback and screenshots | 23 Sep 2026 | Phase 0 chat |
 | 9 | Dev setup: cloud services (Neon, Upstash, S3) instead of local Docker | 23 Sep 2026 | Phase 0 chat |
 | 10 | Build with Claude Code in Cursor; project context lives in the repo (`CLAUDE.md`, `docs/`) | 24 Sep 2026 | Planning chat |
+| 11 | Roles (prototype matrix): Administrator and Account manager configure everything in an account (only Administrators grant Administrator); Analyst edits terms and catalogue and reads the rest; Brand user reads catalogue and prices only | 24 Sep 2026 | Phase 1 (Claude Code) |
+| 12 | Credential vault: AES-256-GCM in the API with keys in env (`VAULT_KEYS`, rotatable by key id); AWS KMS possible later without a schema change | 24 Sep 2026 | Phase 1 |
+| 13 | Invites: single-use link (72 h) copied by the inviter; email delivery arrives in P3 | 24 Sep 2026 | Phase 1 |
+| 14 | The source catalogue holds all 6 launch sources plus Google Shopping; sources without a collector are `planned`: subscribable and costed, not crawled until P2b | 24 Sep 2026 | Phase 1 |
+| 15 | The API connects as `mapintel_api` (no BYPASSRLS) and `app.role='system'` is ignored for it; the few cross-account reads are SECURITY DEFINER functions | 24 Sep 2026 | Phase 1 |
 
 ## Open questions
 - **US egress for collection.** From India, Best Buy drops every connection and Amazon returns bot checks on 21 of 26 pages. Options:
@@ -43,7 +50,7 @@
 
 ## Phase checklist
 - [x] P0 Groundwork: backend skeleton, bug fixes, API client, collector proof of concept, enforcement-channel spike (verified 23 Sep 2026)
-- [ ] P1 Foundation: accounts, roles, audit log, vault, sources, subscriptions, schedules, terms
+- [x] P1 Foundation: accounts, roles, audit log, vault, sources, subscriptions, schedules, terms (exit test 30/30, 24 Sep 2026)
 - [ ] P2a Catalogue: products, MAP history, promo windows, policy docs, sellers, Mapping Center
 - [ ] P2b Collectors: scheduler, production collectors, evidence capture, observation store, source health
 - [ ] P3 Detection & reporting: rules, violations, dashboard, reports, evidence links, email alerts (pilot go-live)
@@ -66,13 +73,68 @@
   | SAM-P07 | QN65QN90FAFXZA | Amazon | Candidate `B0DXMYSQJC` ("65QN90F, 2025"); confirm model |
   | SAM-P07 | QN65QN90FAFXZA | Walmart | Not found (`16209267446` is a bundle, `15969669430` open box) |
 - **Only the main offer is collected.** Walmart LG-P01 had 5 other sellers that were not captured. MAP monitoring needs all offers on a listing (Phase 2b).
-- **Test SKU `TEST-P0-STEP5` (LG) is `Retired`, not deleted.** Its MAP row is protected by `map_price_no_delete`. Product Summary still lists Retired products; filter them in Phase 1/2a.
-- **Neon owner role has BYPASSRLS.** Tenant isolation relies on the API switching to `mapintel_tenant`, which is verified (10/10). In Phase 1, give the API its own non-owner database role.
+- **Test SKU `TEST-P0-STEP5` (LG) is `Retired`, not deleted.** Its MAP row is protected by `map_price_no_delete`. Product Summary still lists Retired products; filter them in Phase 2a.
+- **Owner-level functions rely on BYPASSRLS.** The API itself is now on `mapintel_api` (fixed in P1). The SECURITY DEFINER helpers (`app_accounts_for_user`, `app_accept_invite`, and so on) run as the owner and need its BYPASSRLS on Neon; on a Postgres whose owner lacks it they would return nothing. Keep this in mind if the database moves.
+- **Tokens stay valid until they expire (12 h)**, but every request re-checks that the user is Active and still a member, so disabling or removing someone takes effect at once. No refresh tokens or sign-out-everywhere yet (P5, with SSO).
+- **Removed users keep their login.** Removing someone from an account deletes the membership; the `app_user` row stays (they may belong to other accounts). The browser-check user `browser-check@example.com` exists without any membership. There is no platform user-admin screen yet (P5).
+- **Term yield shows 0** until the P2b collectors fill `listing_discovery`; the violations column waits for P3.
+- **Planned sources** (eBay, Target, Home Depot, Google Shopping) are subscribed and costed for the pilot accounts but have no collector until P2b.
+- **Database tests run over the network.** `npm run test:db` (45 tests) takes several minutes from India against Neon; each API request makes 2 to 3 extra round trips (user status, role lookup).
 - **Upstash command limits.** Run the worker only when needed until production.
 - **Mock screens.** Screens for later phases still show mock data in API mode.
-- **Lint warnings.** 11 remain: 9 in the portal (6 unused names, 3 React-hook notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
+- **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 24 Sep 2026 — Phase 1 Foundation (Claude Code)
+- **Branch** `phase-1-foundation`. Commits:
+  - M1 `e37bbf7`, M2 `5816a8a`, M3 `df44e85`, M4 `3803d90`
+  - M5–M8 `f78b608`, M9 `44557f2`, M10 `270da6f`, M11 `8ecb997`
+  - docs: this commit
+
+  Not pushed.
+- **Migrations 002–006** (`server/db/migrations`):
+  - 002: API role `mapintel_api` and SECURITY DEFINER cross-account helpers.
+  - 003: `audit_event`, append-only except through account deletion.
+  - 004: `credential` (vault).
+  - 005: `source_family`, `account_source`, `term_group`, `term`, `listing_discovery` + `term_yield`, `term_group_subscription`, `schedule`.
+  - 006: `user_invite`, invite functions, RLS on `account`.
+- **Server** (`server/src`):
+  - `lib/permissions.ts` maps roles to actions. Every route declares a permission; a route without one fails at startup.
+  - `lib/audit.ts` writes audit rows in the same transaction as the change, with secrets redacted.
+  - Also new: `lib/vault.ts`, `lib/rateLimit.ts` (Redis), `lib/cost.ts`, `lib/terms.ts`, `lib/schedules.ts`, `lib/sourceOptions.ts`.
+  - `collector/catalogue.ts`: 7 sources with collector-declared options and per-term-type request costs.
+  - Routes: accounts, audit, credentials, sources, terms, matrix, schedules, settings, users, and auth (invite info and accept).
+- **Portal** (`src/`):
+  - `ui.jsx`: shared blocks moved out of `App.jsx`, plus the prototype blocks.
+  - `views/SourcesTermsView.jsx`: the new Sources & Terms screen.
+  - `views/AdminViews.jsx`: Settings with vault credentials, Users & Access with invite links, Audit Log.
+  - An accept-invite screen, and nav items hidden by role.
+  - `api/mock/config.js` stands in for these screens in mock mode.
+- **Seed:**
+  - Writes the source catalogue.
+  - Gives each pilot account its starting subscriptions (Amazon, Walmart, Best Buy) and a daily schedule.
+  - A retired listing's retailer id is now removed from the product and its identifier term deactivated (LG-P09's dead ASIN).
+- **Tests:**
+  - `npm test`: 36/36 (unit).
+  - `npm run test:db`: 45/45 as `mapintel_api` against Neon (RLS, role × route, audit, vault, configuration, users and settings).
+  - Portal: lint 0 errors, build OK.
+- **Exit test** `npm run exit:p1`: 30/30, and it passes again on a re-run.
+  - An invited Account manager configures LG, Apple and Samsung through the API:
+    - 4 subscriptions each, including eBay (planned)
+    - about 30 terms per account: a keyword per active SKU, MPN/ASIN identifiers, and a brand term by import
+    - the matrix at about 112 of 3,000 requests per cycle
+    - an "Under-notice re-check" schedule next to the daily sweep
+    - every change in the audit log
+  - A Brand user gets 403 on configuration, and LG's manager gets 403 on Apple.
+- **Browser checks (you, 24 Sep): all pass.**
+  1. Sources & Terms screen.
+  2. Generate terms with preview, then the audit entry.
+  3. Settings save: the budget shows on the matrix, and the audit log has before/after.
+  4. Invite a Brand user, accept in a private window, config screens hidden, user removed.
+- **Pilot data changed by the checks:**
+  - LG has a "Browser check: Brand + Model" group (2 terms).
+  - LG settings are now budget 2,500 and MAP tolerance 1.5%, unless you reset them.
+
 ### 24 Sep 2026 — P0 follow-ups (Claude Code)
 - **Commits:** `f1a4462` (context docs), `f0ec35d` (follow-ups), `cb90fd0` (APL-P10 seed); all P0 commits pushed to `origin/main`.
 - **Browser checks:** Step 4.2 PASS (4/4 live pages match the report); Step 5 PASS (sign in, client list, Product Summary, Add SKU survives refresh). Details in `docs/phase0-verification.md`.

@@ -5,17 +5,17 @@ Target model for all phases. Where the implemented schema (`server/db/*.sql`) al
 ## Principles
 - **Append-only facts:** observations, MAP prices, seller classifications, violations. Corrections are new rows.
 - **Effective-dated:** MAP prices, promo windows, seller classifications, rule versions, policy documents (`[from, to)`, no gaps per scope). A verdict stores the versions it used.
-- **Tenant boundary:** `account_id` on every account-owned row + Postgres RLS. The API connects as a non-owner role. Only the source catalogue is shared.
+- **Tenant boundary:** `account_id` on every account-owned row + Postgres RLS. The API connects as `mapintel_api` (no BYPASSRLS; `app.role=system` ignored); the few cross-account reads are SECURITY DEFINER `app_*` functions. Only the source catalogue is shared.
 - **Shared core** (reused later by Pricing Intel unchanged): collection config, market identity (sellers), observations/listings/evidence.
 
 ## Domains and tables
 | Domain | Tables |
 |---|---|
-| Tenancy & access | account, app_user, account_membership (role), credential (vault ref), audit_event |
+| Tenancy & access | account, app_user, account_membership (role), user_invite, credential (vault, encrypted), audit_event |
 | Collection config (shared core) | source, source_family, account_source (subscription), term_group, term, term_group_subscription, schedule, crawl_job, crawl_run |
 | Catalogue & policy | product, product_identifier, map_price, promo_window, policy_document |
 | Market identity (shared core) | seller, seller_alias, seller_link, seller_classification (per account, effective-dated), seller_contact |
-| Observations (shared core) | listing, listing_state_event, observation (monthly partitions), evidence, match_candidate, match_decision, suppression |
+| Observations (shared core) | listing, listing_discovery (term found listing; drives term yield), listing_state_event, observation (monthly partitions), evidence, match_candidate, match_decision, suppression |
 | MAP decisions | rule, rule_version, violation, violation_event, replay_run |
 | Enforcement | case, case_violation, notice, notice_template, communication, marketplace_report |
 | Delivery | report_template, report_definition, report_run, destination, distribution_list, evidence_link, alert_rule, alert_event, notification |
@@ -27,7 +27,7 @@ Key relationships: term → product (assigned); listing → source, seller, prod
 | Table | Key columns | Rule |
 |---|---|---|
 | account | id, brand, regions[], currency, timezone, contract_from/to, settings (tolerance, min_depth, grace, match thresholds) | Tenant root; process config lives here |
-| source | id, internal_name, family_id, category (Marketplace / Online Seller / Price Comparison), country, capability, options_schema | Shared; options declared by collector |
+| source | id, code, internal_name, family_id, category (Marketplace / Online Seller / Price Comparison), country, capability, options_schema, collector_status (live / planned) | Shared; options and per-term request costs declared by the collector (server/src/collector/catalogue.ts) |
 | term | id, account_id, group_id, type (keyword/brand/identifier/url/seller), value, product_id?, active, batch_label | Yield derived from listings found |
 | product | id, account_id, product_code, name, brand, category, group_id, standard_price (MSRP), retired | Identifiers in product_identifier |
 | map_price | id, product_id, amount, currency, region?, effective_from, effective_to, source | Never overwritten |
