@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { enqueueRun } from '../../collector/runs.js';
+import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { withApi } from '../../lib/db.js';
 
 const runBody = z.object({
@@ -33,6 +34,18 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     const body = runBody.safeParse(req.body ?? {});
     if (!body.success) return reply.code(400).send({ error: 'invalid run scope' });
     const result = await enqueueRun(body.data, 'manual', withApi);
+    await withApi((db) =>
+      recordAudit(db, {
+        accountId: null,
+        actor: actorFrom(req),
+        action: 'crawl_run.queued',
+        entityType: 'crawl_run',
+        entityId: result.crawlRunId,
+        summary: `Queued a collection run (${result.jobs} listings)`,
+        after: { scope: body.data, jobs: result.jobs },
+        requestId: req.id,
+      }),
+    );
     return reply.code(202).send(result);
   });
 }

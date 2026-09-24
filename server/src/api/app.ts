@@ -6,6 +6,7 @@ import { withApi } from '../lib/db.js';
 import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
 import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
+import { auditRoutes } from './routes/audit.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
 import { healthRoutes } from './routes/health.js';
@@ -127,6 +128,7 @@ export async function buildApp() {
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(accountRoutes);
+  await app.register(auditRoutes);
   await app.register(collectionRoutes);
   return app;
 }

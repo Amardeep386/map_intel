@@ -48,6 +48,24 @@ export async function removeTestUsers(): Promise<void> {
   await withSystem((db) => db.query('DELETE FROM app_user WHERE email LIKE $1', [`%@${TEST_EMAIL_DOMAIN}`]));
 }
 
+export const TEST_ACCOUNT_PREFIX = 'zz-p1-test';
+
+/** A throwaway account (removed by removeTestAccounts; its audit rows go with it). Returns its id. */
+export async function createTestAccount(label: string): Promise<string> {
+  return withSystem(async (db) => {
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO account (slug, name, brand, status) VALUES ($1, $2, 'TestBrand', 'Sandbox')
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+      [`${TEST_ACCOUNT_PREFIX}-${label}`, `Test ${label}`],
+    );
+    return rows[0].id;
+  });
+}
+
+export async function removeTestAccounts(): Promise<void> {
+  await withSystem((db) => db.query('DELETE FROM account WHERE slug LIKE $1', [`${TEST_ACCOUNT_PREFIX}-%`]));
+}
+
 export async function testApp(): Promise<FastifyInstance> {
   const app = await buildApp();
   await app.ready();

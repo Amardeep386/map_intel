@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { withApi, withTenant } from '../../lib/db.js';
 import { signedUrl } from '../../lib/storage.js';
 import { HttpError, requireAccountAction } from '../app.js';
@@ -140,6 +141,16 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
           [accountId, rows[0].id, b.map, req.user!.sub],
         );
       }
+      await recordAudit(db, {
+        accountId,
+        actor: actorFrom(req),
+        action: 'product.created',
+        entityType: 'product',
+        entityId: rows[0].id,
+        summary: `Added SKU ${b.code}`,
+        after: { code: b.code, name: b.name, model: b.model, category: b.category || null, msrp: b.msrp ?? null, map: b.map ?? null },
+        requestId: req.id,
+      });
       return rows[0].id;
     });
     return reply.code(201).send({
