@@ -2,7 +2,7 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { verifyToken, type TokenClaims } from '../lib/auth.js';
 import { config } from '../lib/config.js';
-import { withSystem } from '../lib/db.js';
+import { withApi } from '../lib/db.js';
 import { accountRoutes } from './routes/accounts.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
@@ -31,15 +31,12 @@ export class HttpError extends Error {
 export async function assertAccountAccess(user: TokenClaims, accountId: string): Promise<string> {
   if (!/^[0-9a-f-]{36}$/i.test(accountId)) throw new HttpError(404, 'account not found');
   if (user.role === 'admin') {
-    const exists = await withSystem(async (db) => (await db.query('SELECT 1 FROM account WHERE id = $1', [accountId])).rowCount);
+    const exists = await withApi(async (db) => (await db.query('SELECT 1 FROM account WHERE id = $1', [accountId])).rowCount);
     if (!exists) throw new HttpError(404, 'account not found');
     return 'Administrator';
   }
-  const role = await withSystem(async (db) => {
-    const { rows } = await db.query<{ role: string }>(
-      'SELECT role FROM account_membership WHERE account_id = $1 AND user_id = $2',
-      [accountId, user.sub],
-    );
+  const role = await withApi(async (db) => {
+    const { rows } = await db.query<{ role: string | null }>('SELECT app_account_role($1, $2) AS role', [accountId, user.sub]);
     return rows[0]?.role ?? null;
   });
   if (!role) throw new HttpError(403, 'no access to this account');

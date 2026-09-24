@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
-import { pool } from '../../lib/db.js';
+import { apiPool } from '../../lib/db.js';
 import { redisHealthy } from '../../lib/queue.js';
 import { storageHealthy } from '../../lib/storage.js';
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/health', async (_req, reply) => {
     const [db, redis, storage] = await Promise.all([
-      pool.query('SELECT 1').then(() => true).catch(() => false),
+      apiPool().query('SELECT 1').then(() => true).catch(() => false),
       redisHealthy(),
       storageHealthy(),
     ]);

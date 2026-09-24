@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { withSystem, withTenant } from '../../lib/db.js';
+import { withApi, withTenant } from '../../lib/db.js';
 import { signedUrl } from '../../lib/storage.js';
 import { HttpError, assertAccountAccess } from '../app.js';
 
@@ -52,19 +52,8 @@ const newProduct = z.object({
 export async function accountRoutes(app: FastifyInstance): Promise<void> {
   app.get('/accounts', { preHandler: app.requireUser }, async (req) => {
     const user = req.user!;
-    return withSystem(async (db) => {
-      const { rows } = await db.query(
-        `SELECT a.id, a.slug, a.name, a.brand, a.status, a.accent_light, a.accent_dark,
-                m.role,
-                (SELECT count(*) FROM product p WHERE p.account_id = a.id AND p.status <> 'Retired')::int AS skus,
-                (SELECT count(DISTINCT l.source_id) FROM listing l JOIN product p ON p.id = l.product_id
-                  WHERE p.account_id = a.id)::int AS sources
-           FROM account a
-           LEFT JOIN account_membership m ON m.account_id = a.id AND m.user_id = $1
-          WHERE $2 OR m.user_id IS NOT NULL
-          ORDER BY a.name`,
-        [user.sub, user.role === 'admin'],
-      );
+    return withApi(async (db) => {
+      const { rows } = await db.query('SELECT * FROM app_accounts_for_user($1, $2)', [user.sub, user.role === 'admin']);
       return rows.map((r) => ({
         id: r.id,
         slug: r.slug,
@@ -72,7 +61,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
         brand: r.brand,
         status: r.status,
         accent: { light: r.accent_light, dark: r.accent_dark },
-        role: r.role ?? (user.role === 'admin' ? 'Administrator' : null),
+        role: r.role,
         skus: r.skus,
         merchants: r.sources,
       }));
@@ -135,8 +124,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     const b = body.data;
 
     const created = await withTenant(accountId, async (db) => {
-      const brand = (await withSystem((s) => s.query<{ brand: string }>('SELECT brand FROM account WHERE id = $1', [accountId]))).rows[0]
-        ?.brand;
+      const brand = (await db.query<{ brand: string }>('SELECT brand FROM account WHERE id = $1', [accountId])).rows[0]?.brand;
       const { rows } = await db.query<{ id: string }>(
         `INSERT INTO product (account_id, product_code, name, brand, category, model_number, standard_price)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -203,9 +191,16 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { evidenceId: string } }>('/evidence/:evidenceId', { preHandler: app.requireUser }, async (req) => {
     const { evidenceId } = req.params;
     if (!/^[0-9a-f-]{36}$/i.test(evidenceId)) throw new HttpError(404, 'evidence not found');
-    const row = await withSystem(async (db) => {
+    // Find the owning account first, check access, then read the evidence as that tenant.
+    const accountId = await withApi(async (db) => {
+      const { rows } = await db.query<{ account_id: string | null }>('SELECT app_evidence_account($1) AS account_id', [evidenceId]);
+      return rows[0]?.account_id ?? null;
+    });
+    if (!accountId) throw new HttpError(404, 'evidence not found');
+    await assertAccountAccess(req.user!, accountId);
+    const row = await withTenant(accountId, async (db) => {
       const { rows } = await db.query(
-        `SELECT e.*, p.account_id, o.advertised_price, o.seller_name_raw, l.url
+        `SELECT e.*, o.advertised_price, o.seller_name_raw, l.url
            FROM evidence e
            JOIN observation o ON o.id = e.observation_id AND o.observed_at = e.observed_at
            JOIN listing l ON l.id = o.listing_id
@@ -216,7 +211,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       return rows[0];
     });
     if (!row) throw new HttpError(404, 'evidence not found');
-    await assertAccountAccess(req.user!, row.account_id);
     return {
       id: row.id,
       observationId: row.observation_id,

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { enqueueRun } from '../../collector/runs.js';
-import { withSystem } from '../../lib/db.js';
+import { withApi } from '../../lib/db.js';
 
 const runBody = z.object({
   account: z.string().max(64).optional(),
@@ -12,7 +12,7 @@ const runBody = z.object({
 
 export async function collectionRoutes(app: FastifyInstance): Promise<void> {
   app.get('/sources', { preHandler: app.requireUser }, async () =>
-    withSystem(async (db) => {
+    withApi(async (db) => {
       const { rows } = await db.query(
         `SELECT id, code, display_name AS name, category, country, base_url, logo_url, active FROM source ORDER BY display_name`,
       );
@@ -21,7 +21,7 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.get<{ Querystring: { limit?: string } }>('/crawl-runs', { preHandler: app.requireAdmin }, async (req) =>
-    withSystem(async (db) => {
+    withApi(async (db) => {
       const limit = Math.min(Number.parseInt(req.query.limit ?? '20', 10) || 20, 100);
       const { rows } = await db.query('SELECT * FROM crawl_run ORDER BY started_at DESC LIMIT $1', [limit]);
       return rows;
@@ -32,7 +32,7 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
   app.post('/crawl-runs', { preHandler: app.requireAdmin }, async (req, reply) => {
     const body = runBody.safeParse(req.body ?? {});
     if (!body.success) return reply.code(400).send({ error: 'invalid run scope' });
-    const result = await enqueueRun(body.data);
+    const result = await enqueueRun(body.data, 'manual', withApi);
     return reply.code(202).send(result);
   });
 }

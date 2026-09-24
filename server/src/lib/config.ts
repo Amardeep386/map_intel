@@ -19,6 +19,9 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  // The API's own login role (mapintel_api, no BYPASSRLS). Required in production; in development
+  // the API falls back to DATABASE_URL with a warning.
+  DATABASE_URL_API: z.string().optional(),
   DATABASE_SSL: bool(false),
 
   REDIS_URL: z.string().default('redis://localhost:6379'),

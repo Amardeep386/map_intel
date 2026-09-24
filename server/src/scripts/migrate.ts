@@ -8,7 +8,7 @@ import { closeDb, pool } from '../lib/db.js';
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../db/migrations');
 
 async function main(): Promise<void> {
-  const client = await pool.connect();
+  const client = await pool().connect();
   try {
     await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
       name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);

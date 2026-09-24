@@ -15,6 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test test/*.test.ts",
+    "test:db": "tsx --test --test-concurrency=1 test/db/*.test.ts",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
     "admin:set-password": "tsx src/scripts/set-admin-password.ts",

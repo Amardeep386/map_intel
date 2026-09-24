@@ -1,5 +1,5 @@
 import { config } from '../lib/config.js';
-import { withSystem } from '../lib/db.js';
+import { withSystem, type Db } from '../lib/db.js';
 import { collectQueue } from '../lib/queue.js';
 
 export interface RunScope {
@@ -9,28 +9,29 @@ export interface RunScope {
   limit?: number;
 }
 
-export async function selectListings(scope: RunScope): Promise<string[]> {
-  return withSystem(async (db) => {
-    const { rows } = await db.query<{ id: string }>(
-      `SELECT l.id
-         FROM listing l
-         JOIN source s ON s.id = l.source_id AND s.active
-         JOIN product p ON p.id = l.product_id AND p.status = 'Active'
-         JOIN account a ON a.id = p.account_id
-        WHERE l.state = 'Included'
-          AND ($1::text IS NULL OR a.slug = $1)
-          AND ($2::text IS NULL OR s.code = $2)
-          AND ($3::text IS NULL OR p.product_code = $3)
-        ORDER BY a.slug, p.product_code, s.code
-        LIMIT $4`,
-      [scope.account ?? null, scope.source ?? null, scope.product ?? null, scope.limit ?? 10_000],
-    );
+/** How to reach the database: withSystem for the CLI, withApi when called from an API route. */
+export type DbRunner = <T>(fn: (db: Db) => Promise<T>) => Promise<T>;
+
+export async function selectListings(scope: RunScope, run: DbRunner = withSystem): Promise<string[]> {
+  return run(async (db) => {
+    // app_select_listings reads across accounts, so it works for the API role too.
+    const { rows } = await db.query<{ id: string }>('SELECT id FROM app_select_listings($1, $2, $3, $4)', [
+      scope.account ?? null,
+      scope.source ?? null,
+      scope.product ?? null,
+      scope.limit ?? 10_000,
+    ]);
     return rows.map((r) => r.id);
   });
 }
 
-export async function createCrawlRun(scope: RunScope, jobs: number, trigger: 'manual' | 'schedule' = 'manual'): Promise<string> {
-  return withSystem(async (db) => {
+export async function createCrawlRun(
+  scope: RunScope,
+  jobs: number,
+  trigger: 'manual' | 'schedule' = 'manual',
+  run: DbRunner = withSystem,
+): Promise<string> {
+  return run(async (db) => {
     const { rows } = await db.query<{ id: string }>(
       `INSERT INTO crawl_run (trigger, scope, egress_label, status, jobs_total)
        VALUES ($1, $2, $3, $4, $5) RETURNING id`,
@@ -41,9 +42,13 @@ export async function createCrawlRun(scope: RunScope, jobs: number, trigger: 'ma
 }
 
 /** Create a crawl run and put one job per listing on the Redis queue for the worker. */
-export async function enqueueRun(scope: RunScope, trigger: 'manual' | 'schedule' = 'manual'): Promise<{ crawlRunId: string; jobs: number }> {
-  const listingIds = await selectListings(scope);
-  const crawlRunId = await createCrawlRun(scope, listingIds.length, trigger);
+export async function enqueueRun(
+  scope: RunScope,
+  trigger: 'manual' | 'schedule' = 'manual',
+  run: DbRunner = withSystem,
+): Promise<{ crawlRunId: string; jobs: number }> {
+  const listingIds = await selectListings(scope, run);
+  const crawlRunId = await createCrawlRun(scope, listingIds.length, trigger, run);
   const queue = collectQueue();
   try {
     await queue.addBulk(
@@ -56,9 +61,9 @@ export async function enqueueRun(scope: RunScope, trigger: 'manual' | 'schedule'
     );
   } catch (err) {
     // Don't leave a run stuck in 'running' when nothing was queued.
-    await withSystem((db) =>
-      db.query(`UPDATE crawl_run SET status = 'failed', finished_at = now() WHERE id = $1`, [crawlRunId]),
-    ).catch(() => undefined);
+    await run((db) => db.query(`UPDATE crawl_run SET status = 'failed', finished_at = now() WHERE id = $1`, [crawlRunId])).catch(
+      () => undefined,
+    );
     throw err;
   }
   return { crawlRunId, jobs: listingIds.length };
