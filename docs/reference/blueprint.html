@@ -1,0 +1,695 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAP Intel Blueprint</title>
+<meta name="description" content="Refined build roadmap, data architecture and data flow for the Mirethos MAP Intel portal">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#FAF6EE; --surface:#FFFFFF; --ink:#3C2F2F; --muted:#827064; --copper:#A65E44; --sand:#F0E6D2; --sand-2:#EADEC9;
+  --line:rgba(60,47,47,.12); --line-strong:rgba(60,47,47,.28);
+  --ok:#2F7D5B; --warn:#A8671A; --bad:#B4372B; --info:#3B6AA0;
+  --copper-soft:rgba(166,94,68,.10);
+  --display:'Outfit',ui-sans-serif,system-ui,sans-serif; --body:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#17110F; --surface:#221916; --ink:#FAF6EE; --muted:#A9998E; --copper:#E38663; --sand:#53423B; --sand-2:#4A3A34;
+  --line:rgba(250,246,238,.10); --line-strong:rgba(250,246,238,.26);
+  --ok:#6FCB9F; --warn:#E6B15C; --bad:#F08A7E; --info:#8DB5E8; --copper-soft:rgba(227,134,99,.14); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#17110F; --surface:#221916; --ink:#FAF6EE; --muted:#A9998E; --copper:#E38663; --sand:#53423B; --sand-2:#4A3A34;
+  --line:rgba(250,246,238,.10); --line-strong:rgba(250,246,238,.26);
+  --ok:#6FCB9F; --warn:#E6B15C; --bad:#F08A7E; --info:#8DB5E8; --copper-soft:rgba(227,134,99,.14); color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--body);margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:20px;padding-block:0 80px}
+h1,h2,h3,h4{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(30px,5vw,44px);font-weight:600;letter-spacing:-.01em}
+h2{font-size:26px;font-weight:600;margin-bottom:6px}
+h3{font-size:18px;font-weight:600}
+p{margin:0 0 12px;max-width:72ch}
+.muted{color:var(--muted)}
+.eyebrow{font:600 11px/1 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--copper)}
+code,.mono{font-family:var(--mono);font-size:.86em}
+a{color:var(--copper)}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+
+/* top nav */
+.topnav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.topnav .wrap{display:flex;gap:18px;align-items:center;padding-block:10px;overflow-x:auto;white-space:nowrap}
+.brand{font:700 13px var(--display);letter-spacing:.22em}
+.brand span{color:var(--copper)}
+.topnav a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:600}
+.topnav a:hover{color:var(--ink)}
+
+header.hero{padding-block:44px 28px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:1.4fr 1fr;gap:32px;align-items:end}
+.hero p{font-size:16px;margin-top:14px}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.meta dt{color:var(--muted)} .meta dd{margin:0;font-weight:600}
+section{padding-top:56px}
+.sec-head{display:grid;gap:6px;margin-bottom:22px}
+
+/* summary strip */
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:28px}
+.strip div{background:var(--surface);padding:16px 18px}
+.strip b{display:block;font:600 24px var(--display);font-variant-numeric:tabular-nums}
+.strip span{font-size:12.5px;color:var(--muted)}
+
+/* changes list */
+.changes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.change{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.change h4{font-size:15px;margin-bottom:6px}
+.change p{font-size:13.5px;margin:0;color:var(--muted)}
+.why{font-size:12px;color:var(--copper);font-weight:600;margin-top:8px}
+
+/* gantt */
+.gantt{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;overflow-x:auto}
+.g-grid{display:grid;grid-template-columns:190px repeat(28,minmax(18px,1fr));min-width:760px;row-gap:8px;align-items:center}
+.g-wk{font:500 10px var(--mono);color:var(--muted);text-align:center}
+.g-lbl{grid-column:1;font-size:13px;font-weight:600;padding-right:10px}
+.g-lbl small{display:block;font-weight:500;color:var(--muted);font-size:11.5px}
+.bar{height:26px;border-radius:6px;background:var(--sand);border:1px solid var(--line-strong);font:600 11px var(--body);display:flex;align-items:center;padding-inline:8px;overflow:hidden;white-space:nowrap}
+.bar.hot{background:var(--copper);color:#fff;border-color:transparent}
+.bar.next{background:transparent;border-style:dashed;color:var(--muted)}
+.milestone{grid-column:1/-1;display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+.milestone b{color:var(--ink)}
+
+/* phases */
+.phases{display:grid;gap:16px;margin-top:18px}
+.phase{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:grid;grid-template-columns:220px 1fr;overflow:hidden}
+.phase aside{padding:18px;border-right:1px solid var(--line);background:var(--copper-soft)}
+.phase aside .p-num{font:700 13px var(--mono);color:var(--copper)}
+.phase aside h3{margin:6px 0 8px}
+.phase aside .wk{font-size:12px;color:var(--muted)}
+.phase aside .goal{font-size:13px;margin-top:10px}
+.phase .body{padding:18px 20px;display:grid;grid-template-columns:1.5fr 1fr;gap:20px}
+.phase ul{margin:0;padding-left:0;list-style:none;display:grid;gap:7px}
+.phase li{font-size:13.5px;display:grid;grid-template-columns:52px 1fr;gap:8px;align-items:baseline}
+.tag{font:600 9.5px var(--mono);letter-spacing:.04em;border-radius:4px;padding:2px 5px;text-align:center;border:1px solid var(--line-strong);color:var(--muted)}
+.tag.new{color:var(--ok);border-color:currentColor}
+.tag.moved{color:var(--info);border-color:currentColor}
+.tag.add{color:var(--warn);border-color:currentColor}
+.side h4{font-size:12px;font-family:var(--body);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.chip{font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--sand);color:var(--ink)}
+.exit{font-size:13px;border-left:3px solid var(--copper);padding:8px 12px;background:var(--copper-soft);border-radius:0 8px 8px 0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
+
+/* tables */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;background:var(--copper-soft)}
+tr:last-child td{border-bottom:0}
+td code{color:var(--copper)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.bug li{margin-bottom:6px;font-size:13.5px}
+
+figure{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+figure .scroll{overflow-x:auto}
+figure svg{display:block;width:100%;height:auto;min-width:760px;color:var(--ink)}
+figcaption{font-size:13px;color:var(--muted);margin-top:12px;max-width:80ch}
+.principles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.principles div{border-top:2px solid var(--copper);padding-top:10px;font-size:13.5px}
+.principles b{display:block;font-family:var(--display);font-size:15px;margin-bottom:3px}
+.decisions{counter-reset:d;display:grid;gap:12px}
+.decision{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px;display:grid;grid-template-columns:1fr 1.2fr;gap:18px}
+.decision h4{font-size:15px}
+.decision p{font-size:13.5px;margin:0}
+.rec{color:var(--copper);font-weight:600}
+@media (max-width:820px){
+  header.hero,.two,.changes,.principles,.decision{grid-template-columns:1fr}
+  .strip{grid-template-columns:repeat(2,1fr)}
+  .phase{grid-template-columns:1fr}.phase aside{border-right:0;border-bottom:1px solid var(--line)}
+  .phase .body{grid-template-columns:1fr}
+}
+</style>
+
+<nav class="topnav" aria-label="Sections"><div class="wrap">
+  <span class="brand">MIRETH<span>O</span>S</span>
+  <a href="#roadmap">Roadmap</a><a href="#changes">What changed</a><a href="#portal">Portal changes</a><a href="#architecture">Data architecture</a><a href="#flow">Data flow</a><a href="#decisions">Decisions needed</a>
+</div></nav>
+
+<div class="wrap">
+<header class="hero">
+  <div>
+    <div class="eyebrow">MAP Intel · refined build plan</div>
+    <h1>MAP Intel Blueprint</h1>
+    <p class="muted">One plan built from the company document, the in-depth product document, the three spec PDFs from the competitor training videos, the addendum&nbsp;3 roadmap, and the current portal code. MAP Intel is built first; Pricing Intel starts once MAP Intel is complete and reuses the same data core.</p>
+  </div>
+  <dl class="meta">
+    <dt>Version</dt><dd>1.0 · 23 Sep 2026</dd>
+    <dt>Scope</dt><dd>MAP Intel only (Pricing Intel is a separate portal)</dd>
+    <dt>UI</dt><dd>Current Mirethos portal kept as is: new screens reuse its components</dd>
+    <dt>Prototype</dt><dd>Map Intel Prototype (companion artifact)</dd>
+  </dl>
+</header>
+
+<div class="strip" role="list">
+  <div role="listitem"><b>6 phases</b><span>Phase 0 groundwork, then the V1–V5 from addendum 3, re-sequenced</span></div>
+  <div role="listitem"><b>~17 weeks</b><span>to a pilot brand going live (end of Phase 3)</span></div>
+  <div role="listitem"><b>~26 weeks</b><span>to the full MAP Intel scope (end of Phase 5)</span></div>
+  <div role="listitem"><b>15 screens</b><span>5 new, 9 updated, 1 unchanged. See the prototype</span></div>
+</div>
+
+<!-- ============ ROADMAP ============ -->
+<section id="roadmap">
+  <div class="sec-head">
+    <div class="eyebrow">Roadmap</div>
+    <h2>Build order, by dependency</h2>
+    <p class="muted">Durations are indicative, assuming 2–3 full-stack engineers plus one data-operations analyst. The order matters more than the weeks: nothing downstream can be trusted until the layer beneath it is correct.</p>
+  </div>
+
+  <div class="gantt" role="img" aria-label="Timeline: Phase 0 weeks 1–2, Phase 1 weeks 3–6, Phase 2 weeks 7–12, Phase 3 weeks 13–17 with pilot go-live, Phase 4 weeks 18–23, Phase 5 from week 24, then Pricing Intel.">
+    <div class="g-grid">
+      <div></div>
+      <div class="g-wk">1</div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk">4</div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk">8</div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk">12</div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk">16</div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk">20</div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk">24</div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk"></div><div class="g-wk">28</div>
+      <div class="g-lbl">P0 · Groundwork<small>decisions, backend skeleton</small></div><div class="bar" style="grid-column:2/4">P0</div>
+      <div class="g-lbl">P1 · Foundation<small>accounts, sources, terms</small></div><div class="bar" style="grid-column:4/8">P1</div>
+      <div class="g-lbl">P2 · Catalogue &amp; collection<small>MAP history, collectors, cleansing</small></div><div class="bar" style="grid-column:8/14">P2</div>
+      <div class="g-lbl">P3 · Detection &amp; reporting<small>rules, violations, reports</small></div><div class="bar hot" style="grid-column:14/19">P3 → pilot live</div>
+      <div class="g-lbl">P4 · Enforcement &amp; learning<small>cases, notices, learning loop</small></div><div class="bar" style="grid-column:19/25">P4</div>
+      <div class="g-lbl">P5 · Scale &amp; governance<small>onboarding, SSO, API</small></div><div class="bar" style="grid-column:25/30">P5 (continues)</div>
+      <div class="g-lbl">Pricing Intel<small>separate portal, shared core</small></div><div class="bar next" style="grid-column:27/30">starts after MAP</div>
+      <div class="milestone"><span><b>Week 6:</b> first account configured in-product</span><span><b>Week 12:</b> real daily data cleansed</span><span><b>Week 17:</b> pilot brand live with weekly reports</span><span><b>Week 23:</b> notice → resolved without spreadsheets</span></div>
+    </div>
+  </div>
+
+  <div class="legend" style="margin-top:18px"><span class="tag">SPEC</span> from spec / addenda, unchanged <span class="tag new">NEW</span> added in this plan <span class="tag moved">MOVED</span> re-sequenced from another version <span class="tag add">FIX</span> fixes the current portal</div>
+
+  <div class="phases">
+    <article class="phase">
+      <aside><div class="p-num">PHASE 0</div><h3>Groundwork</h3><div class="wk">Weeks 1–2</div><div class="goal">Close the open decisions and turn the front-end-only prototype into a real app skeleton.</div></aside>
+      <div class="body">
+        <ul>
+          <li><span class="tag new">NEW</span>Settle the decisions listed at the end of this page: collection build vs buy, pilot brand, launch sources, US-only.</li>
+          <li><span class="tag add">FIX</span>Fix the current portal bugs (list in "Portal changes"), clean duplicate files (<code>App.jsx.bak</code>, root <code>map-intel-portal.jsx</code>).</li>
+          <li><span class="tag new">NEW</span>Backend skeleton: API service, Postgres, Redis queue, object storage, auth, CI, staging environment.</li>
+          <li><span class="tag new">NEW</span>Replace in-memory mock data with an API client layer, so each screen switches to real data as its phase lands.</li>
+          <li><span class="tag moved">MOVED</span>Technical spike on Amazon Brand Registry and eBay VeRO (enforcement channels), pulled forward as addendum 3 recommends.</li>
+          <li><span class="tag new">NEW</span>Legal review of collection methods and site terms for the launch sources.</li>
+        </ul>
+        <div class="side"><h4>Portal screens</h4><div class="chips"><span class="chip">All screens, same UI, API-backed shell</span></div>
+          <h4>Exit test</h4><div class="exit">Decisions signed off; staging is live; the portal loads from the API instead of hard-coded arrays.</div></div>
+      </div>
+    </article>
+
+    <article class="phase">
+      <aside><div class="p-num">PHASE 1 · V1</div><h3>Foundation</h3><div class="wk">Weeks 3–6</div><div class="goal">Tenancy, access and the "what do we collect" configuration. Ships nothing an analyst reports from yet.</div></aside>
+      <div class="body">
+        <ul>
+          <li><span class="tag">SPEC</span>Accounts (one per brand), users, roles: Administrator, Account manager, Analyst, Brand user.</li>
+          <li><span class="tag moved">MOVED</span>Audit log and append-only discipline from the first migration, not later.</li>
+          <li><span class="tag">SPEC</span>Credential vault for source logins and delivery credentials (SFTP, API keys).</li>
+          <li><span class="tag">SPEC</span>Shared source catalogue + per-account subscriptions; collector-declared per-source options.</li>
+          <li><span class="tag">SPEC</span>Term-group × source-category subscription matrix with a request-cost estimate against budget.</li>
+          <li><span class="tag">SPEC</span>Named, reusable schedules (frequency settings) matched by selector.</li>
+          <li><span class="tag">SPEC</span>Terms with types (keyword, brand, identifier, URL, seller), yield tracking, bulk import, generate-from-catalogue.</li>
+        </ul>
+        <div class="side"><h4>Portal screens</h4><div class="chips"><span class="chip">Sources &amp; Terms (new)</span><span class="chip">Users &amp; Access</span><span class="chip">Settings</span><span class="chip">Audit Log</span></div>
+          <h4>Exit test</h4><div class="exit">An account is configured (sources subscribed, terms generated at catalogue scale) without anyone opening Excel or a shared drive.</div></div>
+      </div>
+    </article>
+
+    <article class="phase">
+      <aside><div class="p-num">PHASE 2 · V2 + collectors</div><h3>Catalogue &amp; collection</h3><div class="wk">Weeks 7–12</div><div class="goal">Real observations flowing in, matched to the right product, with evidence captured at the moment of collection.</div></aside>
+      <div class="body">
+        <ul>
+          <li><span class="tag">SPEC</span>Products with identifiers (UPC/EAN/MPN/ASIN, up to 6 alternate SKUs); catalogue import with dry-run diff.</li>
+          <li><span class="tag">SPEC</span>MAP as a time series (effective-dated, regional) and promotion windows.</li>
+          <li><span class="tag moved">MOVED</span>Policy documents versioned now (was V5), because rules, letters and evidence all reference them.</li>
+          <li><span class="tag">SPEC</span>Sellers with aliases, linkages, effective-dated classification, and seller contacts.</li>
+          <li><span class="tag new">NEW</span>Collectors for the launch sources: scheduler → queue → HTTP-first fetch, headless browser only where needed → extractor → validator.</li>
+          <li><span class="tag moved">MOVED</span>Evidence capture (screenshot, HTML, hash) at collection time, not at report time, before the page changes.</li>
+          <li><span class="tag">SPEC</span>Append-only observation store; listing lifecycle Staged → Included / Excluded → Retired.</li>
+          <li><span class="tag">SPEC</span>Match confidence (6 signals) with fixed thresholds; single-candidate review queue; listing explorer; scoped exclusions → suppressions; seeded rules from the Columbia recording.</li>
+          <li><span class="tag moved">MOVED</span>Source health recorded from the first crawl run.</li>
+        </ul>
+        <div class="side"><h4>Portal screens</h4><div class="chips"><span class="chip">Product Summary</span><span class="chip">MAP Policies</span><span class="chip">Sellers</span><span class="chip">Mapping Center</span><span class="chip">Data Health (basic)</span></div>
+          <h4>Exit test</h4><div class="exit">An analyst cleanses a pilot brand's real daily volume without the Staged / Included / Excluded split ever needing an Excel pivot to sanity-check.</div></div>
+      </div>
+    </article>
+
+    <article class="phase">
+      <aside><div class="p-num">PHASE 3 · V3</div><h3>Detection &amp; reporting</h3><div class="wk">Weeks 13–17 · pilot go-live</div><div class="goal">A violation becomes a defensible, reportable fact, and the pilot brand gets its weekly report from the product.</div></aside>
+      <div class="body">
+        <ul>
+          <li><span class="tag">SPEC</span>Rules engine: scope, condition, verdict, validity, priority, dry run, versioning, replay into a shadow set.</li>
+          <li><span class="tag">SPEC</span>Violations judged against the MAP in force on the observation date; statuses Open, Needs review, Under notice, Authorised promo, Resolved, Dismissed.</li>
+          <li><span class="tag">SPEC</span>Dashboard: authorised vs unauthorised trend, top sellers, depth, time to compliance; degraded days shaded.</li>
+          <li><span class="tag">SPEC</span>Report templates with typed parameters, schedules, repository, adoption counts; email, hosted link and SFTP delivery.</li>
+          <li><span class="tag">SPEC</span>Evidence permalink page per violation, behind an expiring, scoped token, embedded in every report row.</li>
+          <li><span class="tag moved">MOVED</span>Basic email alerts (new violating seller, severe depth, source degraded) pulled forward from V4; the pilot needs them.</li>
+          <li><span class="tag">SPEC</span>Data-quality banners on reports and dashboards when a source is degraded.</li>
+        </ul>
+        <div class="side"><h4>Portal screens</h4><div class="chips"><span class="chip">Overview</span><span class="chip">Violations</span><span class="chip">Rules (new)</span><span class="chip">Reports</span><span class="chip">Alerts</span><span class="chip">Evidence page (new)</span></div>
+          <h4>Exit test</h4><div class="exit">A weekly report and a monthly trend deck are generated with a working evidence link on every violation row. Nobody opens Excel or hand-builds a URL.</div></div>
+      </div>
+    </article>
+
+    <article class="phase">
+      <aside><div class="p-num">PHASE 4 · V4</div><h3>Enforcement &amp; learning</h3><div class="wk">Weeks 18–23</div><div class="goal">The product does the follow-through a person does by hand today.</div></aside>
+      <div class="body">
+        <ul>
+          <li><span class="tag">SPEC</span>Case lifecycle: Open → Notice sent → Awaiting response → Contested / Escalated → Resolved → Recurred.</li>
+          <li><span class="tag">SPEC</span>Letter templates filled from the frozen evidence bundle; brand approval before sending unless the brand turns it off.</li>
+          <li><span class="tag">SPEC</span>Marketplace enforcement channels where access allows (Amazon Brand Registry, eBay VeRO).</li>
+          <li><span class="tag">SPEC</span>Accelerated re-check for listings under notice; "resolved" is confirmed by a new compliant observation.</li>
+          <li><span class="tag">SPEC</span>Learning loop: analyst decisions become labels; model versions recorded; QA sampling of auto decisions.</li>
+          <li><span class="tag">SPEC</span>Seller risk index (frequency, depth, recurrence, responsiveness) ordering review and enforcement.</li>
+          <li><span class="tag">SPEC</span>Full alert rules + Slack/Teams + webhooks; deduplicated, delivery logged.</li>
+        </ul>
+        <div class="side"><h4>Portal screens</h4><div class="chips"><span class="chip">Enforcement (new, replaces Email Center)</span><span class="chip">Alerts inbox</span><span class="chip">Seller profile</span></div>
+          <h4>Exit test</h4><div class="exit">A violation goes from detected → notice sent → resolved and re-verified without a spreadsheet tracking contest codes.</div></div>
+      </div>
+    </article>
+
+    <article class="phase">
+      <aside><div class="p-num">PHASE 5 · V5</div><h3>Scale &amp; governance</h3><div class="wk">Week 24 onward</div><div class="goal">Many accounts, not one. Onboarding a brand becomes a guided flow.</div></aside>
+      <div class="body">
+        <ul>
+          <li><span class="tag">SPEC</span>Guided onboarding: account → catalogue → MAP &amp; policy → sellers → sources &amp; terms → rules &amp; baseline → reports.</li>
+          <li><span class="tag">SPEC</span>Org-wide crawl-budget dashboard across all accounts sharing the source catalogue.</li>
+          <li><span class="tag">SPEC</span>Internal ticket tracker for operational issues, separate from enforcement cases.</li>
+          <li><span class="tag">SPEC</span>Replay and shadow evaluation at scale; retention and audit hardening per region.</li>
+          <li><span class="tag new">NEW</span>Enterprise SSO/MFA, public API and exports for brand BI teams.</li>
+        </ul>
+        <div class="side"><h4>Portal screens</h4><div class="chips"><span class="chip">Onboarding (new)</span><span class="chip">Admin: budget, tickets</span></div>
+          <h4>Exit test</h4><div class="exit">Onboarding a new brand means finishing a guided flow, not writing a wiki page or booking a training call.</div></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============ WHAT CHANGED ============ -->
+<section id="changes">
+  <div class="sec-head">
+    <div class="eyebrow">What changed</div>
+    <h2>How this refines the addendum 3 roadmap</h2>
+    <p class="muted">Addendum 3 is a strong base and most of it is kept. These are the changes, each with the reason.</p>
+  </div>
+  <div class="changes">
+    <div class="change"><h4>Collection is ours to build</h4><p>The spec assumed crawlers were an upstream service. Mirethos has none today, so collectors, validation and source health are planned in Phase 2.</p><div class="why">Without it, V2 has nothing to cleanse.</div></div>
+    <div class="change"><h4>Evidence is captured at collection</h4><p>Screenshots and HTML are taken when the price is seen, not when a violation or report is produced later.</p><div class="why">Pages change within hours; a late capture proves nothing.</div></div>
+    <div class="change"><h4>A Phase 0 was added</h4><p>The current portal is front-end only with mock data. It needs a backend skeleton, bug fixes and the build-vs-buy decision before V1 starts.</p><div class="why">Addendum 3 itself says two decisions must precede V1.</div></div>
+    <div class="change"><h4>Basic email alerts moved into Phase 3</h4><p>New violating seller, severe depth and source-degraded alerts ship with the pilot; Slack, webhooks and the full rule set stay in Phase 4.</p><div class="why">The company doc's MVP includes email alerts.</div></div>
+    <div class="change"><h4>Audit log and policy versioning moved earlier</h4><p>The audit log starts in Phase 1 and policy documents are versioned in Phase 2, not V5.</p><div class="why">Rules, letters and evidence cite the policy; audit can't be retrofitted.</div></div>
+    <div class="change"><h4>Pricing split out cleanly</h4><p>"MAP &amp; Pricing" becomes "MAP Policies". Competitive price comparison, price index and competitor sets move to Pricing Intel, but the observation store is designed to serve both.</p><div class="why">Two separate portals, one shared data core.</div></div>
+    <div class="change"><h4>One status model for violations and cases</h4><p>Violation statuses (Open, Needs review, Under notice, Authorised promo, Resolved, Dismissed) are kept separate from case states (Open → Notice sent → … → Recurred).</p><div class="why">The two source docs used overlapping, conflicting lists.</div></div>
+    <div class="change"><h4>Deferred until after MAP Intel</h4><p>Natural-language AI search, test buys, deep seller identity resolution and image-based discovery at scale.</p><div class="why">None is needed for a pilot brand to trust the data.</div></div>
+  </div>
+</section>
+
+<!-- ============ PORTAL CHANGES ============ -->
+<section id="portal">
+  <div class="sec-head">
+    <div class="eyebrow">Portal changes</div>
+    <h2>Same UI, reorganised around the workflow</h2>
+    <p class="muted">The shell stays: sidebar, client switcher with brand accent, cards, tables, drawers, light/dark theme. The navigation gains group labels (Monitor, Catalogue, Collection, Deliver, Admin). The prototype tags each item New or Updated.</p>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Screen</th><th>Change</th><th>What it does now</th><th>Phase</th></tr></thead>
+    <tbody>
+      <tr><td><b>Overview</b></td><td>Updated</td><td>Authorised vs unauthorised trend, time to compliance, coverage KPI, data-quality banner, degraded days shaded.</td><td>P3</td></tr>
+      <tr><td><b>Violations</b></td><td>Updated</td><td>Status tabs, seller class at capture, first seen, evidence link. Drawer shows MAP version, rule version, frozen evidence with hash, price history against MAP, and a "dismiss with reason" action.</td><td>P3</td></tr>
+      <tr><td><b>Enforcement</b></td><td>New (replaces Email Center)</td><td>Cases grouped by seller; lifecycle stepper; letter preview; communications log; letter templates with approval rules.</td><td>P4</td></tr>
+      <tr><td><b>Sellers</b></td><td>Updated (was Merchants)</td><td>Classification (MAP Authorised / Unauthorised / Brand Direct / Unknown), risk index, repeat offences, depth, time to compliance; seller profile with classification history, aliases and contact.</td><td>P2–P4</td></tr>
+      <tr><td><b>Product Summary</b></td><td>Updated</td><td>Identifiers, MAP in force, listings count; product drawer with MAP history and per-seller listings; catalogue import.</td><td>P2</td></tr>
+      <tr><td><b>MAP Policies</b></td><td>Updated (was MAP &amp; Pricing)</td><td>MAP price history, promotion windows with end dates and seller scope, versioned policy documents, import with dry-run diff.</td><td>P2</td></tr>
+      <tr><td><b>Mapping Center</b></td><td>Updated</td><td>Keyboard review queue with confidence breakdown; Staged, Included, Excluded (reason + scope), Retired, Suppressions.</td><td>P2</td></tr>
+      <tr><td><b>Sources &amp; Terms</b></td><td>New</td><td>Subscription matrix with cost, source catalogue, terms with yield, generate-from-catalogue, schedules.</td><td>P1</td></tr>
+      <tr><td><b>Rules</b></td><td>New</td><td>Verdict, inclusion, exclusion and score rules; condition builder; dry run required before publish; versions and replay.</td><td>P3</td></tr>
+      <tr><td><b>Data Health</b></td><td>New</td><td>Per-source health, failure streaks, listings vs expected, error class, which report is at risk.</td><td>P2–P3</td></tr>
+      <tr><td><b>Reports</b></td><td>Updated</td><td>Scheduled reports with email / link / SFTP; repository with rule set and data quality per run; template library with adoption counts.</td><td>P3</td></tr>
+      <tr><td><b>Alerts</b></td><td>Updated</td><td>Inbox plus alert rules with on/off toggles.</td><td>P3–P4</td></tr>
+      <tr><td><b>Settings · Users · Audit</b></td><td>Updated</td><td>Account process as data (tolerance, thresholds, delivery); new role set; audit shows before → after and rule/model actors.</td><td>P1</td></tr>
+      <tr><td><b>Login · Account select</b></td><td>Kept + "New account"</td><td>Same screens; "New account" opens the guided onboarding flow.</td><td>P5</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="two" style="margin-top:18px">
+    <div class="change"><h4>Removed from MAP Intel</h4>
+      <ul class="bug">
+        <li>Competitive pricing concepts (moved to Pricing Intel).</li>
+        <li>The fake "IP: 184.28.110.15" on the evidence panel; replaced by capture time, captures and hash.</li>
+        <li>Manual "Mark resolved" as the normal path: a new compliant observation resolves a violation; a manual close needs a reason.</li>
+        <li>Clearbit logo lookups; store a logo per source instead.</li>
+        <li>Hard-coded counts (Violations badge "24", Alerts "3").</li>
+      </ul></div>
+    <div class="change"><h4>Bugs found in the current code (fix in Phase 0)</h4>
+      <ul class="bug">
+        <li><code>ViolationDrawer</code> calls <code>showToast</code>, which isn't in scope, so Mark Resolved, Escalate and Send Warning throw an error when clicked.</li>
+        <li>Add SKU ignores the MAP and MSRP fields and saves every SKU at $999.</li>
+        <li>New promotion saves nothing and has no end date.</li>
+        <li>"Showing X of 10 SKUs" uses the LG list for every client.</li>
+        <li>Charts use fixed slate/blue colours that ignore the theme; Bulk upload uses <code>alert()</code>.</li>
+      </ul></div>
+  </div>
+</section>
+
+<!-- ============ DATA ARCHITECTURE ============ -->
+<section id="architecture">
+  <div class="sec-head">
+    <div class="eyebrow">Data architecture</div>
+    <h2>Nine domains, one shared core</h2>
+    <p class="muted">Observations are stored separately from master data, so historical truth survives when products, MAP values, seller classifications or rules change.</p>
+  </div>
+
+  <div class="principles">
+    <div><b>Append-only facts</b>Observations, MAP prices, seller classifications and violations are never edited. Corrections are new records.</div>
+    <div><b>Effective-dated everything</b>MAP, promo windows, classification, rules and policy documents each carry from/to dates. A verdict stores the versions it used.</div>
+    <div><b>Hard tenant boundary</b>Every account-owned row carries <code>account_id</code>, enforced with Postgres row-level security. Only the source catalogue is shared.</div>
+  </div>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1100 760" role="img" aria-label="Domain map: shared-core domains (collection config, market identity, observations) sit between client catalogue data and MAP decisions; violations reference an observation, a MAP price version and a rule version; enforcement and delivery hang off violations and evidence.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+      </defs>
+      <g font-family="Plus Jakarta Sans, system-ui, sans-serif" font-size="12">
+      <!-- clusters: columns x=20,400,780 w=300; rows y=40,290,540 h=200 -->
+      <!-- Row 1 -->
+      <g>
+        <rect x="20" y="40" width="300" height="200" rx="12" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+        <text x="36" y="66" font-weight="700" font-size="13" fill="currentColor">Tenancy &amp; access</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="36" y="94">account</text><text x="36" y="114">user · membership (role)</text><text x="36" y="134">credential (vault ref)</text><text x="36" y="154">audit_event</text>
+        </g>
+        <text x="36" y="218" font-size="11" fill="currentColor" fill-opacity=".6">account_id on every owned row</text>
+      </g>
+      <g>
+        <rect x="400" y="40" width="300" height="200" rx="12" fill="#A65E44" fill-opacity=".08" stroke="#A65E44" stroke-width="1.5"/>
+        <text x="416" y="66" font-weight="700" font-size="13" fill="currentColor">Collection config</text>
+        <text x="684" y="66" text-anchor="end" font-size="10" font-weight="700" fill="#A65E44">SHARED CORE</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="416" y="94">source · source_family</text><text x="416" y="114">account_source (subscription)</text><text x="416" y="134">term_group · term</text><text x="416" y="154">term_group_subscription</text><text x="416" y="174">schedule</text><text x="416" y="194">crawl_job · crawl_run</text>
+        </g>
+      </g>
+      <g>
+        <rect x="780" y="40" width="300" height="200" rx="12" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+        <text x="796" y="66" font-weight="700" font-size="13" fill="currentColor">Catalogue &amp; policy</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="796" y="94">product</text><text x="796" y="114">product_identifier</text><text x="796" y="134">map_price (effective-dated)</text><text x="796" y="154">promo_window</text><text x="796" y="174">policy_document (versioned)</text>
+        </g>
+      </g>
+      <!-- Row 2 -->
+      <g>
+        <rect x="20" y="290" width="300" height="200" rx="12" fill="#A65E44" fill-opacity=".08" stroke="#A65E44" stroke-width="1.5"/>
+        <text x="36" y="316" font-weight="700" font-size="13" fill="currentColor">Market identity</text>
+        <text x="304" y="316" text-anchor="end" font-size="10" font-weight="700" fill="#A65E44">SHARED CORE</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="36" y="344">seller · seller_alias</text><text x="36" y="364">seller_link (same operator)</text><text x="36" y="384">seller_classification*</text><text x="36" y="404">seller_contact</text>
+        </g>
+        <text x="36" y="468" font-size="11" fill="currentColor" fill-opacity=".6">* per account, effective-dated</text>
+      </g>
+      <g>
+        <rect x="400" y="290" width="300" height="200" rx="12" fill="#A65E44" fill-opacity=".08" stroke="#A65E44" stroke-width="1.5"/>
+        <text x="416" y="316" font-weight="700" font-size="13" fill="currentColor">Observations</text>
+        <text x="684" y="316" text-anchor="end" font-size="10" font-weight="700" fill="#A65E44">SHARED CORE</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="416" y="344">listing · listing_state_event</text><text x="416" y="364">observation (partitioned)</text><text x="416" y="384">evidence (object refs + hash)</text><text x="416" y="404">match_candidate · match_decision</text><text x="416" y="424">suppression</text>
+        </g>
+        <text x="416" y="468" font-size="11" fill="currentColor" fill-opacity=".6">append-only · monthly partitions</text>
+      </g>
+      <g>
+        <rect x="780" y="290" width="300" height="200" rx="12" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+        <text x="796" y="316" font-weight="700" font-size="13" fill="currentColor">MAP decisions</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="796" y="344">rule · rule_version</text><text x="796" y="364">violation</text><text x="796" y="384">violation_event</text><text x="796" y="404">replay_run (shadow set)</text>
+        </g>
+      </g>
+      <!-- Row 3 -->
+      <g>
+        <rect x="20" y="540" width="300" height="200" rx="12" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+        <text x="36" y="566" font-weight="700" font-size="13" fill="currentColor">Health &amp; ops</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="36" y="594">source_health_snapshot</text><text x="36" y="614">data_quality_flag</text><text x="36" y="634">ticket</text>
+        </g>
+        <text x="36" y="718" font-size="11" fill="currentColor" fill-opacity=".6">per source × account × cycle</text>
+      </g>
+      <g>
+        <rect x="400" y="540" width="300" height="200" rx="12" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+        <text x="416" y="566" font-weight="700" font-size="13" fill="currentColor">Delivery</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="416" y="594">report_template · report_definition</text><text x="416" y="614">report_run · destination</text><text x="416" y="634">evidence_link (token, expiry)</text><text x="416" y="654">alert_rule · alert_event</text><text x="416" y="674">notification (delivery log)</text>
+        </g>
+      </g>
+      <g>
+        <rect x="780" y="540" width="300" height="200" rx="12" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+        <text x="796" y="566" font-weight="700" font-size="13" fill="currentColor">Enforcement</text>
+        <g font-family="JetBrains Mono, monospace" font-size="12" fill="currentColor" fill-opacity=".8">
+          <text x="796" y="594">case · case_violation</text><text x="796" y="614">notice · notice_template</text><text x="796" y="634">communication</text><text x="796" y="654">marketplace_report</text>
+        </g>
+      </g>
+
+      <!-- edges -->
+      <g stroke="currentColor" stroke-width="1.4" fill="none" marker-end="url(#ar)">
+        <line x1="700" y1="130" x2="778" y2="130"/>
+        <line x1="550" y1="290" x2="550" y2="242"/>
+        <line x1="700" y1="300" x2="790" y2="242"/>
+        <line x1="400" y1="360" x2="322" y2="360"/>
+        <line x1="780" y1="364" x2="702" y2="364"/>
+        <line x1="930" y1="290" x2="930" y2="242"/>
+        <line x1="930" y1="540" x2="930" y2="492"/>
+        <line x1="550" y1="540" x2="550" y2="492"/>
+        <line x1="170" y1="540" x2="170" y2="492" stroke-dasharray="4 4"/>
+      </g>
+      <g font-size="11" fill="currentColor">
+        <text x="740" y="122" text-anchor="middle">term →</text><text x="740" y="152" text-anchor="middle">product</text>
+        <text x="560" y="270">found on source, by term</text>
+        <text x="800" y="272">matched to product</text>
+        <text x="361" y="352" text-anchor="middle">offered by</text><text x="361" y="378" text-anchor="middle">seller</text>
+        <text x="741" y="356" text-anchor="middle">verdict on</text><text x="741" y="382" text-anchor="middle">observation</text>
+        <text x="940" y="270">MAP version used</text>
+        <text x="940" y="520">case groups violations</text>
+        <text x="560" y="520">link → evidence</text>
+        <text x="180" y="520">health per source</text>
+      </g>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Copper-outlined domains are the shared Intelligence Core that Pricing Intel will reuse without changes. A violation always points to one observation, the MAP price version and the rule version that produced it, which is what keeps a six-month-old violation provable.</figcaption>
+  </figure>
+
+  <h3 style="margin:32px 0 12px">Key tables</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Table</th><th>Key columns</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td><code>account</code></td><td>id, brand, regions[], currency, timezone, contract_from/to, settings (tolerance, min_depth, grace, thresholds)</td><td>Tenant root. Process config lives here, not in a wiki.</td></tr>
+      <tr><td><code>source</code></td><td>id, internal_name, family_id, category (Marketplace / Online Seller / Price Comparison), country, capability, options_schema</td><td>Shared catalogue. Options are declared by the collector.</td></tr>
+      <tr><td><code>term</code></td><td>id, account_id, group_id, type (keyword/brand/identifier/url/seller), value, product_id?, active, batch_label</td><td>Yield is derived from listings it found.</td></tr>
+      <tr><td><code>product</code></td><td>id, account_id, product_code, name, brand, category, group_id, standard_price (MSRP), retired</td><td>Identifiers in <code>product_identifier</code> (UPC, EAN, MPN, ASIN, alt 1–6).</td></tr>
+      <tr><td><code>map_price</code></td><td>id, product_id, amount, currency, region?, effective_from, effective_to, source (import/manual/policy)</td><td>Half-open intervals, no gaps per region. Never overwritten.</td></tr>
+      <tr><td><code>promo_window</code></td><td>id, account_id, product set, seller set?, promo_amount, from, to</td><td>Below-MAP inside a window → "Authorised promo".</td></tr>
+      <tr><td><code>seller_classification</code></td><td>seller_id, account_id, class (Authorised / Unauthorised / Brand Direct / Unknown), from, to, set_by, note</td><td>Effective-dated; the class at capture time is copied onto the violation.</td></tr>
+      <tr><td><code>listing</code></td><td>id, source_id, seller_id, product_id?, url, channel_sku, state (Staged/Included/Excluded/Retired), match_confidence, first_seen, last_seen</td><td>A stable identity over many observations.</td></tr>
+      <tr><td><code>observation</code></td><td>id, listing_id, observed_at (UTC), advertised_price, list_price, currency, promo_text, coupon, qty, availability, seller_name_raw, crawl_run_id, status</td><td>Append-only, partitioned by month. Never carries an old price forward.</td></tr>
+      <tr><td><code>evidence</code></td><td>id, observation_id, screenshot_uri, html_uri, pdf_uri, sha256, captured_at, method</td><td>Object storage with write-once lock; hash stored in Postgres.</td></tr>
+      <tr><td><code>rule_version</code></td><td>rule_id, version, scope, condition (JSON), verdict, severity bands, valid_from/to, priority</td><td>Editing creates a new version; old closed, not deleted.</td></tr>
+      <tr><td><code>violation</code></td><td>id, account_id, observation_id, listing_id, product_id, seller_id, map_price_id, rule_version_id, class_at_capture, map_amount, observed_price, depth_abs, depth_pct, severity, status, first_seen, last_seen</td><td>Stores the versions it used, so reports are reproducible.</td></tr>
+      <tr><td><code>case</code></td><td>id, account_id, seller_id, state, owner, opened_at, response_due, channel; <code>case_violation</code> links</td><td>Resolved only by a compliant observation (or a manual close with reason).</td></tr>
+      <tr><td><code>evidence_link</code></td><td>token_hash, violation_id, scope, expires_at, created_by, views</td><td>Expiring, scoped access; never an open URL.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="two" style="margin-top:24px">
+    <div>
+      <h3 style="margin-bottom:12px">Storage &amp; services</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Layer</th><th>Recommended choice</th></tr></thead>
+        <tbody>
+          <tr><td>Portal</td><td>Keep the current React + Vite + Tailwind app</td></tr>
+          <tr><td>API</td><td>Node / TypeScript (same language as the portal)</td></tr>
+          <tr><td>Database</td><td>PostgreSQL with row-level security; <code>observation</code> partitioned monthly</td></tr>
+          <tr><td>Queue &amp; cache</td><td>Redis (job queue + dashboard cache)</td></tr>
+          <tr><td>Collectors</td><td>Container workers; HTTP-first, Playwright headless only where a page needs it</td></tr>
+          <tr><td>Evidence &amp; files</td><td>S3-compatible object storage with object lock</td></tr>
+          <tr><td>Secrets</td><td>Managed secrets store / KMS-encrypted vault</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">A recommendation, not a commitment. Revisit once volume numbers are known (Decision 4).</p>
+    </div>
+    <div>
+      <h3 style="margin-bottom:12px">What Pricing Intel reuses</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Reused as is</th><th>Added for pricing</th></tr></thead>
+        <tbody>
+          <tr><td>source, schedules, collectors</td><td>competitor_set</td></tr>
+          <tr><td>product, product_identifier</td><td>price_index snapshots</td></tr>
+          <tr><td>seller, seller_alias</td><td>price_change_event</td></tr>
+          <tr><td>listing, observation, evidence</td><td>opportunity_item</td></tr>
+          <tr><td>source health, alerts, reports</td><td>pricing report templates</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">Because observations are shared, Pricing Intel starts with months of history on day one.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DATA FLOW ============ -->
+<section id="flow">
+  <div class="sec-head">
+    <div class="eyebrow">Data flow</div>
+    <h2>From a retailer's page to a notice</h2>
+    <p class="muted">The copper spine is the path every price takes. Client configuration feeds it from the left; the analyst, storage and health checks work from the right.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1100 850" role="img" aria-label="Data flow: scheduler, queue, collector, extract, validate, normalize, match, observation store, rules engine, violation and evidence bundle run top to bottom; client configuration feeds scheduler, matcher and rules engine; outputs are dashboard, alerts, reports, evidence page, API and cases, with cases feeding re-check cadence back to the scheduler.">
+      <defs>
+        <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A65E44"/></marker>
+      </defs>
+      <g font-family="Plus Jakarta Sans, system-ui, sans-serif" font-size="12" fill="currentColor">
+        <text x="160" y="18" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="1.5" fill-opacity=".6">CLIENT CONFIGURATION</text>
+        <text x="510" y="18" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#A65E44">PIPELINE</text>
+        <text x="860" y="18" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="1.5" fill-opacity=".6">OUTSIDE WORLD · PEOPLE · STORAGE</text>
+
+        <!-- spine: x=380 w=260, y=30+i*64, h=46 -->
+        <g>
+          <g stroke="#A65E44" stroke-width="1.6" fill="#A65E44" fill-opacity=".08">
+            <rect x="380" y="30" width="260" height="46" rx="9"/><rect x="380" y="94" width="260" height="46" rx="9"/><rect x="380" y="158" width="260" height="46" rx="9"/><rect x="380" y="222" width="260" height="46" rx="9"/><rect x="380" y="286" width="260" height="46" rx="9"/><rect x="380" y="350" width="260" height="46" rx="9"/><rect x="380" y="414" width="260" height="46" rx="9"/><rect x="380" y="478" width="260" height="46" rx="9"/><rect x="380" y="542" width="260" height="46" rx="9"/><rect x="380" y="606" width="260" height="46" rx="9"/><rect x="380" y="670" width="260" height="46" rx="9"/>
+          </g>
+          <g font-weight="700" font-size="13" text-anchor="middle">
+            <text x="510" y="50">Scheduler</text><text x="510" y="114">Job queue</text><text x="510" y="178">Collector</text><text x="510" y="242">Extract</text><text x="510" y="306">Validate</text><text x="510" y="370">Normalize</text><text x="510" y="434">Match</text><text x="510" y="498">Observation store</text><text x="510" y="562">Rules engine</text><text x="510" y="626">Violation</text><text x="510" y="690">Evidence bundle</text>
+          </g>
+          <g font-size="11" text-anchor="middle" fill-opacity=".7">
+            <text x="510" y="66">priority · SLA · rate limits</text><text x="510" y="130">retries · per-source budgets</text><text x="510" y="194">HTTP first · headless if needed</text><text x="510" y="258">price · seller · stock · promo · IDs</text><text x="510" y="322">bounds · currency · sudden change</text><text x="510" y="386">currency · promo type · seller name</text><text x="510" y="450">identifiers → title / image → score</text><text x="510" y="514">append-only · listing current state</text><text x="510" y="578">MAP in force at observed_at</text><text x="510" y="642">depth · severity · status</text><text x="510" y="706">frozen · hashed · permalink</text>
+          </g>
+          <g stroke="#A65E44" stroke-width="1.6" marker-end="url(#ac)">
+            <line x1="510" y1="76" x2="510" y2="92"/><line x1="510" y1="140" x2="510" y2="156"/><line x1="510" y1="204" x2="510" y2="220"/><line x1="510" y1="268" x2="510" y2="284"/><line x1="510" y1="332" x2="510" y2="348"/><line x1="510" y1="396" x2="510" y2="412"/><line x1="510" y1="460" x2="510" y2="476"/><line x1="510" y1="524" x2="510" y2="540"/><line x1="510" y1="588" x2="510" y2="604"/><line x1="510" y1="652" x2="510" y2="668"/>
+          </g>
+        </g>
+
+        <!-- left: config -->
+        <g stroke="currentColor" stroke-opacity=".45" fill="none">
+          <rect x="40" y="30" width="240" height="46" rx="9"/>
+          <rect x="40" y="414" width="240" height="46" rx="9"/>
+          <rect x="40" y="520" width="240" height="90" rx="9"/>
+          <rect x="40" y="110" width="240" height="250" rx="9" stroke-dasharray="5 4"/>
+        </g>
+        <g font-size="12.5" font-weight="700">
+          <text x="56" y="50">Sources · terms · schedules</text>
+          <text x="56" y="434">Catalogue &amp; identifiers</text>
+          <text x="56" y="542">Versioned policy data</text>
+          <text x="56" y="132">Data health monitor</text>
+        </g>
+        <g font-size="11" fill-opacity=".7">
+          <text x="56" y="66">subscriptions × cadence</text>
+          <text x="56" y="450">UPC · MPN · ASIN · images</text>
+          <text x="56" y="560">MAP history · promo windows</text><text x="56" y="576">seller classification</text><text x="56" y="592">rule versions · policy docs</text>
+          <text x="56" y="154">fetch success per source</text><text x="56" y="172">extraction success</text><text x="56" y="190">validator rejections</text><text x="56" y="208">freshness vs SLA</text><text x="56" y="226">coverage of subscribed terms</text><text x="56" y="244">evidence capture success</text>
+          <text x="56" y="290" fill-opacity="1" font-weight="600">→ data-quality banners</text><text x="56" y="308" fill-opacity="1" font-weight="600">→ "source degraded" alerts</text><text x="56" y="326" fill-opacity="1" font-weight="600">→ shaded days on charts</text>
+        </g>
+        <g stroke="currentColor" stroke-width="1.3" marker-end="url(#af)">
+          <line x1="280" y1="53" x2="378" y2="53"/>
+          <line x1="280" y1="437" x2="378" y2="437"/>
+          <line x1="280" y1="565" x2="378" y2="565"/>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".5" stroke-dasharray="3 4">
+          <line x1="280" y1="117" x2="380" y2="117"/><line x1="280" y1="181" x2="380" y2="181"/><line x1="280" y1="245" x2="380" y2="245"/><line x1="280" y1="309" x2="380" y2="309"/>
+        </g>
+        <g font-size="11">
+          <text x="329" y="46" text-anchor="middle">what &amp; when</text>
+          <text x="329" y="430" text-anchor="middle">candidates</text>
+          <text x="329" y="558" text-anchor="middle">in force</text>
+          <text x="329" y="110" text-anchor="middle" fill-opacity=".6">reads</text>
+        </g>
+
+        <!-- right: world / people / storage -->
+        <g stroke="currentColor" stroke-opacity=".45" fill="none">
+          <rect x="740" y="140" width="240" height="46" rx="9"/>
+          <rect x="740" y="222" width="240" height="46" rx="9"/>
+          <rect x="740" y="286" width="240" height="46" rx="9"/>
+          <rect x="740" y="396" width="240" height="64" rx="9"/>
+        </g>
+        <g font-size="12.5" font-weight="700">
+          <text x="756" y="160">Retailer &amp; marketplace pages</text>
+          <text x="756" y="242">Object storage</text>
+          <text x="756" y="306">Held for review</text>
+          <text x="756" y="416">Analyst review queue</text>
+        </g>
+        <g font-size="11" fill-opacity=".7">
+          <text x="756" y="176">Amazon · Walmart · Best Buy · eBay …</text>
+          <text x="756" y="258">screenshot · HTML · PDF · SHA-256</text>
+          <text x="756" y="322">suspicious price, never published</text>
+          <text x="756" y="432">confidence 60–89, riskiest first</text><text x="756" y="448">≥90 auto-include · &lt;60 auto-exclude</text>
+        </g>
+        <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#af)">
+          <line x1="640" y1="172" x2="738" y2="163"/>
+          <polyline points="640,196 690,196 690,245 738,245"/>
+          <line x1="640" y1="309" x2="738" y2="309"/>
+          <line x1="640" y1="428" x2="738" y2="421"/>
+          <line x1="738" y1="446" x2="642" y2="446"/>
+        </g>
+        <g font-size="11">
+          <text x="689" y="160" text-anchor="middle">fetch</text>
+          <text x="700" y="228">raw capture</text>
+          <text x="689" y="302" text-anchor="middle">reject / hold</text>
+          <text x="689" y="420" text-anchor="middle">60–89</text>
+          <text x="689" y="462" text-anchor="middle">decision = label</text>
+        </g>
+        <!-- evidence link from object storage to bundle -->
+        <polyline points="980,245 1010,245 1010,693 642,693" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#af)"/>
+        <text x="1004" y="470" font-size="11" text-anchor="end" transform="rotate(-90 1004 470)">captures referenced by hash</text>
+
+        <!-- outputs bus -->
+        <line x1="510" y1="716" x2="510" y2="746" stroke="#A65E44" stroke-width="1.6"/>
+        <line x1="100" y1="746" x2="1000" y2="746" stroke="#A65E44" stroke-width="1.6"/>
+        <text x="520" y="740" font-size="11" fill="#A65E44">events: violation.created · resolved · source.degraded</text>
+        <g stroke="#A65E44" stroke-width="1.6" marker-end="url(#ac)">
+          <line x1="100" y1="746" x2="100" y2="772"/><line x1="280" y1="746" x2="280" y2="772"/><line x1="460" y1="746" x2="460" y2="772"/><line x1="640" y1="746" x2="640" y2="772"/><line x1="820" y1="746" x2="820" y2="772"/><line x1="1000" y1="746" x2="1000" y2="772"/>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".55" fill="none">
+          <rect x="20" y="774" width="160" height="56" rx="9"/><rect x="200" y="774" width="160" height="56" rx="9"/><rect x="380" y="774" width="160" height="56" rx="9"/><rect x="560" y="774" width="160" height="56" rx="9"/><rect x="740" y="774" width="160" height="56" rx="9"/><rect x="920" y="774" width="160" height="56" rx="9"/>
+        </g>
+        <g font-size="12.5" font-weight="700" text-anchor="middle">
+          <text x="100" y="797">Dashboard</text><text x="280" y="797">Alerts</text><text x="460" y="797">Reports</text><text x="640" y="797">Evidence page</text><text x="820" y="797">API · exports</text><text x="1000" y="797">Cases &amp; notices</text>
+        </g>
+        <g font-size="11" text-anchor="middle" fill-opacity=".7">
+          <text x="100" y="815">trends · compliance</text><text x="280" y="815">email · Slack · webhook</text><text x="460" y="815">email · link · SFTP</text><text x="640" y="815">expiring token</text><text x="820" y="815">Phase 5</text><text x="1000" y="815">letters · takedowns</text>
+        </g>
+        <!-- feedback: cases -> scheduler -->
+        <polyline points="1070,774 1070,40 642,40" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 4" marker-end="url(#af)"/>
+        <text x="1064" y="400" font-size="11" text-anchor="middle" transform="rotate(-90 1064 400)">under notice → re-check every 6h</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>A price is only published after it passes validation and matching. A below-MAP verdict freezes an evidence bundle that points to captures already stored at collection time. Cases feed back into the scheduler, so listings under notice are re-checked faster, and a violation resolves when a new observation shows a compliant price.</figcaption>
+  </figure>
+
+  <h3 style="margin:32px 0 12px">One observation, step by step</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Step</th><th>What happens</th><th>Written to</th></tr></thead>
+    <tbody>
+      <tr><td>1 · Schedule</td><td>"Daily marketplace sweep" matches Amazon US and term group F26; 318 jobs are queued at 06:00 UTC.</td><td><code>crawl_job</code></td></tr>
+      <tr><td>2 · Collect</td><td>Worker fetches amazon.com/dp/B0CVS3X1YZ; takes a full-page screenshot and keeps the HTML.</td><td><code>crawl_run</code>, object storage</td></tr>
+      <tr><td>3 · Extract &amp; validate</td><td>Price $1,395, seller "XYZ Electronics", in stock. Within bounds, currency USD, no sudden-change flag.</td><td>n/a (in memory)</td></tr>
+      <tr><td>4 · Match</td><td>ASIN in URL matches LG-001; title 0.88; image 0.93; confidence 98 → auto-include.</td><td><code>match_decision</code>, <code>listing</code></td></tr>
+      <tr><td>5 · Store</td><td>New observation appended; listing last_seen and current price updated.</td><td><code>observation</code>, <code>evidence</code></td></tr>
+      <tr><td>6 · Judge</td><td>MAP in force on 23 Sep = $1,499 (v2). Rule R-01 v3: 6.9% below → Standard. Seller class at capture: Unauthorised.</td><td><code>violation</code>, <code>violation_event</code></td></tr>
+      <tr><td>7 · Deliver</td><td>Evidence bundle frozen; alert to the account manager; row with evidence link in Monday's weekly report.</td><td><code>alert_event</code>, <code>report_run</code>, <code>evidence_link</code></td></tr>
+      <tr><td>8 · Enforce</td><td>Grouped into CASE-0042; notice sent after brand approval; listing re-checked every 6h; resolved when a compliant price is observed.</td><td><code>case</code>, <code>notice</code>, <code>communication</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section id="decisions">
+  <div class="sec-head">
+    <div class="eyebrow">Decisions needed</div>
+    <h2>Settle these in Phase 0</h2>
+    <p class="muted">Each one changes what gets built. A recommendation is given, but these are your calls.</p>
+  </div>
+  <div class="decisions">
+    <div class="decision"><div><h4>1 · Build or buy collection?</h4><p class="muted">Open across the spec and all three addenda.</p></div><p><span class="rec">Recommended:</span> build in-house for 5–7 launch sources (Amazon, Walmart, Best Buy, eBay, Home Depot, Target), with a data vendor as a fallback for hard sources. It is the core of the shared data layer and of the margins.</p></div>
+    <div class="decision"><div><h4>2 · Who is the pilot brand?</h4><p class="muted">LG, Philips, Kawasaki and Citizen appear in the prototype.</p></div><p><span class="rec">Recommended:</span> one brand, US only, 50–300 SKUs, with an existing MAP policy PDF and a spreadsheet of MAP prices. That sizes Phase 2 realistically.</p></div>
+    <div class="decision"><div><h4>3 · Brand users in the pilot, or reports only?</h4><p class="muted">Spec open question 3.</p></div><p><span class="rec">Recommended:</span> reports and evidence links first (Phase 3), read-only brand login in Phase 4. Keeps permissions work out of the critical path.</p></div>
+    <div class="decision"><div><h4>4 · What volume do we size for?</h4><p class="muted">Listings per account, observations per day, accounts at launch.</p></div><p><span class="rec">Needed:</span> a rough number decides how the observation table is partitioned and what collection costs per month.</p></div>
+    <div class="decision"><div><h4>5 · Legal boundary</h4><p class="muted">Collection methods, site terms, and wording of notices.</p></div><p><span class="rec">Recommended:</span> a short review with counsel before Phase 2. The product records observations and supports the brand's enforcement; it does not make legal determinations.</p></div>
+    <div class="decision"><div><h4>6 · Missing reference material</h4><p class="muted">The spec PDFs note that the "cyber analyst" recordings and the Case Management, Price Grid and Visualizations screens were never seen.</p></div><p><span class="rec">If available:</span> share them before Phase 4. The Case Management screen could change how enforcement is designed.</p></div>
+  </div>
+</section>
+</div>
