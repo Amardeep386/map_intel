@@ -17,6 +17,8 @@ const schema = z.object({
   NODE_ENV: z.string().default('development'),
   PORT: int(4000),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  // Where the portal lives; invite links point here.
+  PORTAL_URL: z.string().url().default('http://localhost:5173'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   // The API's own login role (mapintel_api, no BYPASSRLS). Required in production; in development

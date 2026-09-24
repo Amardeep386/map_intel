@@ -6,6 +6,8 @@ import { withApi } from '../lib/db.js';
 import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
 import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
+import { settingsRoutes } from './routes/settings.js';
+import { userRoutes } from './routes/users.js';
 import { auditRoutes } from './routes/audit.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
@@ -92,7 +94,10 @@ export async function buildApp() {
     const header = req.headers.authorization;
     if (header?.startsWith('Bearer ')) {
       try {
-        req.user = await verifyToken(header.slice(7));
+        const claims = await verifyToken(header.slice(7));
+        // A disabled (or removed) user is signed out on their next request, not when the token expires.
+        const active = await withApi(async (db) => (await db.query("SELECT 1 FROM app_user WHERE id = $1 AND status = 'Active'", [claims.sub])).rowCount);
+        req.user = active ? claims : null;
       } catch {
         req.user = null;
       }
@@ -140,5 +145,7 @@ export async function buildApp() {
   await app.register(termRoutes);
   await app.register(matrixRoutes);
   await app.register(scheduleRoutes);
+  await app.register(settingsRoutes);
+  await app.register(userRoutes);
   return app;
 }

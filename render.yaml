@@ -14,6 +14,7 @@ services:
       - { key: NODE_ENV, value: production }
       - { key: PORT, value: "4000" }
       - { key: CORS_ORIGINS, sync: false }          # e.g. https://map-intel.vercel.app
+      - { key: PORTAL_URL, sync: false }            # the portal URL, used in invite links
       - { key: DATABASE_URL, sync: false }          # Neon owner URL: used only by preDeploy migrations
       - { key: DATABASE_URL_API, sync: false }      # Neon URL for the mapintel_api role (no BYPASSRLS): used by the API
       - { key: DATABASE_SSL, value: "true" }
