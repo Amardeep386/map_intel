@@ -11,7 +11,7 @@ const runBody = z.object({
 });
 
 export async function collectionRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/sources', { preHandler: app.requireUser }, async () =>
+  app.get('/sources', { config: { permission: 'user' } }, async () =>
     withApi(async (db) => {
       const { rows } = await db.query(
         `SELECT id, code, display_name AS name, category, country, base_url, logo_url, active FROM source ORDER BY display_name`,
@@ -20,7 +20,7 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     }),
   );
 
-  app.get<{ Querystring: { limit?: string } }>('/crawl-runs', { preHandler: app.requireAdmin }, async (req) =>
+  app.get<{ Querystring: { limit?: string } }>('/crawl-runs', { config: { permission: 'platform' } }, async (req) =>
     withApi(async (db) => {
       const limit = Math.min(Number.parseInt(req.query.limit ?? '20', 10) || 20, 100);
       const { rows } = await db.query('SELECT * FROM crawl_run ORDER BY started_at DESC LIMIT $1', [limit]);
@@ -29,7 +29,7 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // Queue a collection run for the worker (admin only).
-  app.post('/crawl-runs', { preHandler: app.requireAdmin }, async (req, reply) => {
+  app.post('/crawl-runs', { config: { permission: 'platform' } }, async (req, reply) => {
     const body = runBody.safeParse(req.body ?? {});
     if (!body.success) return reply.code(400).send({ error: 'invalid run scope' });
     const result = await enqueueRun(body.data, 'manual', withApi);

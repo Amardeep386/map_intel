@@ -3,6 +3,8 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { verifyToken, type TokenClaims } from '../lib/auth.js';
 import { config } from '../lib/config.js';
 import { withApi } from '../lib/db.js';
+import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
+import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
@@ -11,10 +13,12 @@ import { healthRoutes } from './routes/health.js';
 declare module 'fastify' {
   interface FastifyRequest {
     user: TokenClaims | null;
+    /** Set for routes with an account action: the :accountId and the caller's role in it. */
+    accountId: string | null;
+    accountRole: string | null;
   }
-  interface FastifyInstance {
-    requireUser: (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
-    requireAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
+  interface FastifyContextConfig {
+    permission?: RoutePermission;
   }
 }
 
@@ -27,19 +31,31 @@ export class HttpError extends Error {
   }
 }
 
-/** Throws 403 unless the user is a platform admin or a member of the account. Returns the role. */
-export async function assertAccountAccess(user: TokenClaims, accountId: string): Promise<string> {
-  if (!/^[0-9a-f-]{36}$/i.test(accountId)) throw new HttpError(404, 'account not found');
-  if (user.role === 'admin') {
-    const exists = await withApi(async (db) => (await db.query('SELECT 1 FROM account WHERE id = $1', [accountId])).rowCount);
-    if (!exists) throw new HttpError(404, 'account not found');
-    return 'Administrator';
-  }
-  const role = await withApi(async (db) => {
-    const { rows } = await db.query<{ role: string | null }>('SELECT app_account_role($1, $2) AS role', [accountId, user.sub]);
-    return rows[0]?.role ?? null;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The caller's role in an account: their membership role, or Administrator for platform admins.
+ * Throws 404 for an unknown account and 403 when the caller has no access.
+ */
+export async function accountRoleFor(user: TokenClaims, accountId: string): Promise<string> {
+  if (!UUID.test(accountId)) throw new HttpError(404, 'account not found');
+  const { exists, role } = await withApi(async (db) => {
+    const { rows } = await db.query<{ exists: boolean; role: string | null }>(
+      'SELECT EXISTS (SELECT 1 FROM account WHERE id = $1) AS exists, app_account_role($1, $2) AS role',
+      [accountId, user.sub],
+    );
+    return rows[0];
   });
+  if (!exists) throw new HttpError(404, 'account not found');
+  if (user.role === 'admin') return 'Administrator';
   if (!role) throw new HttpError(403, 'no access to this account');
+  return role;
+}
+
+/** For routes whose account is not in the URL (e.g. evidence): check the action inside the handler. */
+export async function requireAccountAction(user: TokenClaims, accountId: string, action: AccountAction): Promise<string> {
+  const role = await accountRoleFor(user, accountId);
+  if (!can(role, action)) throw new HttpError(403, `your role (${role}) cannot do this`);
   return role;
 }
 
@@ -49,13 +65,22 @@ export async function buildApp() {
     trustProxy: true,
   });
 
+  // Every route must say who may call it. HEAD and OPTIONS routes are added by Fastify and CORS.
+  app.addHook('onRoute', (route) => {
+    const methods = Array.isArray(route.method) ? route.method : [route.method];
+    if (methods.every((m) => m === 'HEAD' || m === 'OPTIONS')) return;
+    if (!route.config?.permission) throw new Error(`route ${methods.join(',')} ${route.url} has no permission in its config`);
+  });
+
   await app.register(cors, {
     origin: config.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'content-type'],
   });
 
   app.decorateRequest('user', null);
+  app.decorateRequest('accountId', null);
+  app.decorateRequest('accountRole', null);
 
   app.addHook('onRequest', async (req) => {
     const header = req.headers.authorization;
@@ -68,14 +93,22 @@ export async function buildApp() {
     }
   });
 
-  // In async hooks Fastify stops the request when the hook returns the reply it sent.
-  app.decorate('requireUser', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Enforce the declared permission before any handler runs.
+  app.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
+    const permission = req.routeOptions.config?.permission;
+    if (!permission || permission === 'public') return undefined;
     if (!req.user) return reply.code(401).send({ error: 'sign in required' });
-    return undefined;
-  });
-  app.decorate('requireAdmin', async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!req.user) return reply.code(401).send({ error: 'sign in required' });
-    if (req.user.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
+    if (permission === 'user') return undefined;
+    if (permission === 'platform') {
+      if (req.user.role !== 'admin') return reply.code(403).send({ error: 'Mirethos administrators only' });
+      return undefined;
+    }
+    const accountId = (req.params as { accountId?: string } | undefined)?.accountId;
+    if (!accountId) throw new Error(`route ${req.routeOptions.url} needs :accountId for permission ${permission}`);
+    const role = await accountRoleFor(req.user, accountId);
+    if (!can(role, permission)) return reply.code(403).send({ error: `your role (${role}) cannot do this` });
+    req.accountId = accountId;
+    req.accountRole = role;
     return undefined;
   });
 
@@ -85,6 +118,10 @@ export async function buildApp() {
     if (err.statusCode && err.statusCode < 500) return reply.code(err.statusCode).send({ error: err.message });
     req.log.error(err);
     return reply.code(500).send({ error: 'internal error' });
+  });
+
+  app.addHook('onClose', async () => {
+    await closeRateLimiter();
   });
 
   await app.register(healthRoutes);

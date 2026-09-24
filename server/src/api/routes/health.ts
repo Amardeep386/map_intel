@@ -4,7 +4,7 @@ import { redisHealthy } from '../../lib/queue.js';
 import { storageHealthy } from '../../lib/storage.js';
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/health', async (_req, reply) => {
+  app.get('/health', { config: { permission: 'public' } }, async (_req, reply) => {
     const [db, redis, storage] = await Promise.all([
       apiPool().query('SELECT 1').then(() => true).catch(() => false),
       redisHealthy(),

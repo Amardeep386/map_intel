@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { withApi, withTenant } from '../../lib/db.js';
 import { signedUrl } from '../../lib/storage.js';
-import { HttpError, assertAccountAccess } from '../app.js';
+import { HttpError, requireAccountAction } from '../app.js';
 
 // Latest observation per listing, looking back 30 days (keeps partition pruning effective).
 const LATEST_OFFERS_SQL = `
@@ -50,7 +50,7 @@ const newProduct = z.object({
 });
 
 export async function accountRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/accounts', { preHandler: app.requireUser }, async (req) => {
+  app.get('/accounts', { config: { permission: 'user' } }, async (req) => {
     const user = req.user!;
     return withApi(async (db) => {
       const { rows } = await db.query('SELECT * FROM app_accounts_for_user($1, $2)', [user.sub, user.role === 'admin']);
@@ -68,9 +68,8 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.get<{ Params: { accountId: string } }>('/accounts/:accountId/products', { preHandler: app.requireUser }, async (req) => {
+  app.get<{ Params: { accountId: string } }>('/accounts/:accountId/products', { config: { permission: 'catalogue.read' } }, async (req) => {
     const { accountId } = req.params;
-    await assertAccountAccess(req.user!, accountId);
     return withTenant(accountId, async (db) => {
       const products = (
         await db.query<ProductRow>(
@@ -115,10 +114,8 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post<{ Params: { accountId: string } }>('/accounts/:accountId/products', { preHandler: app.requireUser }, async (req, reply) => {
+  app.post<{ Params: { accountId: string } }>('/accounts/:accountId/products', { config: { permission: 'catalogue.write' } }, async (req, reply) => {
     const { accountId } = req.params;
-    const role = await assertAccountAccess(req.user!, accountId);
-    if (role === 'Brand user') throw new HttpError(403, 'brand users cannot add products');
     const body = newProduct.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
     const b = body.data;
@@ -162,10 +159,9 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { accountId: string }; Querystring: { product?: string; limit?: string } }>(
     '/accounts/:accountId/observations',
-    { preHandler: app.requireUser },
+    { config: { permission: 'observations.read' } },
     async (req) => {
       const { accountId } = req.params;
-      await assertAccountAccess(req.user!, accountId);
       const limit = Math.min(Number.parseInt(req.query.limit ?? '100', 10) || 100, 500);
       return withTenant(accountId, async (db) => {
         const { rows } = await db.query(
@@ -188,7 +184,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.get<{ Params: { evidenceId: string } }>('/evidence/:evidenceId', { preHandler: app.requireUser }, async (req) => {
+  app.get<{ Params: { evidenceId: string } }>('/evidence/:evidenceId', { config: { permission: 'user' } }, async (req) => {
     const { evidenceId } = req.params;
     if (!/^[0-9a-f-]{36}$/i.test(evidenceId)) throw new HttpError(404, 'evidence not found');
     // Find the owning account first, check access, then read the evidence as that tenant.
@@ -197,7 +193,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       return rows[0]?.account_id ?? null;
     });
     if (!accountId) throw new HttpError(404, 'evidence not found');
-    await assertAccountAccess(req.user!, accountId);
+    await requireAccountAction(req.user!, accountId, 'observations.read');
     const row = await withTenant(accountId, async (db) => {
       const { rows } = await db.query(
         `SELECT e.*, o.advertised_price, o.seller_name_raw, l.url
