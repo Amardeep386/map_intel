@@ -122,6 +122,30 @@ async function main(): Promise<void> {
           [sourceId, url, productId],
         );
         retired += rowCount ?? 0;
+
+        // The retired listing's retailer id (e.g. a dead ASIN) no longer identifies the product:
+        // remove it, and switch off any identifier term generated from it.
+        const channelSku = channelSkuFromUrl(sourceCode, url);
+        if (channelSku) {
+          const type = sourceCode === 'amazon_us' ? 'ASIN' : sourceCode === 'bestbuy_us' ? 'BESTBUY_SKU' : 'WALMART_ID';
+          await db.query('DELETE FROM product_identifier WHERE product_id = $1 AND type = $2 AND value = $3', [productId, type, channelSku]);
+          const { rows: stale } = await db.query<{ id: string }>(
+            `UPDATE term SET active = false WHERE product_id = $1 AND type = 'identifier' AND lower(value) = lower($2) AND active RETURNING id`,
+            [productId, channelSku],
+          );
+          for (const t of stale) {
+            await recordAudit(db, {
+              accountId,
+              actor: { ...SYSTEM_ACTOR, label: 'Seed' },
+              action: 'term.updated',
+              entityType: 'term',
+              entityId: t.id,
+              summary: `Deactivated identifier term "${channelSku}": its ${sourceCode} listing was retired`,
+              before: { active: true },
+              after: { active: false },
+            });
+          }
+        }
       }
     }
 
