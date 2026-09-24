@@ -12,15 +12,6 @@ const runBody = z.object({
 });
 
 export async function collectionRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/sources', { config: { permission: 'user' } }, async () =>
-    withApi(async (db) => {
-      const { rows } = await db.query(
-        `SELECT id, code, display_name AS name, category, country, base_url, logo_url, active FROM source ORDER BY display_name`,
-      );
-      return rows;
-    }),
-  );
-
   app.get<{ Querystring: { limit?: string } }>('/crawl-runs', { config: { permission: 'platform' } }, async (req) =>
     withApi(async (db) => {
       const limit = Math.min(Number.parseInt(req.query.limit ?? '20', 10) || 20, 100);

@@ -5,11 +5,6 @@
     { "slug": "apple", "name": "Apple", "brand": "Apple", "status": "Sandbox", "accentLight": "#3A3A3C", "accentDark": "#A1A1A6" },
     { "slug": "samsung", "name": "Samsung", "brand": "Samsung", "status": "Sandbox", "accentLight": "#1428A0", "accentDark": "#6B8BFF" }
   ],
-  "sources": [
-    { "code": "amazon_us", "internalName": "amazon.com", "displayName": "Amazon", "category": "Marketplace", "baseUrl": "https://www.amazon.com", "capability": { "http": true, "browser": true, "api": false } },
-    { "code": "bestbuy_us", "internalName": "bestbuy.com", "displayName": "Best Buy", "category": "Online Seller", "baseUrl": "https://www.bestbuy.com", "capability": { "http": true, "browser": true, "api": "optional (BESTBUY_API_KEY)" } },
-    { "code": "walmart_us", "internalName": "walmart.com", "displayName": "Walmart", "category": "Marketplace", "baseUrl": "https://www.walmart.com", "capability": { "http": true, "browser": true, "api": false } }
-  ],
   "products": [
     { "account": "lg", "code": "LG-P01", "name": "LG 65\" C6 OLED evo 4K TV (2026)", "category": "TV", "model": "OLED65C6PUA",
       "urls": { "amazon_us": "https://www.amazon.com/dp/B0GRK5D3RW", "bestbuy_us": "https://www.bestbuy.com/product/lg-65-class-c6-series-oled-evo-ai-4k-smart-webos-tv-2026/JJ8VPZKZ8H/sku/6673112", "walmart_us": "https://www.walmart.com/ip/18196407846" } },

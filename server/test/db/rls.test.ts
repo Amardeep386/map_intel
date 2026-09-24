@@ -65,7 +65,7 @@ test("setting app.role = 'system' does not widen access for the API role", () =>
 test('no account set means no account-owned rows', () =>
   rolledBack(async (db) => {
     await asTenant(db, null);
-    for (const table of ['product', 'product_identifier', 'map_price', 'account_membership']) {
+    for (const table of ['product', 'product_identifier', 'map_price', 'account_membership', 'account_source', 'term_group', 'term', 'listing_discovery', 'term_group_subscription', 'schedule']) {
       const { rows } = await db.query(`SELECT count(*)::int AS n FROM ${table}`);
       assert.equal(rows[0].n, 0, table);
     }

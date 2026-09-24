@@ -11,6 +11,10 @@ import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
 import { credentialRoutes } from './routes/credentials.js';
 import { healthRoutes } from './routes/health.js';
+import { matrixRoutes } from './routes/matrix.js';
+import { scheduleRoutes } from './routes/schedules.js';
+import { sourceRoutes } from './routes/sources.js';
+import { termRoutes } from './routes/terms.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -132,5 +136,9 @@ export async function buildApp() {
   await app.register(auditRoutes);
   await app.register(collectionRoutes);
   await app.register(credentialRoutes);
+  await app.register(sourceRoutes);
+  await app.register(termRoutes);
+  await app.register(matrixRoutes);
+  await app.register(scheduleRoutes);
   return app;
 }

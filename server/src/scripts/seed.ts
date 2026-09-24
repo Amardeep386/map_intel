@@ -1,8 +1,12 @@
-// Loads the pilot accounts (LG, Apple, Samsung), the three launch sources, the pilot SKUs and
-// their retailer listings, and the first admin user. Safe to run more than once.
+// Loads the pilot accounts (LG, Apple, Samsung), the shared source catalogue (from the collector
+// declarations in src/collector/catalogue.ts), the pilot SKUs and their retailer listings, each pilot
+// account's starting subscriptions and schedule, and the first admin user. Safe to run more than once:
+// it never overwrites an account's own subscription or schedule changes.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SOURCE_CATALOGUE, optionsSchema } from '../collector/catalogue.js';
+import { SYSTEM_ACTOR, recordAudit } from '../lib/audit.js';
 import { hashPassword } from '../lib/auth.js';
 import { config } from '../lib/config.js';
 import { closeDb, withSystem } from '../lib/db.js';
@@ -10,14 +14,6 @@ import { channelSkuFromUrl } from '../collector/sources.js';
 
 interface SeedFile {
   accounts: { slug: string; name: string; brand: string; status: string; accentLight: string; accentDark: string }[];
-  sources: {
-    code: string;
-    internalName: string;
-    displayName: string;
-    category: string;
-    baseUrl: string;
-    capability: Record<string, unknown>;
-  }[];
   products: {
     account: string;
     code: string;
@@ -50,14 +46,27 @@ async function main(): Promise<void> {
       accountIds.set(a.slug, rows[0].id);
     }
 
-    const sourceIds = new Map<string, string>();
-    for (const s of seed.sources) {
+    const familyIds = new Map<string, string>();
+    for (const f of new Map(SOURCE_CATALOGUE.map((d) => [d.family.code, d.family])).values()) {
       const { rows } = await db.query<{ id: string }>(
-        `INSERT INTO source (code, internal_name, display_name, category, base_url, capability)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (code) DO UPDATE SET display_name = EXCLUDED.display_name, capability = EXCLUDED.capability
+        `INSERT INTO source_family (code, name) VALUES ($1, $2)
+         ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+        [f.code, f.name],
+      );
+      familyIds.set(f.code, rows[0].id);
+    }
+
+    const sourceIds = new Map<string, string>();
+    for (const s of SOURCE_CATALOGUE) {
+      const { rows } = await db.query<{ id: string }>(
+        `INSERT INTO source (code, internal_name, display_name, category, country, base_url, capability, options_schema, family_id, collector_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (code) DO UPDATE SET internal_name = EXCLUDED.internal_name, display_name = EXCLUDED.display_name,
+           category = EXCLUDED.category, country = EXCLUDED.country, base_url = EXCLUDED.base_url, capability = EXCLUDED.capability,
+           options_schema = EXCLUDED.options_schema, family_id = EXCLUDED.family_id, collector_status = EXCLUDED.collector_status
          RETURNING id`,
-        [s.code, s.internalName, s.displayName, s.category, s.baseUrl, JSON.stringify(s.capability)],
+        [s.code, s.internalName, s.displayName, s.category, s.country, s.baseUrl, JSON.stringify(s.capability),
+          JSON.stringify(optionsSchema(s)), familyIds.get(s.family.code), s.collectorStatus],
       );
       sourceIds.set(s.code, rows[0].id);
     }
@@ -116,6 +125,50 @@ async function main(): Promise<void> {
       }
     }
 
+    // Starting configuration per pilot account: subscribed to the sources its listings are on, and
+    // a daily marketplace sweep. Only created when missing, so account changes are never undone.
+    let subscriptions = 0;
+    let schedules = 0;
+    for (const [slug, accountId] of accountIds) {
+      const liveSources = [...new Set(seed.products.filter((p) => p.account === slug).flatMap((p) => Object.keys(p.urls).filter((k) => p.urls[k])))];
+      for (const code of liveSources) {
+        const { rowCount } = await db.query(
+          `INSERT INTO account_source (account_id, source_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [accountId, sourceIds.get(code)],
+        );
+        if (rowCount) {
+          subscriptions++;
+          await recordAudit(db, {
+            accountId,
+            actor: { ...SYSTEM_ACTOR, label: 'Seed' },
+            action: 'subscription.created',
+            entityType: 'account_source',
+            entityId: code,
+            summary: `Subscribed to ${code} (starting configuration)`,
+            after: { source: code, active: true, options: {} },
+          });
+        }
+      }
+      const { rows: sched } = await db.query<{ id: string }>(
+        `INSERT INTO schedule (account_id, name, selector, listing_scope, listing_status, takedown_status, cadence, timezone, priority)
+         VALUES ($1, 'Daily marketplace sweep', '{}'::jsonb, 'Included and Staged', 'Active only', 'All', '0 6 * * *', 'UTC', 10)
+         ON CONFLICT (account_id, lower(name)) DO NOTHING RETURNING id`,
+        [accountId],
+      );
+      if (sched[0]) {
+        schedules++;
+        await recordAudit(db, {
+          accountId,
+          actor: { ...SYSTEM_ACTOR, label: 'Seed' },
+          action: 'schedule.created',
+          entityType: 'schedule',
+          entityId: sched[0].id,
+          summary: 'Created schedule "Daily marketplace sweep" (starting configuration)',
+          after: { name: 'Daily marketplace sweep', cadence: '0 6 * * *', timezone: 'UTC', priority: 10 },
+        });
+      }
+    }
+
     if (config.SEED_ADMIN_EMAIL && config.SEED_ADMIN_PASSWORD) {
       const hash = await hashPassword(config.SEED_ADMIN_PASSWORD);
       await db.query(
@@ -129,7 +182,7 @@ async function main(): Promise<void> {
       console.log('SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set: no admin user created');
     }
 
-    console.log(`seeded ${seed.accounts.length} accounts, ${seed.sources.length} sources, ${seed.products.length} products, ${listings} listings, ${retired} listings retired`);
+    console.log(`seeded ${seed.accounts.length} accounts, ${SOURCE_CATALOGUE.length} sources, ${subscriptions} new subscriptions, ${schedules} new schedules, ${seed.products.length} products, ${listings} listings, ${retired} listings retired`);
   });
   await closeDb();
 }
