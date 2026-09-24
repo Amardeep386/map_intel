@@ -37,6 +37,11 @@ const schema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_TTL_HOURS: int(12),
 
+  // Credential vault: comma-separated `id:base64key` pairs (32-byte keys) and the id used for new secrets.
+  // Old keys stay listed so existing secrets still decrypt after a key change.
+  VAULT_KEYS: z.string().optional(),
+  VAULT_ACTIVE_KEY: z.string().optional(),
+
   SEED_ADMIN_EMAIL: z.string().optional(),
   SEED_ADMIN_PASSWORD: z.string().min(12, 'SEED_ADMIN_PASSWORD must be at least 12 characters').optional(),
   SEED_ADMIN_NAME: z.string().default('Mirethos Operations'),

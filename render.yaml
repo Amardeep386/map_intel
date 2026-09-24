@@ -25,6 +25,8 @@ services:
       - { key: S3_FORCE_PATH_STYLE, value: "false" }
       - { key: S3_OBJECT_LOCK_DAYS, value: "365" }
       - { key: JWT_SECRET, generateValue: true }
+      - { key: VAULT_KEYS, sync: false }            # id:base64key[,id:base64key] (credential vault)
+      - { key: VAULT_ACTIVE_KEY, sync: false }
 
   - type: worker
     name: map-intel-collector
@@ -46,5 +48,7 @@ services:
       - { key: S3_FORCE_PATH_STYLE, value: "false" }
       - { key: S3_OBJECT_LOCK_DAYS, value: "365" }
       - { key: JWT_SECRET, sync: false }            # copy from the API service
+      - { key: VAULT_KEYS, sync: false }            # same as the API: the worker decrypts source logins
+      - { key: VAULT_ACTIVE_KEY, sync: false }
       - { key: COLLECT_EGRESS_LABEL, value: render-ohio }
       - { key: BESTBUY_API_KEY, sync: false }

@@ -22,3 +22,10 @@ test('no API file uses withSystem or the owner pool', async () => {
     assert.doesNotMatch(src, /\bwithSystem\b|\bpool\(\)/, path.relative(apiDir, file));
   }
 });
+
+test('no API file can decrypt vault secrets', async () => {
+  for (const file of await tsFiles(apiDir)) {
+    const src = await readFile(file, 'utf8');
+    assert.doesNotMatch(src, /\bdecrypt\b/, path.relative(apiDir, file));
+  }
+});
