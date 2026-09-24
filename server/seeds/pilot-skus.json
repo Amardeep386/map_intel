@@ -52,7 +52,7 @@
     { "account": "apple", "code": "APL-P09", "name": "Apple Pencil Pro", "category": "Accessory", "model": "MX2D3AM/A",
       "urls": { "amazon_us": "https://www.amazon.com/dp/B0D3J71RM7", "bestbuy_us": "https://www.bestbuy.com/product/apple-pencil-pro-white/JJGCQ35H4Q", "walmart_us": "https://www.walmart.com/ip/5762417070" } },
     { "account": "apple", "code": "APL-P10", "name": "Apple Watch Series 11 GPS 42mm Space Gray, M/L", "category": "Wearable", "model": "MEQX4LW/A",
-      "urls": { "amazon_us": null, "bestbuy_us": "https://www.bestbuy.com/product/apple-watch-series-11-gps-42mm-space-gray-aluminum-case-with-black-sport-band-m-l-space-gray-2025/JJGCQLX93Y/sku/6572705", "walmart_us": null } },
+      "urls": { "amazon_us": null, "bestbuy_us": "https://www.bestbuy.com/product/apple-watch-series-11-gps-42mm-space-gray-aluminum-case-with-black-sport-band-m-l-space-gray-2025/JJGCQLX93Y/sku/6572705", "walmart_us": "https://www.walmart.com/ip/17814852199" } },
 
     { "account": "samsung", "code": "SAM-P01", "name": "Samsung Galaxy S26 Ultra 256GB Unlocked Black", "category": "Phone", "model": "SM-S948UZKAXAA",
       "urls": { "amazon_us": "https://www.amazon.com/dp/B0G4SWDH8P", "bestbuy_us": "https://www.bestbuy.com/product/samsung-galaxy-s26-ultra-256gb-unlocked-black/JJGRF36YGZ", "walmart_us": "https://www.walmart.com/ip/19199350891" } },

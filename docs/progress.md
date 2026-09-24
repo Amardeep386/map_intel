@@ -9,7 +9,7 @@
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Live portal:** front-end with API client layer. Mock mode by default; `VITE_USE_MOCK=false` switches sign-in, clients and Product Summary to the API.
 - **Next step:**
-  1. Supply URLs for the 10 missing SKU/retailer pairs (Known issues).
+  1. Check the 3 unconfirmed Amazon ASINs from a US browser; the other 6 missing pairs stay empty for now (Known issues).
   2. Decide on US egress for the collector (see Open questions).
   3. Start Phase 1 in Claude Code (prompt in `docs/prompts.md`).
 
@@ -52,20 +52,19 @@
 
 ## Known issues carried forward
 - **Collector blocked from India on Amazon and Best Buy.** Needs US egress; see Open questions.
-- **10 SKU/retailer pairs have no listing** (8 never found, plus 2 retired on 24 Sep). URLs needed from you:
+- **9 SKU/retailer pairs have no listing.** URL research on 24 Sep: APL-P10 Walmart found and added. The Amazon pages could not be checked from India (bot check), so 3 candidate ASINs need their "Item model number" confirmed from a US browser. The other 6 were not found new on that retailer: the only listings were a different model, refurbished, open-box, a bundle or an international version, so they were not used.
 
-  | SKU | Model | Needs |
-  |---|---|---|
-  | LG-P04 | 65QNED75BUA | Amazon |
-  | LG-P09 | S90TY | Amazon (dead ASIN `B0FKB4VTDY` retired) |
-  | LG-P09 | S90TY | Walmart |
-  | LG-P10 | 16U55U-H.AU77U3 | Walmart |
-  | APL-P10 | MEQX4LW/A | Amazon |
-  | APL-P10 | MEQX4LW/A | Walmart |
-  | SAM-P02 | SM-S942UZKEXAA | Amazon |
-  | SAM-P03 | SM-R640NZKAXAR | Walmart (…KWXAR variant URL retired) |
-  | SAM-P07 | QN65QN90FAFXZA | Amazon |
-  | SAM-P07 | QN65QN90FAFXZA | Walmart |
+  | SKU | Model | Retailer | Status |
+  |---|---|---|---|
+  | LG-P04 | 65QNED75BUA | Amazon | Candidate `B0HFPCNJYH` (title says 65QNED75B only); confirm model |
+  | LG-P09 | S90TY | Amazon | Not found on amazon.com (`B0DZ6RWBVF` is amazon.in; `B0FKB4VTDY` dead, retired) |
+  | LG-P09 | S90TY | Walmart | Not found (`5439978188` is the S90TR) |
+  | LG-P10 | 16U55U-H.AU77U3 | Walmart | Not found |
+  | APL-P10 | MEQX4LW/A | Amazon | Not found new (M/L listing is Renewed; `B0FQFPB851` is S/M, MEQW4LW/A) |
+  | SAM-P02 | SM-S942UZKEXAA | Amazon | Candidate `B0G4SW96R4` (same ASIN is "International Version" on amazon.ae); confirm model |
+  | SAM-P03 | SM-R640NZKAXAR | Walmart | Not found (Walmart has `…KWXAR`, an international version, or a listing with no model code) |
+  | SAM-P07 | QN65QN90FAFXZA | Amazon | Candidate `B0DXMYSQJC` ("65QN90F, 2025"); confirm model |
+  | SAM-P07 | QN65QN90FAFXZA | Walmart | Not found (`16209267446` is a bundle, `15969669430` open box) |
 - **Only the main offer is collected.** Walmart LG-P01 had 5 other sellers that were not captured. MAP monitoring needs all offers on a listing (Phase 2b).
 - **Test SKU `TEST-P0-STEP5` (LG) is `Retired`, not deleted.** Its MAP row is protected by `map_price_no_delete`. Product Summary still lists Retired products; filter them in Phase 1/2a.
 - **Neon owner role has BYPASSRLS.** Tenant isolation relies on the API switching to `mapintel_tenant`, which is verified (10/10). In Phase 1, give the API its own non-owner database role.
@@ -79,6 +78,7 @@
 - **Browser checks:** Step 4.2 PASS (4/4 live pages match the report); Step 5 PASS (sign in, client list, Product Summary, Add SKU survives refresh). Details in `docs/phase0-verification.md`.
 - **Admin password rotated** with the new `server` script `npm run admin:set-password`. It never prints the password. `SEED_ADMIN_PASSWORD` must now be at least 12 characters.
 - **Seed:** `pilot-skus.json` has a `retired` entry per product; `seed.ts` sets those listings to `Retired`, keeping their observations and evidence. LG-P09 Amazon and SAM-P03 Walmart retired; Neon has 80 Included and 2 Retired listings.
+- **Seed URL research:** APL-P10 Walmart added (`/ip/17814852199`: model MEQX4LW/A, new, sold by Walmart.com). Neon now has 81 Included listings. The other 9 missing pairs are in Known issues.
 - **`docs/reference/` excluded** from oxlint (`.oxlintrc.json`), Tailwind scanning (`src/index.css`: CSS 39.0 → 31.9 kB) and the Vite dependency scan (`vite.config.js`).
 
 ### 24 Sep 2026 — Planning chat
