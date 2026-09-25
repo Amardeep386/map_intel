@@ -195,9 +195,13 @@ export function generateCandidates(products: SyntheticProduct[], count: number, 
       case 'auction':
         c = { title: `${titleFor(p, r, r() < 0.5)} NEW SEALED`, price: round(base * (0.45 + r() * 0.3)), condition: 'New', format: 'auction', channelSku: null, truth: exclude('Not a purchasable offer') };
         break;
-      case 'grey-market':
-        c = { title: `${titleFor(p, r, false)} (International Version)`, price: round(base * (0.66 + r() * 0.1)), condition: 'New', format: null, channelSku: null, truth: exclude('Out of region', 'seller_product') };
+      case 'grey-market': {
+        // A grey-market reseller keeps relisting the same couple of products.
+        const g = products[Math.floor(r() * Math.min(2, products.length))];
+        c = { title: `${titleFor(g, r, r() < 0.6)} (International Version)`, price: round(g.basePrice * (0.66 + r() * 0.1)), condition: 'New', format: null, channelSku: null,
+          truth: { decision: 'exclude', reason: 'Out of region', scope: 'seller_product' } };
         break;
+      }
     }
     out.push({ kind, sourceCode: source, url, sellerName: seller, ...c });
   }

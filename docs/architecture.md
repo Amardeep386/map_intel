@@ -15,7 +15,8 @@ Target model for all phases. Where the implemented schema (`server/db/*.sql`) al
 | Collection config (shared core) | source, source_family, account_source (subscription), term_group, term, term_group_subscription, schedule, crawl_job, crawl_run |
 | Catalogue & policy | product, product_identifier, map_price, promo_window, policy_document |
 | Market identity (shared core) | seller, seller_alias, seller_link, seller_classification (per account, effective-dated), seller_contact |
-| Observations (shared core) | listing, listing_discovery (term found listing; drives term yield), listing_state_event, observation (monthly partitions), evidence, match_candidate, match_decision, suppression |
+| Observations (shared core) | listing, listing_discovery (term found listing; drives term yield), observation (monthly partitions), evidence |
+| Mapping (per account) | listing_match (current state per account), listing_state_event (history; human decisions are labels), match_candidate + match_signal (six signals per candidate), match_rule, suppression |
 | MAP decisions | rule, rule_version, violation, violation_event, replay_run |
 | Enforcement | case, case_violation, notice, notice_template, communication, marketplace_report |
 | Delivery | report_template, report_definition, report_run, destination, distribution_list, evidence_link, alert_rule, alert_event, notification |
@@ -33,7 +34,9 @@ Key relationships: term → product (assigned); listing → source, seller, prod
 | map_price | id, product_id, amount, currency, region?, effective_from, effective_to, source | Never overwritten |
 | promo_window | id, account_id, products, sellers?, promo_amount, from, to | Below-MAP inside → "Authorised promo" |
 | seller_classification | seller_id, account_id, class, from, to, set_by, note | Class at capture copied onto violation |
-| listing | id, source_id, seller_id, product_id?, url, channel_sku, state (Staged/Included/Excluded/Retired), match_confidence, first_seen, last_seen | Stable identity over observations |
+| listing | id, source_id, seller_id, url, channel_sku, title, image_url, origin (collector/import/synthetic/seed), first_seen, last_seen | Stable identity over observations; shared by every account. (`product_id`, `state`, `match_confidence` are P0 leftovers kept for the P0 collector.) |
+| listing_match | account_id, listing_id, product_id, state (Staged/Included/Excluded/Retired), confidence, priority, candidate_id, decided_by, rule_id, suppression_id, reason, scope | Each account's decision on a shared listing; changes write listing_state_event |
+| match_signal | candidate_id, signal (identifier/title/image/price/attributes/prior), score (null = n/a), weight, passed, detail | Append-only; what the confidence was built from |
 | observation | id, listing_id, observed_at (UTC), advertised_price, list_price, currency, promo_text, coupon, qty, availability, seller_name_raw, crawl_run_id, status | Append-only, partitioned monthly |
 | evidence | id, observation_id, screenshot_uri, html_uri, pdf_uri, sha256, captured_at, method | S3 Object Lock; hash in Postgres |
 | rule_version | rule_id, version, scope, condition (JSON), verdict, severity bands, valid_from/to, priority | Edit = new version |
@@ -56,7 +59,7 @@ Key relationships: term → product (assigned); listing → source, seller, prod
 4. **Extract:** price, list price, seller, stock, promo, identifiers.
 5. **Validate:** bounds, currency, sudden change; suspicious → held, never published.
 6. **Normalize:** currency, promo type, seller name → seller/alias.
-7. **Match:** identifiers → title/image/attributes → confidence; 60–89 to review queue; decisions become labels.
+7. **Match:** `lib/mapping.ts stageCandidate` — proposed product (identifiers, then title) → six signals → confidence → suppressions, then rules, then bands (≥ include / review / < exclude); 60–89 to review queue ordered by (100 − confidence) × (1 + discount depth); a person's decision stands on re-sight and becomes a label.
 8. **Store:** append observation + evidence; update listing current state.
 9. **Judge:** rules engine with MAP in force at observed_at, promo windows, seller class, rule version → violation / violation_event.
 10. **Deliver:** freeze evidence bundle; events (violation.created, resolved, source.degraded) → dashboard, alerts, reports, evidence page, API, cases.
