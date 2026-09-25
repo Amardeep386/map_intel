@@ -61,12 +61,16 @@ Each result is saved as an append-only `observation` row. Its `evidence` row poi
 - `docs/enforcement-channels.md`: Amazon Brand Registry and eBay VeRO notes (Phase 0 spike)
 - Blueprint, prototype and progress log are kept in the Mirethos Claude project.
 
-## Deploy (planned)
+## Deploy
 
 | Part | Host |
 |---|---|
-| Portal | Vercel (`vercel.json`) |
-| API and collector worker | Render (`render.yaml`) |
+| Portal | Vercel (`vercel.json`), env `VITE_USE_MOCK=false`, `VITE_API_URL=<Render API URL>` |
+| API | Render free plan (`render.yaml`: native Node, migrations run at start-up) |
+| Collector worker | Render paid plan only (commented out in `render.yaml`) |
 | Postgres | Neon |
 | Redis | Upstash |
 | Evidence files | AWS S3 (with Object Lock) |
+
+The free API sleeps after 15 minutes idle; the first request after that takes about a minute.
+After the portal URL is known, set `CORS_ORIGINS` and `PORTAL_URL` on the Render service to it.
