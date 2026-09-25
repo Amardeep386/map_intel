@@ -34,3 +34,5 @@ server/.env.*
 # Backend build output / local data
 server/dist
 server/.data
+
+.vercel
