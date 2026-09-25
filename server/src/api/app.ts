@@ -10,6 +10,7 @@ import { accountRoutes } from './routes/accounts.js';
 import { settingsRoutes } from './routes/settings.js';
 import { userRoutes } from './routes/users.js';
 import { auditRoutes } from './routes/audit.js';
+import { catalogueRoutes } from './routes/catalogue.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
 import { credentialRoutes } from './routes/credentials.js';
@@ -141,6 +142,7 @@ export async function buildApp() {
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(accountRoutes);
   await app.register(auditRoutes);
+  await app.register(catalogueRoutes);
   await app.register(collectionRoutes);
   await app.register(credentialRoutes);
   await app.register(sourceRoutes);
