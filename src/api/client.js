@@ -106,7 +106,12 @@ export const api = {
     const data = await request("/auth/login", { method: "POST", body: { email, password } });
     token = data.token;
     try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
-    return this.me();
+    return data.user;
+  },
+
+  /** Start the API early (the free host sleeps when idle) so it is awake by the time the user signs in. */
+  wake() {
+    if (!USE_MOCK) fetch(`${API_URL}/health`).catch(() => undefined);
   },
 
   /** The signed-in user with each account's role and allowed actions. */
@@ -130,7 +135,7 @@ export const api = {
     const data = await request("/auth/accept-invite", { method: "POST", body: { token: inviteToken, password, name: name || undefined } });
     token = data.token;
     try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
-    return this.me();
+    return data.user;
   },
 
   logout() {

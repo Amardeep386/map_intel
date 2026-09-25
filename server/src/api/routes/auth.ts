@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { hashPassword, signToken, verifyPassword } from '../../lib/auth.js';
+import { hashPassword, needsRehash, signToken, verifyPassword } from '../../lib/auth.js';
 import { withApi } from '../../lib/db.js';
 import { actionsFor } from '../../lib/permissions.js';
 import { hit, isLimited, reset, type Limit } from '../../lib/rateLimit.js';
@@ -45,7 +45,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(401).send({ error: 'wrong email or password' });
     }
     await reset(key);
-    await withApi((db) => db.query('UPDATE app_user SET last_login_at = now() WHERE id = $1', [user.id]));
+    const rehash = needsRehash(user.password_hash) ? await hashPassword(body.data.password) : null;
+    await withApi((db) =>
+      db.query('UPDATE app_user SET last_login_at = now(), password_hash = coalesce($2, password_hash) WHERE id = $1', [user.id, rehash]),
+    );
     const token = await signToken({ sub: user.id, email: user.email, role: user.platform_role });
     return { token, user: { id: user.id, email: user.email, name: user.full_name, role: user.platform_role } };
   });

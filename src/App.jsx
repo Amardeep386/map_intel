@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   Plus, ChevronDown, ExternalLink, X, ChevronLeft, ChevronRight,
-  Eye, MapPin, Ban, Sparkles, Lock, Moon, Sun, Radar
+  Eye, MapPin, Ban, Sparkles, Lock, Moon, Sun, Radar, Loader2
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -785,6 +785,8 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('operations@mirethos.com');
   const [loginPassword, setLoginPassword] = useState(api.isMock ? '••••••••••••' : '');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  // Shown when sign-in takes long, which usually means the API is waking from sleep.
+  const [slowLogin, setSlowLogin] = useState(false);
 
   // Client configuration
   const client = useMemo(
@@ -818,13 +820,17 @@ export default function App() {
     setDb(prev => ({ ...prev, [clientName]: fn(prev[clientName] || EMPTY_WORKSPACE) }));
   };
 
-  // After sign-in (or accepting an invite): load the accounts and open the client picker.
-  const enterPortal = async (user) => {
-    const list = await api.listClients();
+  // Wake the API while the user is still typing (the free host sleeps when idle).
+  useEffect(() => { api.wake(); }, []);
+
+  // After sign-in (or accepting an invite): load the user, accounts and shared data together,
+  // then each account's workspace, and open the client picker.
+  const enterPortal = async () => {
+    const [user, list, sharedData] = await Promise.all([api.me(), api.listClients(), api.loadShared()]);
     const workspaces = await Promise.all(list.map((c) => api.loadWorkspace(c)));
     const nextDb = {};
     list.forEach((c, i) => { nextDb[c.name] = workspaces[i]; });
-    setShared(await api.loadShared());
+    setShared(sharedData);
     setClients(list);
     setDb(nextDb);
     setCurrentUser(user);
@@ -835,13 +841,17 @@ export default function App() {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setIsLoggingIn(true);
+    const slowTimer = setTimeout(() => setSlowLogin(true), 5000);
     try {
-      await enterPortal(await api.login(loginEmail, loginPassword));
+      await api.login(loginEmail, loginPassword);
+      await enterPortal();
       showToast("Credentials authorized.", "success");
     } catch (err) {
       showToast(err.message || "Sign in failed.", "info");
     } finally {
+      clearTimeout(slowTimer);
       setIsLoggingIn(false);
+      setSlowLogin(false);
     }
   };
 
@@ -964,9 +974,9 @@ export default function App() {
     return (
       <InviteAcceptScreen
         inviteToken={inviteToken}
-        onAccepted={async (user) => {
+        onAccepted={async () => {
           window.history.replaceState(null, '', window.location.pathname);
-          await enterPortal(user);
+          await enterPortal();
           showToast("Welcome! Your account is ready.", "success");
         }}
         onCancel={() => { window.history.replaceState(null, '', window.location.pathname); setScreen('login'); }}
@@ -1008,9 +1018,13 @@ export default function App() {
               <input type="checkbox" defaultChecked className="rounded border-brand-taupe bg-brand-charcoal text-brand-copper focus:ring-brand-copper/30" /> Remember me
             </label>
 
-            <button type="submit" className="w-full py-2.5 bg-brand-copper hover:bg-brand-copper/90 text-white rounded-lg text-sm font-semibold transition-colors cursor-pointer mt-2">
-              Sign In
+            <button type="submit" disabled={isLoggingIn} className="w-full py-2.5 bg-brand-copper hover:bg-brand-copper/90 text-white rounded-lg text-sm font-semibold transition-colors cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2">
+              {isLoggingIn && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isLoggingIn ? "Signing in…" : "Sign In"}
             </button>
+            {slowLogin && (
+              <p className="text-[11px] text-brand-taupe text-center">Waking up the server. The first sign-in after a quiet spell can take up to a minute.</p>
+            )}
           </form>
 
           <div className="border-t border-white/5 mt-6 pt-4 text-center text-[10px] text-brand-taupe flex items-center justify-center gap-1.5">

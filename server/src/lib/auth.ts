@@ -11,8 +11,22 @@ export interface TokenClaims {
   role: 'admin' | 'member';
 }
 
+// bcrypt work factor. 10 keeps sign-in around a second on a small shared CPU (Render free plan);
+// older cost-12 hashes are rewritten at the next successful sign-in (see needsRehash).
+const PASSWORD_COST = 10;
+
 export function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, 12);
+  return bcrypt.hash(plain, PASSWORD_COST);
+}
+
+/** True when a stored hash uses a different work factor than new hashes do. */
+export function needsRehash(hash: string): boolean {
+  try {
+    const rounds = bcrypt.getRounds(hash); // NaN for a malformed hash
+    return Number.isInteger(rounds) && rounds !== PASSWORD_COST;
+  } catch {
+    return false;
+  }
 }
 
 export function verifyPassword(plain: string, hash: string): Promise<boolean> {

@@ -4,13 +4,19 @@ import { config } from './config.js';
 // numeric -> JS number (prices fit comfortably in a double at 2 decimal places)
 pg.types.setTypeParser(1700, (v) => (v === null ? null : Number.parseFloat(v)));
 
-const makePool = (connectionString: string) =>
-  new pg.Pool({
+// Idle connections are kept for 5 minutes so requests reuse them instead of paying a new TLS
+// handshake to the database each time. Neon may close them first (compute suspend); the pool then
+// drops them and reports the error here instead of crashing the process.
+const makePool = (connectionString: string) => {
+  const p = new pg.Pool({
     connectionString,
     ssl: config.DATABASE_SSL ? { rejectUnauthorized: true } : undefined,
     max: 10,
-    idleTimeoutMillis: 30_000,
+    idleTimeoutMillis: 5 * 60_000,
   });
+  p.on('error', (err) => console.warn(`database connection dropped: ${err.message}`));
+  return p;
+};
 
 let ownerPool: pg.Pool | null = null;
 let apiPoolInstance: pg.Pool | null = null;
@@ -41,11 +47,11 @@ export function apiPool(): pg.Pool {
 
 export type Db = pg.PoolClient;
 
-async function inTransaction<T>(p: pg.Pool, setup: (c: Db) => Promise<void>, fn: (c: Db) => Promise<T>): Promise<T> {
+/** `begin` is sent as one simple-protocol query, so BEGIN and any SET LOCALs cost one round trip. */
+async function inTransaction<T>(p: pg.Pool, begin: (c: Db) => string, fn: (c: Db) => Promise<T>): Promise<T> {
   const client = await p.connect();
   try {
-    await client.query('BEGIN');
-    await setup(client);
+    await client.query(begin(client));
     const result = await fn(client);
     await client.query('COMMIT');
     return result;
@@ -64,10 +70,7 @@ async function inTransaction<T>(p: pg.Pool, setup: (c: Db) => Promise<void>, fn:
 export function withTenant<T>(accountId: string, fn: (c: Db) => Promise<T>): Promise<T> {
   return inTransaction(
     apiPool(),
-    async (c) => {
-      await c.query('SET LOCAL ROLE mapintel_tenant');
-      await c.query("SELECT set_config('app.account_id', $1, true)", [accountId]);
-    },
+    (c) => `BEGIN; SET LOCAL ROLE mapintel_tenant; SELECT set_config('app.account_id', ${c.escapeLiteral(accountId)}, true)`,
     fn,
   );
 }
@@ -77,16 +80,14 @@ export function withTenant<T>(accountId: string, fn: (c: Db) => Promise<T>): Pro
  * Account-owned tables return no rows here; cross-account reads go through the app_* functions.
  */
 export function withApi<T>(fn: (c: Db) => Promise<T>): Promise<T> {
-  return inTransaction(apiPool(), async () => undefined, fn);
+  return inTransaction(apiPool(), () => 'BEGIN', fn);
 }
 
 /** Run queries as the platform (migrations, seeds, collector worker, admin scripts). Not for API routes. */
 export function withSystem<T>(fn: (c: Db) => Promise<T>): Promise<T> {
   return inTransaction(
     pool(),
-    async (c) => {
-      await c.query("SELECT set_config('app.role', 'system', true)");
-    },
+    () => "BEGIN; SELECT set_config('app.role', 'system', true)",
     fn,
   );
 }

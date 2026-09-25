@@ -3,7 +3,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { verifyToken, type TokenClaims } from '../lib/auth.js';
 import { config } from '../lib/config.js';
 import { parseOrigins } from '../lib/cors.js';
-import { withApi } from '../lib/db.js';
+import { apiPool, withApi } from '../lib/db.js';
 import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
 import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
@@ -97,7 +97,8 @@ export async function buildApp() {
       try {
         const claims = await verifyToken(header.slice(7));
         // A disabled (or removed) user is signed out on their next request, not when the token expires.
-        const active = await withApi(async (db) => (await db.query("SELECT 1 FROM app_user WHERE id = $1 AND status = 'Active'", [claims.sub])).rowCount);
+        // One read, no transaction: this runs on every signed-in request.
+        const active = (await apiPool().query("SELECT 1 FROM app_user WHERE id = $1 AND status = 'Active'", [claims.sub])).rowCount;
         req.user = active ? claims : null;
       } catch {
         req.user = null;
