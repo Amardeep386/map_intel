@@ -127,7 +127,8 @@ export function parseCsv(text: string): string[][] {
         i++;
       } else if (ch === '"') quoted = false;
       else field += ch;
-    } else if (ch === '"') quoted = true;
+    } else if (ch === '"' && field === '') quoted = true;
+    // A quote inside an unquoted field is a literal character (an inch mark: 65" TV).
     else if (ch === ',') {
       row.push(field);
       field = '';

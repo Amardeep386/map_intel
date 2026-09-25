@@ -25,6 +25,14 @@ export interface MatchContext {
   thresholds: Thresholds;
   rules: MatchRule[];
   suppressions: Suppression[];
+  /** Latest human decision per listing (for the prior-decisions signal). */
+  labels: Map<string, { sellerId: string | null; productId: string | null; state: string }>;
+  /** Current match per listing, kept up to date as the batch stages listings. */
+  current: Map<string, { state: ListingState; decidedBy: string; productId: string | null }>;
+  /** Sellers already classified in this account (no need to check again). */
+  classified: Set<string>;
+  /** Seller ids resolved in this batch: `${sourceId}|${name}` -> id. */
+  sellers: Map<string, string | null>;
 }
 
 export interface Actor {
@@ -45,7 +53,16 @@ export async function loadMatchContext(db: Db, accountId: string): Promise<Match
       `SELECT p.id, p.product_code AS code, p.name, p.brand, p.model_number AS model, p.standard_price AS msrp,
               (SELECT mp.amount FROM map_price mp WHERE mp.product_id = p.id AND mp.region IS NULL AND mp.effective_from <= now()
                   AND (mp.effective_to IS NULL OR mp.effective_to > now()) ORDER BY mp.effective_from DESC LIMIT 1) AS map,
-              coalesce((SELECT json_agg(json_build_object('type', i.type, 'value', i.value)) FROM product_identifier i WHERE i.product_id = p.id), '[]') AS identifiers
+              coalesce((SELECT json_agg(json_build_object('type', i.type, 'value', i.value)) FROM product_identifier i WHERE i.product_id = p.id), '[]') AS identifiers,
+              -- Market reference: median of the latest prices on the product's included listings
+              -- (observations from the last 30 days, else the price the matcher saw).
+              (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x.price)::numeric(12,2) FROM (
+                 SELECT coalesce(
+                          (SELECT o.advertised_price FROM observation o WHERE o.listing_id = m.listing_id AND o.observed_at > now() - interval '30 days'
+                              AND o.advertised_price IS NOT NULL ORDER BY o.observed_at DESC LIMIT 1),
+                          c.price) AS price
+                   FROM listing_match m LEFT JOIN match_candidate c ON c.id = m.candidate_id
+                  WHERE m.product_id = p.id AND m.state = 'Included') x WHERE x.price IS NOT NULL) AS market
          FROM product p WHERE p.account_id = $1 AND p.status <> 'Retired'`,
       [accountId],
     )
@@ -56,7 +73,32 @@ export async function loadMatchContext(db: Db, accountId: string): Promise<Match
       [accountId],
     )
   ).rows;
-  return { accountId, products, thresholds: { include, review }, rules, suppressions: await loadSuppressions(db, accountId) };
+  const labels = new Map(
+    (
+      await db.query<{ listing_id: string; seller_id: string | null; product_id: string | null; to_state: string }>(
+        `SELECT DISTINCT ON (e.listing_id) e.listing_id, l.seller_id, e.product_id, e.to_state
+           FROM listing_state_event e JOIN listing l ON l.id = e.listing_id
+          WHERE e.account_id = $1 AND e.is_label
+          ORDER BY e.listing_id, e.created_at DESC`,
+        [accountId],
+      )
+    ).rows.map((r) => [r.listing_id, { sellerId: r.seller_id, productId: r.product_id, state: r.to_state }]),
+  );
+  const current = new Map(
+    (
+      await db.query<{ listing_id: string; state: ListingState; decided_by: string; product_id: string | null }>(
+        'SELECT listing_id, state, decided_by, product_id FROM listing_match WHERE account_id = $1',
+        [accountId],
+      )
+    ).rows.map((r) => [r.listing_id, { state: r.state, decidedBy: r.decided_by, productId: r.product_id }]),
+  );
+  const classified = new Set(
+    (await db.query<{ seller_id: string }>('SELECT DISTINCT seller_id FROM seller_classification WHERE account_id = $1', [accountId])).rows.map((r) => r.seller_id),
+  );
+  return {
+    accountId, products, thresholds: { include, review }, rules, suppressions: await loadSuppressions(db, accountId),
+    labels, current, classified, sellers: new Map(),
+  };
 }
 
 async function loadSuppressions(db: Db, accountId: string): Promise<Suppression[]> {
@@ -70,19 +112,15 @@ async function loadSuppressions(db: Db, accountId: string): Promise<Suppression[
   ).rows.map((s) => ({ ...s, code: supCode(s.seq) }));
 }
 
-async function priorLabels(db: Db, listingId: string, sellerId: string | null): Promise<PriorLabel[]> {
-  // The latest human decision per listing: this URL, and other listings of the same seller.
-  const { rows } = await db.query<{ product_id: string | null; to_state: string; same_url: boolean }>(
-    `SELECT * FROM (
-       SELECT DISTINCT ON (e.listing_id) e.product_id, e.to_state, e.listing_id = $1 AS same_url
-         FROM listing_state_event e JOIN listing l ON l.id = e.listing_id
-        WHERE e.is_label AND (e.listing_id = $1 OR ($2::uuid IS NOT NULL AND l.seller_id = $2))
-        ORDER BY e.listing_id, e.created_at DESC) latest
-      WHERE to_state IN ('Included', 'Excluded')
-      LIMIT 50`,
-    [listingId, sellerId],
-  );
-  return rows.map((r) => ({ productId: r.product_id, state: r.to_state as PriorLabel['state'], sameUrl: r.same_url }));
+/** Earlier human decisions on this URL, and on other listings of the same seller. */
+function priorLabels(ctx: MatchContext, listingId: string, sellerId: string | null): PriorLabel[] {
+  const out: PriorLabel[] = [];
+  for (const [id, l] of ctx.labels) {
+    if (l.state !== 'Included' && l.state !== 'Excluded') continue;
+    if (id === listingId) out.push({ productId: l.productId, state: l.state, sameUrl: true });
+    else if (sellerId && l.sellerId === sellerId) out.push({ productId: l.productId, state: l.state, sameUrl: false });
+  }
+  return out;
 }
 
 // clock_timestamp(), not now(): several events in one transaction must keep their order.
@@ -129,100 +167,85 @@ export interface StageResult {
  */
 export async function stageCandidate(db: Db, ctx: MatchContext, c: StageInput): Promise<StageResult> {
   const product = proposeProduct(c, ctx.products, c.proposedProductId);
-  const labels = await priorLabels(db, c.listingId, c.sellerId);
-  const result = scoreCandidate(c, product, labels, ctx.thresholds);
-  const cctx = { listingId: c.listingId, sourceId: c.sourceId, sellerId: c.sellerId, input: c };
-  const decision = decide(cctx, result, ctx.rules, ctx.suppressions);
+  const result = scoreCandidate(c, product, priorLabels(ctx, c.listingId, c.sellerId), ctx.thresholds);
+  const decision = decide({ listingId: c.listingId, sourceId: c.sourceId, sellerId: c.sellerId, input: c }, result, ctx.rules, ctx.suppressions);
 
+  // The candidate and its six signals in one statement.
   const candidateId = (
-    await db.query<{ id: string }>(
-      `INSERT INTO match_candidate (account_id, listing_id, product_id, title, price, currency, seller_name, seller_id, image_url, condition,
-                                    listing_format, found, confidence, band, origin)
-       VALUES ($1, $2, $3, $4, $5, 'USD', $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+    await db.query<{ candidate_id: string }>(
+      `WITH cand AS (
+         INSERT INTO match_candidate (account_id, listing_id, product_id, title, price, currency, seller_name, seller_id, image_url, condition,
+                                      listing_format, found, confidence, band, origin)
+         VALUES ($1, $2, $3, $4, $5, 'USD', $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id)
+       INSERT INTO match_signal (candidate_id, account_id, signal, score, weight, passed, detail)
+       SELECT cand.id, $1, s.signal, s.score, s.weight, s.passed, s.detail
+         FROM cand, jsonb_to_recordset($15::jsonb) AS s(signal text, score numeric, weight numeric, passed boolean, detail text)
+       RETURNING candidate_id`,
       [ctx.accountId, c.listingId, result.productId, c.title, c.price, c.sellerName, c.sellerId, c.imageUrl, c.condition, c.format,
-        JSON.stringify(result.found), result.confidence, result.band, c.origin],
+        JSON.stringify(result.found), result.confidence, result.band, c.origin, JSON.stringify(result.signals)],
     )
-  ).rows[0].id;
-  for (const s of result.signals) {
-    await db.query(
-      'INSERT INTO match_signal (candidate_id, account_id, signal, score, weight, passed, detail) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [candidateId, ctx.accountId, s.signal, s.score, s.weight, s.passed, s.detail],
-    );
-  }
+  ).rows[0].candidate_id;
 
-  const cur = (
-    await db.query<{ state: ListingState; decided_by: string; product_id: string | null }>(
-      'SELECT state, decided_by, product_id FROM listing_match WHERE account_id = $1 AND listing_id = $2',
-      [ctx.accountId, c.listingId],
-    )
-  ).rows[0];
-  const humanDecision = cur && cur.decided_by === 'user' && (cur.state === 'Included' || cur.state === 'Excluded');
-  if (humanDecision) {
+  const cur = ctx.current.get(c.listingId);
+  if (cur && cur.decidedBy === 'user' && (cur.state === 'Included' || cur.state === 'Excluded')) {
     await db.query(
       'UPDATE listing_match SET candidate_id = $3, confidence = $4, priority = $5 WHERE account_id = $1 AND listing_id = $2',
       [ctx.accountId, c.listingId, candidateId, result.confidence, result.priority],
     );
-    return { state: cur.state, decidedBy: 'user', confidence: result.confidence, productId: cur.product_id, candidateId, changed: false };
+    return { state: cur.state, decidedBy: 'user', confidence: result.confidence, productId: cur.productId, candidateId, changed: false };
   }
 
   const actor: Actor =
     decision.decidedBy === 'rule' ? { type: 'rule', id: decision.ruleId, label: `Rule ${ctx.rules.find((r) => r.id === decision.ruleId)?.code ?? ''}`.trim() }
     : decision.decidedBy === 'suppression' ? { type: 'suppression', id: decision.suppressionId, label: 'Suppression' }
     : { type: 'auto', id: null, label: 'Matcher' };
+  const changed = !cur || cur.state !== decision.state || cur.productId !== result.productId;
+  // The match, and its history event when the state or product changed, in one statement.
   await db.query(
-    `INSERT INTO listing_match (account_id, listing_id, product_id, state, confidence, priority, candidate_id, decided_by, rule_id, suppression_id, reason, state_since)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
-     ON CONFLICT (account_id, listing_id) DO UPDATE SET
-       product_id = EXCLUDED.product_id, confidence = EXCLUDED.confidence, priority = EXCLUDED.priority, candidate_id = EXCLUDED.candidate_id,
-       decided_by = EXCLUDED.decided_by, rule_id = EXCLUDED.rule_id, suppression_id = EXCLUDED.suppression_id, reason = EXCLUDED.reason,
-       scope = NULL, decided_user = NULL,
-       state = EXCLUDED.state,
-       state_since = CASE WHEN listing_match.state = EXCLUDED.state THEN listing_match.state_since ELSE now() END`,
+    `WITH m AS (
+       INSERT INTO listing_match (account_id, listing_id, product_id, state, confidence, priority, candidate_id, decided_by, rule_id, suppression_id, reason, state_since)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+       ON CONFLICT (account_id, listing_id) DO UPDATE SET
+         product_id = EXCLUDED.product_id, confidence = EXCLUDED.confidence, priority = EXCLUDED.priority, candidate_id = EXCLUDED.candidate_id,
+         decided_by = EXCLUDED.decided_by, rule_id = EXCLUDED.rule_id, suppression_id = EXCLUDED.suppression_id, reason = EXCLUDED.reason,
+         scope = NULL, decided_user = NULL, state = EXCLUDED.state,
+         state_since = CASE WHEN listing_match.state = EXCLUDED.state THEN listing_match.state_since ELSE now() END
+       RETURNING listing_id)
+     INSERT INTO listing_state_event (account_id, listing_id, from_state, to_state, product_id, confidence, actor_type, actor_id, actor_label,
+                                      reason, rule_id, suppression_id, candidate_id, is_label, created_at)
+     SELECT $1, m.listing_id, $12, $4, $3, $5, $13, $14, $15, $11, $9, $10, $7, false, clock_timestamp() FROM m WHERE $16`,
     [ctx.accountId, c.listingId, result.productId, decision.state, result.confidence, result.priority, candidateId, decision.decidedBy,
-      decision.ruleId, decision.suppressionId, decision.reason],
+      decision.ruleId, decision.suppressionId, decision.reason, cur?.state ?? null, actor.type, actor.id, actor.label, changed],
   );
-  const changed = !cur || cur.state !== decision.state || cur.product_id !== result.productId;
-  if (changed) {
-    await writeEvent(db, ctx.accountId, c.listingId, cur?.state ?? null, decision.state, {
-      productId: result.productId, confidence: result.confidence, actor, reason: decision.reason,
-      ruleId: decision.ruleId, suppressionId: decision.suppressionId, candidateId,
-    });
-  }
+  ctx.current.set(c.listingId, { state: decision.state, decidedBy: decision.decidedBy, productId: result.productId });
   if (decision.ruleId) await db.query('UPDATE match_rule SET hits = hits + 1 WHERE id = $1', [decision.ruleId]);
   if (decision.suppressionId) await db.query('UPDATE suppression SET hits = hits + 1 WHERE id = $1', [decision.suppressionId]);
-  if (c.sellerId) await ensureClassification(db, ctx.accountId, c.sellerId);
+  if (c.sellerId && !ctx.classified.has(c.sellerId)) {
+    await ensureClassification(db, ctx.accountId, c.sellerId);
+    ctx.classified.add(c.sellerId);
+  }
   return { state: decision.state, decidedBy: decision.decidedBy, confidence: result.confidence, productId: result.productId, candidateId, changed };
-}
-
-/** Candidate snapshot of a listing's latest candidate, for re-scoring. */
-async function latestSnapshot(db: Db, accountId: string, listingId: string): Promise<StageInput | null> {
-  const r = (
-    await db.query(
-      `SELECT l.id, l.url, l.source_id, l.seller_id, l.channel_sku, c.title, c.price, c.seller_name, c.condition, c.listing_format, c.image_url, m.product_id
-         FROM listing_match m JOIN listing l ON l.id = m.listing_id LEFT JOIN match_candidate c ON c.id = m.candidate_id
-        WHERE m.account_id = $1 AND m.listing_id = $2`,
-      [accountId, listingId],
-    )
-  ).rows[0];
-  if (!r) return null;
-  return {
-    listingId: r.id, sourceId: r.source_id, sellerId: r.seller_id, url: r.url, channelSku: r.channel_sku, title: r.title ?? null,
-    price: r.price, sellerName: r.seller_name, condition: r.condition, format: r.listing_format, imageUrl: r.image_url, origin: 'rescore',
-    proposedProductId: null,
-  };
 }
 
 /** Re-run rules, suppressions and bands over every Staged listing ("Apply rules now"). */
 export async function applyRules(db: Db, accountId: string): Promise<{ checked: number; included: number; excluded: number; staged: number }> {
   const ctx = await loadMatchContext(db, accountId);
-  const staged = (await db.query<{ listing_id: string }>(`SELECT listing_id FROM listing_match WHERE account_id = $1 AND state = 'Staged'`, [accountId])).rows;
-  const out = { checked: staged.length, included: 0, excluded: 0, staged: 0 };
-  for (const { listing_id } of staged) {
-    const snap = await latestSnapshot(db, accountId, listing_id);
-    if (!snap) continue;
-    const r = await stageCandidate(db, ctx, snap);
-    if (r.state === 'Included') out.included++;
-    else if (r.state === 'Excluded') out.excluded++;
+  const snaps = (
+    await db.query(
+      `SELECT l.id, l.url, l.source_id, l.seller_id, l.channel_sku, c.title, c.price, c.seller_name, c.condition, c.listing_format, c.image_url
+         FROM listing_match m JOIN listing l ON l.id = m.listing_id LEFT JOIN match_candidate c ON c.id = m.candidate_id
+        WHERE m.account_id = $1 AND m.state = 'Staged'`,
+      [accountId],
+    )
+  ).rows;
+  const out = { checked: snaps.length, included: 0, excluded: 0, staged: 0 };
+  for (const r of snaps) {
+    const res = await stageCandidate(db, ctx, {
+      listingId: r.id, sourceId: r.source_id, sellerId: r.seller_id, url: r.url, channelSku: r.channel_sku, title: r.title ?? null,
+      price: r.price, sellerName: r.seller_name, condition: r.condition, format: r.listing_format, imageUrl: r.image_url, origin: 'rescore',
+    });
+    if (res.state === 'Included') out.included++;
+    else if (res.state === 'Excluded') out.excluded++;
     else out.staged++;
   }
   return out;
@@ -395,8 +418,17 @@ export async function retireListings(db: Db, accountId: string, listingIds: stri
 export async function upsertListing(
   db: Db,
   l: { sourceId: string; url: string; channelSku?: string | null; title?: string | null; sellerName?: string | null; imageUrl?: string | null; origin: 'import' | 'synthetic' },
+  ctx?: MatchContext,
 ): Promise<{ listingId: string; sellerId: string | null; created: boolean }> {
-  const sellerId = l.sellerName ? await resolveSeller(db, l.sourceId, l.sellerName) : null;
+  let sellerId: string | null = null;
+  if (l.sellerName) {
+    const key = `${l.sourceId}|${l.sellerName}`;
+    if (ctx?.sellers.has(key)) sellerId = ctx.sellers.get(key)!;
+    else {
+      sellerId = await resolveSeller(db, l.sourceId, l.sellerName);
+      ctx?.sellers.set(key, sellerId);
+    }
+  }
   const { rows } = await db.query<{ id: string; created: boolean }>(
     `INSERT INTO listing (source_id, url, channel_sku, title, state, origin, seller_id, image_url, first_seen, last_seen)
      VALUES ($1, $2, $3, $4, 'Staged', $5, $6, $7, now(), now())

@@ -30,6 +30,8 @@ test('CSV and XLSX files read into the same table', async () => {
   const buf = Buffer.from(await wb.xlsx.writeBuffer());
   assert.deepEqual(await readTable('m.xlsx', buf.toString('base64')), [['SKU', 'MAP', 'Start'], ['LG-1', '1299.5', '2026-10-01']]);
   await assert.rejects(readTable('old.xls', ''), /xlsx/);
+  // An unquoted inch mark is part of the text, not the start of a quoted field.
+  assert.deepEqual(await readTable('i.csv', b64('SKU,Name\nLG-2,LG 65" TV\nLG-3,LG 55" TV\n')), [['SKU', 'Name'], ['LG-2', 'LG 65" TV'], ['LG-3', 'LG 55" TV']]);
 });
 
 test('money, dates and GTIN check digits', () => {

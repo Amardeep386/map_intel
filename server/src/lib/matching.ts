@@ -3,8 +3,8 @@
 //   identifier  ASIN / UPC / EAN / MPN / alt SKU found in the URL, retailer id or title
 //   title       how much of the product's name and model appears in the listing title
 //   image       not available until collectors capture product images (weight shared out)
-//   price       plausibility against the MAP in force, else MSRP
-//   attributes  condition, bundle / multipack, accessory, size / capacity / colour variant
+//   price       plausibility against the MAP in force, else MSRP, else the median included price
+//   attributes  condition, bundle / multipack, accessory, size / capacity / colour variant, other region
 //   prior       earlier human decisions on the same URL or the same seller + product
 // Pure functions; lib/mapping.ts loads the inputs and stores the result.
 
@@ -33,6 +33,8 @@ export interface ProductRef {
   model: string | null;
   msrp: number | null;
   map: number | null;
+  /** Median price of the product's included listings (a market reference when MAP and MSRP are missing). */
+  market?: number | null;
   identifiers: { type: string; value: string }[];
 }
 
@@ -62,6 +64,8 @@ export interface Found {
   bundle: string | null;
   accessory: string | null;
   variant: string | null;
+  /** Grey-market markers: "International Version", "UK version", "imported"... */
+  region: string | null;
 }
 
 export interface MatchResult {
@@ -97,7 +101,9 @@ export function tokens(s: string): string[] {
 
 /** Share of the product's words found in the title, blended with overall overlap (0–1). */
 export function titleSimilarity(title: string, product: ProductRef): number {
-  const p = tokens(`${product.brand} ${product.name} ${product.model ?? ''}`);
+  // Brand and name words only: the model number is the identifier signal's job, and retailers
+  // often leave out the model year.
+  const p = tokens(`${product.brand} ${product.name}`.replace(/\(?\b20\d\d\b\)?/g, ' '));
   const t = new Set(tokens(title));
   if (!p.length || !t.size) return 0;
   const hit = p.filter((w) => t.has(w)).length;
@@ -117,6 +123,7 @@ function values(re: RegExp, s: string): Set<string> {
 
 const CONDITION_RE = /\b(refurbished|renewed|open[\s-]?box|pre[\s-]?owned|used|for parts|reconditioned|like new|scratch(?:\s|-)and(?:\s|-)dent)\b/i;
 const BUNDLE_RE = /\bbundle\b|\bcombo\b|\bkit\b|\b\d+[\s-]?pack\b|\bpack of \d+\b|\bset of \d+\b|\bwith (?:free|bonus)\b|\s\+\s?\w+|\bw\/\s?\w+/i;
+const REGION_RE = /\b(international version|global version|import(?:ed)?|(?:uk|eu|euro|asia|asian|india|japan|hk|china|canadian|australian|mexico) (?:version|model)|non[\s-]?us|region[\s-]?free)\b/i;
 const ACCESSORY_RE = /\b(case for|cover for|screen protector|protector for|mount for|wall mount|compatible with|replacement|remote (?:control )?for|cable for|charger for|stand for|skin for|strap for|band for|adapter for|for (?:lg|samsung|apple|iphone|ipad|galaxy|macbook)\b)/i;
 
 // ---------------------------------------------------------------------------
@@ -165,10 +172,10 @@ function titleSignal(c: CandidateInput, p: ProductRef): SignalResult {
 
 function priceSignal(c: CandidateInput, p: ProductRef): { signal: SignalResult; depth: number } {
   const w = WEIGHTS.price;
-  const ref = p.map ?? p.msrp;
-  const refName = p.map ? 'MAP' : 'MSRP';
+  const ref = p.map ?? p.msrp ?? p.market ?? null;
+  const refName = p.map ? 'MAP' : p.msrp ? 'MSRP' : 'median included price';
   if (c.price === null || c.price <= 0) return { signal: { signal: 'price', score: null, weight: w, passed: null, detail: 'no price captured' }, depth: 0 };
-  if (!ref) return { signal: { signal: 'price', score: null, weight: w, passed: null, detail: 'no MAP or MSRP to compare with' }, depth: 0 };
+  if (!ref) return { signal: { signal: 'price', score: null, weight: w, passed: null, detail: 'no MAP, MSRP or included price to compare with' }, depth: 0 };
   const ratio = c.price / ref;
   const pct = Math.round((ratio - 1) * 1000) / 10;
   const detail = `${c.price.toFixed(2)} vs ${refName} ${ref.toFixed(2)} (${pct > 0 ? '+' : ''}${pct}%)`;
@@ -185,8 +192,11 @@ function priceSignal(c: CandidateInput, p: ProductRef): { signal: SignalResult; 
 export function detectAttributes(c: CandidateInput, p: ProductRef): Omit<Found, 'identifiers'> {
   const text = `${c.title ?? ''} ${c.condition ?? ''}`;
   const condition = (c.condition && !/^new$/i.test(c.condition.trim()) ? c.condition.trim().toLowerCase() : null) ?? CONDITION_RE.exec(c.title ?? '')?.[1]?.toLowerCase() ?? null;
-  const bundle = BUNDLE_RE.exec(c.title ?? '')?.[0] ?? null;
+  // A pack size that is part of the product itself ("AirTag 4 pack") is not a bundle.
+  const bundle =
+    [...(c.title ?? '').matchAll(new RegExp(BUNDLE_RE.source, 'gi'))].map((m) => m[0]).find((hit) => !p.name.toLowerCase().includes(hit.trim().toLowerCase())) ?? null;
   const accessory = ACCESSORY_RE.exec(c.title ?? '')?.[0] ?? null;
+  const region = REGION_RE.exec(c.title ?? '')?.[0] ?? null;
 
   let variant: string | null = null;
   const productText = `${p.name} ${p.model ?? ''}`;
@@ -199,13 +209,14 @@ export function detectAttributes(c: CandidateInput, p: ProductRef): Omit<Found, 
   const pc = COLOURS.filter((k) => new RegExp(`\\b${k}\\b`, 'i').test(productText));
   const tc = COLOURS.filter((k) => new RegExp(`\\b${k}\\b`, 'i').test(c.title ?? ''));
   if (!variant && pc.length && tc.length && !tc.some((k) => pc.includes(k))) variant = `colour ${tc.join('/')} vs ${pc.join('/')}`;
-  return { condition, bundle, accessory, variant };
+  return { condition, bundle, accessory, variant, region };
 }
 
 function attributesSignal(a: Omit<Found, 'identifiers'>): SignalResult {
   const w = WEIGHTS.attributes;
   if (a.condition) return { signal: 'attributes', score: 0, weight: w, passed: false, detail: `condition: ${a.condition}` };
   if (a.accessory) return { signal: 'attributes', score: 0, weight: w, passed: false, detail: `accessory or part ("${a.accessory}")` };
+  if (a.region) return { signal: 'attributes', score: 0.2, weight: w, passed: false, detail: `other region ("${a.region}")` };
   if (a.variant) return { signal: 'attributes', score: 0.1, weight: w, passed: false, detail: `different variant: ${a.variant}` };
   if (a.bundle) return { signal: 'attributes', score: 0.3, weight: w, passed: false, detail: `bundle or multipack ("${a.bundle}")` };
   return { signal: 'attributes', score: 1, weight: w, passed: true, detail: 'new, single unit, same variant' };
@@ -261,7 +272,7 @@ export function bandFor(confidence: number, t: Thresholds): MatchResult['band'] 
  * human look; an exact retailer identifier on a clean listing is auto-included.
  */
 export function scoreCandidate(c: CandidateInput, product: ProductRef | null, labels: PriorLabel[], t: Thresholds): MatchResult {
-  const attrs = product ? detectAttributes(c, product) : { condition: null, bundle: null, accessory: null, variant: null };
+  const attrs = product ? detectAttributes(c, product) : { condition: null, bundle: null, accessory: null, variant: null, region: null };
   if (!product) {
     const signals: SignalResult[] = SIGNALS.map((s) => ({
       signal: s, score: s === 'identifier' || s === 'title' ? 0 : null, weight: WEIGHTS[s], passed: s === 'identifier' || s === 'title' ? false : null,
@@ -287,12 +298,14 @@ export function scoreCandidate(c: CandidateInput, product: ProductRef | null, la
 
   const idExact = signals[0].score === 1;
   const strongId = identifiers.some((i) => i.exact && ['ASIN', 'UPC', 'EAN'].includes(i.type));
-  const clean = !attrs.condition && !attrs.accessory && !attrs.variant && !attrs.bundle;
+  const clean = !attrs.condition && !attrs.accessory && !attrs.variant && !attrs.bundle && !attrs.region;
   const priorExcluded = labels.some((l) => l.sameUrl && l.state === 'Excluded');
   if (attrs.condition || attrs.accessory || priorExcluded) confidence = Math.min(confidence, t.review - 1);
-  else if (attrs.variant || attrs.bundle) confidence = Math.min(confidence, t.include - 1);
+  else if (attrs.variant || attrs.bundle || attrs.region) confidence = Math.min(confidence, t.include - 1);
   else if (clean && strongId) confidence = Math.max(confidence, Math.max(t.include, 92));
   else if (clean && idExact && (signals[1].score ?? 0) >= 0.4) confidence = Math.max(confidence, t.include);
+  // A clean listing whose title closely matches deserves a human look even without an identifier.
+  else if (clean && (signals[1].score ?? 0) >= 0.75) confidence = Math.max(confidence, t.review);
   confidence = Math.round(Math.max(0, Math.min(100, confidence)) * 100) / 100;
 
   return {
