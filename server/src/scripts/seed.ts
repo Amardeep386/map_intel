@@ -97,11 +97,19 @@ async function main(): Promise<void> {
         const sourceId = sourceIds.get(sourceCode);
         if (!sourceId) throw new Error(`unknown source ${sourceCode}`);
         const channelSku = channelSkuFromUrl(sourceCode, url);
-        await db.query(
-          `INSERT INTO listing (source_id, product_id, url, channel_sku, state, match_confidence)
-           VALUES ($1, $2, $3, $4, 'Included', 100)
-           ON CONFLICT (source_id, url) DO UPDATE SET product_id = EXCLUDED.product_id, channel_sku = EXCLUDED.channel_sku`,
+        const { rows: listingRows } = await db.query<{ id: string }>(
+          `INSERT INTO listing (source_id, product_id, url, channel_sku, state, match_confidence, origin)
+           VALUES ($1, $2, $3, $4, 'Included', 100, 'seed')
+           ON CONFLICT (source_id, url) DO UPDATE SET product_id = EXCLUDED.product_id, channel_sku = EXCLUDED.channel_sku
+           RETURNING id`,
           [sourceId, productId, url, channelSku],
+        );
+        // The account's own decision on the listing (Phase 2a); kept if it already exists.
+        await db.query(
+          `INSERT INTO listing_match (account_id, listing_id, product_id, state, confidence, decided_by, reason)
+           VALUES ($1, $2, $3, 'Included', 100, 'seed', 'Pilot listing from the seed catalogue')
+           ON CONFLICT (account_id, listing_id) DO NOTHING`,
+          [accountId, listingRows[0].id, productId],
         );
         if (channelSku) {
           const type = sourceCode === 'amazon_us' ? 'ASIN' : sourceCode === 'bestbuy_us' ? 'BESTBUY_SKU' : 'WALMART_ID';
@@ -122,6 +130,12 @@ async function main(): Promise<void> {
           [sourceId, url, productId],
         );
         retired += rowCount ?? 0;
+        await db.query(
+          `UPDATE listing_match m SET state = 'Retired', decided_by = 'seed', reason = 'Retired in the seed catalogue', state_since = now()
+             FROM listing l
+            WHERE l.id = m.listing_id AND m.account_id = $1 AND l.source_id = $2 AND l.url = $3 AND m.state <> 'Retired'`,
+          [accountId, sourceId, url],
+        );
 
         // The retired listing's retailer id (e.g. a dead ASIN) no longer identifies the product:
         // remove it, and switch off any identifier term generated from it.

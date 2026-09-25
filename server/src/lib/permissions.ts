@@ -8,7 +8,11 @@ export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 export const ACCOUNT_ACTIONS = [
   'account.read', // account header, catalogue list entry
   'catalogue.read', // products, identifiers, MAP
-  'catalogue.write', // add / edit products (Phase 2a grows this)
+  'catalogue.write', // products, identifiers, imports, MAP history, promotions, policy documents
+  'mapping.read', // Mapping Center: candidates, decisions, rules, suppressions
+  'mapping.write', // include / exclude / retire listings, rules, suppressions
+  'sellers.read', // sellers, classification history, aliases, links, contacts
+  'sellers.write',
   'observations.read', // observations and evidence
   'settings.read',
   'settings.write',
@@ -38,6 +42,8 @@ export type RoutePermission = 'public' | 'user' | 'platform' | AccountAction;
 const READ_ALL: AccountAction[] = [
   'account.read',
   'catalogue.read',
+  'mapping.read',
+  'sellers.read',
   'observations.read',
   'settings.read',
   'sources.read',
@@ -53,7 +59,7 @@ const GRANTS: Record<AccountRole, ReadonlySet<AccountAction>> = {
   // Configures the account: settings, subscriptions, schedules, terms, users, credentials.
   'Account manager': new Set(ACCOUNT_ACTIONS),
   // Cleanses and classifies: edits terms and the catalogue, reads everything else.
-  Analyst: new Set<AccountAction>([...READ_ALL, 'terms.write', 'catalogue.write']),
+  Analyst: new Set<AccountAction>([...READ_ALL, 'terms.write', 'catalogue.write', 'mapping.write', 'sellers.write']),
   // The brand's own people: read-only catalogue and prices, no configuration or audit screens.
   'Brand user': new Set<AccountAction>(['account.read', 'catalogue.read', 'observations.read']),
 };

@@ -25,6 +25,13 @@ test('Brand user is read-only and sees no configuration or audit', () => {
   assert.equal(can('Brand user', 'terms.read'), false);
 });
 
+test('Analyst cleanses: mapping and sellers read and write; Brand user sees neither', () => {
+  for (const a of ['mapping.read', 'mapping.write', 'sellers.read', 'sellers.write'] as const) {
+    assert.ok(can('Analyst', a), a);
+    assert.equal(can('Brand user', a), false, a);
+  }
+});
+
 test('unknown or missing roles can do nothing', () => {
   assert.equal(can(null, 'account.read'), false);
   assert.equal(can('Owner', 'account.read'), false);

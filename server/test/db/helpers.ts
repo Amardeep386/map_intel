@@ -1,8 +1,9 @@
 // Shared fixtures for database tests: throwaway users with a role in one pilot account.
+import assert from 'node:assert/strict';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/api/app.js';
 import { hashPassword, signToken } from '../../src/lib/auth.js';
-import { withSystem } from '../../src/lib/db.js';
+import { apiPool, withSystem, type Db } from '../../src/lib/db.js';
 
 export const TEST_EMAIL_DOMAIN = 'p1-test.mirethos.invalid';
 
@@ -79,4 +80,29 @@ export function call(app: FastifyInstance, user: TestUser | null, method: string
     headers: user ? { authorization: `Bearer ${user.token}` } : {},
     payload: payload as Record<string, unknown> | undefined,
   });
+}
+
+/** Run `fn` as the API role inside a transaction that is always rolled back. */
+export async function rolledBack(fn: (db: Db) => Promise<void>): Promise<void> {
+  const db = await apiPool().connect();
+  try {
+    await db.query('BEGIN');
+    await fn(db);
+  } finally {
+    await db.query('ROLLBACK').catch(() => undefined);
+    db.release();
+  }
+}
+
+/** Switch the transaction to the tenant role, optionally inside one account. */
+export async function asTenant(db: Db, accountId: string | null): Promise<void> {
+  await db.query('SET LOCAL ROLE mapintel_tenant');
+  if (accountId) await db.query("SELECT set_config('app.account_id', $1, true)", [accountId]);
+}
+
+/** Expect `sql` to fail inside a savepoint, so the surrounding transaction stays usable. */
+export async function expectRefused(db: Db, sql: string, params: unknown[] = []): Promise<void> {
+  await db.query('SAVEPOINT refused');
+  await assert.rejects(db.query(sql, params));
+  await db.query('ROLLBACK TO SAVEPOINT refused');
 }
