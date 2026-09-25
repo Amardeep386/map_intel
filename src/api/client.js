@@ -16,6 +16,7 @@ import {
   ALERT_EVENTS, ALERTS, AUDIT_LOG, CLIENTS, EMAILS, REPORTS, SEVERITY_DIST, TREND, USERS, mockWorkspace,
 } from "./mock/data.js";
 import { mockConfig } from "./mock/config.js";
+import { mockCatalog } from "./mock/catalog.js";
 
 export const USE_MOCK = String(import.meta.env.VITE_USE_MOCK ?? "true").toLowerCase() !== "false";
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
@@ -37,6 +38,7 @@ const ALL_ACTIONS = [
   "account.read", "catalogue.read", "catalogue.write", "observations.read", "settings.read", "settings.write",
   "sources.read", "sources.write", "terms.read", "terms.write", "schedules.read", "schedules.write",
   "users.read", "users.manage", "audit.read", "credentials.read", "credentials.write",
+  "mapping.read", "mapping.write", "sellers.read", "sellers.write",
 ];
 
 const qs = (params) => {
@@ -302,6 +304,108 @@ export const api = {
   },
   audit(client, query) {
     return USE_MOCK ? mockConfig.audit(client) : request(`/accounts/${client.id}/audit${qs(query)}`);
+  },
+
+  // ---------------- Catalogue, MAP policies, sellers, mapping (P2a) ----------------
+  products(client, query) {
+    return USE_MOCK ? mockCatalog.products(client, query) : request(`/accounts/${client.id}/products${qs(query)}`);
+  },
+  product(client, productId) {
+    return USE_MOCK ? mockCatalog.product(client, productId) : request(`/accounts/${client.id}/products/${productId}`);
+  },
+  createProduct(client, body) {
+    return USE_MOCK ? mockCatalog.addProduct(client, body) : request(`/accounts/${client.id}/products`, { method: "POST", body });
+  },
+  updateProduct(client, productId, body) {
+    return USE_MOCK ? mockCatalog.updateProduct(client, productId, body) : request(`/accounts/${client.id}/products/${productId}`, { method: "PATCH", body });
+  },
+  /** kind: products | map | listings. body: { fileName, content (base64), mapping?, dryRun }. */
+  importFile(client, kind, body) {
+    if (USE_MOCK) return mockCatalog.importFile(client, kind, body);
+    const path = kind === "listings" ? `/accounts/${client.id}/mapping/import` : `/accounts/${client.id}/imports/${kind}`;
+    return request(path, { method: "POST", body });
+  },
+  imports(client) {
+    return USE_MOCK ? mockCatalog.imports(client) : request(`/accounts/${client.id}/imports`);
+  },
+  mapPrices(client) {
+    return USE_MOCK ? mockCatalog.mapPrices(client) : request(`/accounts/${client.id}/map-prices`);
+  },
+  addMapVersion(client, productId, body) {
+    return USE_MOCK ? mockCatalog.addMapVersion(client, productId, body) : request(`/accounts/${client.id}/products/${productId}/map`, { method: "POST", body });
+  },
+  promos(client) {
+    return USE_MOCK ? mockCatalog.promos(client) : request(`/accounts/${client.id}/promos`);
+  },
+  addPromo(client, body) {
+    return USE_MOCK ? mockCatalog.addPromo(client, body) : request(`/accounts/${client.id}/promos`, { method: "POST", body });
+  },
+  cancelPromo(client, promoId) {
+    return USE_MOCK ? mockCatalog.cancelPromo(client, promoId) : request(`/accounts/${client.id}/promos/${promoId}/cancel`, { method: "POST" });
+  },
+  policies(client) {
+    return USE_MOCK ? mockCatalog.policies(client) : request(`/accounts/${client.id}/policies`);
+  },
+  uploadPolicy(client, body) {
+    return USE_MOCK ? mockCatalog.uploadPolicy(client, body) : request(`/accounts/${client.id}/policies`, { method: "POST", body });
+  },
+  policyDownload(client, docId) {
+    return USE_MOCK ? mockCatalog.policyDownload(client, docId) : request(`/accounts/${client.id}/policies/${docId}/download`);
+  },
+  sellers(client) {
+    return USE_MOCK ? mockCatalog.sellers(client) : request(`/accounts/${client.id}/sellers`);
+  },
+  seller(client, sellerId) {
+    return USE_MOCK ? mockCatalog.seller(client, sellerId) : request(`/accounts/${client.id}/sellers/${sellerId}`);
+  },
+  addSeller(client, body) {
+    return USE_MOCK ? mockCatalog.addSeller(client, body) : request(`/accounts/${client.id}/sellers`, { method: "POST", body });
+  },
+  classifySeller(client, sellerId, body) {
+    return USE_MOCK ? mockCatalog.classifySeller(client, sellerId, body) : request(`/accounts/${client.id}/sellers/${sellerId}/classification`, { method: "POST", body });
+  },
+  addSellerAlias(client, sellerId, body) {
+    return USE_MOCK ? mockCatalog.addAlias(client, sellerId, body) : request(`/accounts/${client.id}/sellers/${sellerId}/aliases`, { method: "POST", body });
+  },
+  linkSeller(client, sellerId, body) {
+    return USE_MOCK ? mockCatalog.linkSeller(client, sellerId, body) : request(`/accounts/${client.id}/sellers/${sellerId}/links`, { method: "POST", body });
+  },
+  addSellerContact(client, sellerId, body) {
+    return USE_MOCK ? mockCatalog.addContact(client, sellerId, body) : request(`/accounts/${client.id}/sellers/${sellerId}/contacts`, { method: "POST", body });
+  },
+  removeSellerContact(client, sellerId, contactId) {
+    return USE_MOCK ? mockCatalog.removeContact(client, sellerId, contactId) : request(`/accounts/${client.id}/sellers/${sellerId}/contacts/${contactId}`, { method: "DELETE" });
+  },
+  mappingSummary(client) {
+    return USE_MOCK ? mockCatalog.mappingSummary(client) : request(`/accounts/${client.id}/mapping/summary`);
+  },
+  mappingQueue(client) {
+    return USE_MOCK ? mockCatalog.mappingQueue(client) : request(`/accounts/${client.id}/mapping/queue`);
+  },
+  mappingListings(client, query) {
+    return USE_MOCK ? mockCatalog.mappingListings(client, query) : request(`/accounts/${client.id}/mapping/listings${qs(query)}`);
+  },
+  mappingListing(client, listingId) {
+    return USE_MOCK ? mockCatalog.mappingListing(client, listingId) : request(`/accounts/${client.id}/mapping/listings/${listingId}`);
+  },
+  /** body: { listingIds, action: include | exclude | restore | retire, productId?, reason?, scope?, urlPattern? } */
+  mappingDecide(client, body) {
+    return USE_MOCK ? mockCatalog.mappingDecide(client, body) : request(`/accounts/${client.id}/mapping/decisions`, { method: "POST", body });
+  },
+  applyMatchRules(client) {
+    return USE_MOCK ? mockCatalog.applyRules(client) : request(`/accounts/${client.id}/mapping/apply-rules`, { method: "POST" });
+  },
+  matchRules(client) {
+    return USE_MOCK ? mockCatalog.matchRules(client) : request(`/accounts/${client.id}/mapping/rules`);
+  },
+  setMatchRule(client, ruleId, body) {
+    return USE_MOCK ? mockCatalog.setRule(client, ruleId, body) : request(`/accounts/${client.id}/mapping/rules/${ruleId}`, { method: "PATCH", body });
+  },
+  suppressions(client) {
+    return USE_MOCK ? mockCatalog.suppressions(client) : request(`/accounts/${client.id}/mapping/suppressions`);
+  },
+  revokeSuppression(client, suppressionId) {
+    return USE_MOCK ? mockCatalog.revokeSuppression(client, suppressionId) : request(`/accounts/${client.id}/mapping/suppressions/${suppressionId}/revoke`, { method: "POST" });
   },
 
   // ---------------- Evidence (real when the backend is on) ----------------

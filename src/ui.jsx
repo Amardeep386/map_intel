@@ -167,3 +167,26 @@ export function Bar({ value, max, tone = "bg-brand-copper" }) {
     </div>
   );
 }
+
+// ---------- Phase 2a: catalogue screens (prototype ui.jsx) ----------
+
+export function Drawer({ open, onClose, eyebrow, title, children, footer, width = "w-[920px]" }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-brand-charcoal/40 flex justify-end z-50" onClick={onClose}>
+      <div className={`bg-brand-ivory ${width} max-w-[94vw] h-full overflow-y-auto p-6 flex flex-col shadow-2xl border-l border-brand-beige`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-brand-beige pb-3 mb-4">
+          <div>
+            <span className="text-xs font-semibold text-brand-taupe uppercase tracking-wider">{eyebrow}</span>
+            <h2 className="text-lg font-bold text-brand-charcoal mt-1">{title}</h2>
+          </div>
+          <button onClick={onClose} className="text-brand-taupe hover:text-brand-charcoal cursor-pointer p-1 rounded-lg border border-brand-beige bg-brand-white" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1">{children}</div>
+        {footer && <div className="flex justify-end gap-3 border-t border-brand-beige pt-4 mt-6 flex-wrap">{footer}</div>}
+      </div>
+    </div>
+  );
+}

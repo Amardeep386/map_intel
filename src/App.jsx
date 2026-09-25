@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   Plus, ChevronDown, ExternalLink, X, ChevronLeft, ChevronRight,
-  Eye, MapPin, Ban, Sparkles, Lock, Moon, Sun, Radar, Loader2
+  MapPin, Lock, Moon, Sun, Radar, Loader2
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -15,6 +15,9 @@ import { api } from "./api/client.js";
 import { Card, KPI, PageHeader, Pill, PrimaryButton, SearchBox, Table } from "./ui.jsx";
 import { WorkspaceContext } from "./workspace.js";
 import { SourcesTermsView } from "./views/SourcesTermsView.jsx";
+import { MapPoliciesView, ProductSummaryView } from "./views/CatalogViews.jsx";
+import { MappingCenterView } from "./views/MappingCenterView.jsx";
+import { SellersView } from "./views/SellersView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 
 // ---------- Format Currency Utility (USD) ----------
@@ -186,188 +189,6 @@ function OverviewView({ onOpenViolation, clientName }) {
   );
 }
 
-function ProductSummaryView({ clientName, onAddSkuClick }) {
-  const { db } = React.useContext(DataContext);
-  const skus = (db[clientName] || EMPTY_WORKSPACE).skus;
-  const [q, setQ] = useState("");
-  const filtered = skus.filter((s) => (s.name + s.model + s.id).toLowerCase().includes(q.toLowerCase()));
-  return (
-    <div>
-      <PageHeader title={`Product Summary — ${clientName} (Sandbox)`} action={<PrimaryButton onClick={onAddSkuClick}><Plus className="w-4 h-4" /> Add SKU</PrimaryButton>} />
-      <Card>
-        <div className="flex justify-between mb-4">
-          <SearchBox value={q} onChange={setQ} placeholder="Search SKU, MPN, product name..." />
-        </div>
-        <Table columns={["SKU", "Product name", "Model / MPN", "Category", "MAP price", "Current price", "Violations", "Status"]}>
-          {filtered.map((s) => (
-            <tr key={s.id} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 font-semibold text-brand-charcoal">{s.id}</td>
-              <td className="py-2 px-3 text-brand-charcoal font-medium">{s.name}</td>
-              <td className="py-2 px-3 text-brand-taupe">{s.model}</td>
-              <td className="py-2 px-3 text-brand-taupe">{s.category}</td>
-              <td className="py-2 px-3 text-brand-charcoal">{s.map != null ? `$${s.map.toLocaleString()}` : "—"}</td>
-              <td className={`py-2 px-3 font-semibold ${s.current != null && s.map != null && s.current < s.map ? "text-red-600" : "text-brand-charcoal"}`}>{s.current != null ? `$${s.current.toLocaleString()}` : "—"}</td>
-              <td className="py-2 px-3">{s.violations > 0 ? <Pill text={s.violations} tone="bg-red-50 text-red-700 border-red-200" /> : <span className="text-brand-taupe">0</span>}</td>
-              <td className="py-2 px-3"><Pill text={s.status} tone={STATUS_BG[s.status]} /></td>
-            </tr>
-          ))}
-        </Table>
-        <div className="text-xs text-brand-taupe mt-3">Showing {filtered.length} of {skus.length} SKUs</div>
-      </Card>
-    </div>
-  );
-}
-
-function MappingCenterView({ clientName }) {
-  const { db, setDb } = React.useContext(DataContext);
-  const { mappingStage, mappingInclude, mappingExclude } = db[clientName] || EMPTY_WORKSPACE;
-
-  const handleMap = (item) => {
-    setDb(prev => {
-      const clientData = prev[clientName];
-      return {
-        ...prev,
-        [clientName]: {
-          ...clientData,
-          mappingStage: clientData.mappingStage.filter(i => i !== item),
-          mappingInclude: [{ product: item.product, merchant: item.merchant, url: "#", mappedOn: "Just now", by: "Manual" }, ...clientData.mappingInclude]
-        }
-      };
-    });
-  };
-
-  const handleExclude = (item) => {
-    setDb(prev => {
-      const clientData = prev[clientName];
-      return {
-        ...prev,
-        [clientName]: {
-          ...clientData,
-          mappingStage: clientData.mappingStage.filter(i => i !== item),
-          mappingExclude: [{ product: item.product, merchant: item.merchant, reason: "Manual Exclude", excludedOn: "Just now" }, ...clientData.mappingExclude]
-        }
-      };
-    });
-  };
-
-  const [tab, setTab] = useState("stage");
-  const tabs = [
-    { id: "stage", label: "Stage (Unmapped)", count: mappingStage.length },
-    { id: "include", label: "Include (Mapped)", count: mappingInclude.length },
-    { id: "exclude", label: "Exclude (Ignored)", count: mappingExclude.length },
-  ];
-  return (
-    <div>
-      <PageHeader title={`Mapping Center — ${clientName} (Sandbox)`} />
-      <Card>
-        <div className="flex items-center gap-1 border-b border-brand-beige mb-4">
-          {tabs.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors cursor-pointer ${tab === t.id ? "border-brand-copper text-brand-copper" : "border-transparent text-brand-taupe hover:text-brand-charcoal"}`}>
-              {t.label} <span className="text-xs text-brand-taupe ml-1">{t.count}</span>
-            </button>
-          ))}
-          <div className="ml-auto flex gap-2 pb-2">
-            <button className="text-xs text-brand-charcoal border border-brand-beige hover:bg-brand-beige/50 rounded-lg px-2.5 py-1.5 cursor-pointer">Rules</button>
-            <button className="text-xs text-brand-charcoal border border-brand-beige hover:bg-brand-beige/50 rounded-lg px-2.5 py-1.5 cursor-pointer">History</button>
-          </div>
-        </div>
-
-        {tab === "stage" && (
-          <>
-            <div className="flex justify-between mb-3">
-              <SearchBox placeholder="Search product, URL, seller..." value="" onChange={() => {}} />
-              <div className="flex gap-2">
-                <PrimaryButton><Sparkles className="w-4 h-4" /> Auto map</PrimaryButton>
-              </div>
-            </div>
-            <Table columns={["Detected product", "Merchant", "Detected price", "Possible match", "Confidence", "Actions"]}>
-              {mappingStage.map((r, i) => (
-                <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-                  <td className="py-2 px-3 text-brand-charcoal font-medium">{r.product}</td>
-                  <td className="py-2 px-3 text-brand-taupe"><MerchantLogo name={r.merchant} /></td>
-                  <td className="py-2 px-3 text-brand-charcoal">${r.price}</td>
-                  <td className="py-2 px-3">{r.match ? <span className="text-brand-copper font-semibold">{r.match}</span> : <span className="text-brand-taupe">No match</span>}</td>
-                  <td className="py-2 px-3">
-                    <Pill text={`${r.confidence}%`} tone={r.confidence > 90 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"} />
-                  </td>
-                  <td className="py-2 px-3">
-                    <div className="flex gap-3">
-                      <button onClick={() => handleMap(r)} className="text-xs text-brand-copper font-semibold hover:underline cursor-pointer">Map</button>
-                      <button onClick={() => handleExclude(r)} className="text-xs text-brand-taupe hover:text-brand-charcoal cursor-pointer">Exclude</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </Table>
-          </>
-        )}
-
-        {tab === "include" && (
-          <Table columns={["Product (client SKU)", "Merchant", "Source URL", "Mapped on", "Mapped by", "Actions"]}>
-            {mappingInclude.map((r, i) => (
-              <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-                <td className="py-2 px-3 text-brand-charcoal font-medium">{r.product}</td>
-                <td className="py-2 px-3 text-brand-taupe"><MerchantLogo name={r.merchant} /></td>
-                <td className="py-2 px-3"><span className="text-brand-copper hover:underline inline-flex items-center gap-1 cursor-pointer">{r.url}<ExternalLink className="w-3.5 h-3.5" /></span></td>
-                <td className="py-2 px-3 text-brand-taupe">{r.mappedOn}</td>
-                <td className="py-2 px-3"><Pill text={r.by} tone={r.by === "Auto Rule" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-600 border-slate-200"} /></td>
-                <td className="py-2 px-3"><button className="text-xs text-brand-charcoal inline-flex items-center gap-1 cursor-pointer"><Eye className="w-3.5 h-3.5" /> View</button></td>
-              </tr>
-            ))}
-          </Table>
-        )}
-
-        {tab === "exclude" && (
-          <>
-            <div className="flex justify-end mb-3">
-              <button className="text-xs text-brand-copper font-semibold hover:underline cursor-pointer">Restore selected</button>
-            </div>
-            <Table columns={["Detected product", "Merchant", "Reason", "Excluded on"]}>
-              {mappingExclude.map((r, i) => (
-                <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-                  <td className="py-2 px-3 text-brand-charcoal font-medium">{r.product}</td>
-                  <td className="py-2 px-3 text-brand-taupe"><MerchantLogo name={r.merchant} /></td>
-                  <td className="py-2 px-3"><Pill text={r.reason} tone="bg-slate-100 text-slate-600 border-slate-200" /></td>
-                  <td className="py-2 px-3 text-brand-taupe">{r.excludedOn}</td>
-                </tr>
-              ))}
-            </Table>
-          </>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function PricingView({ clientName, onAddPromoClick }) {
-  const { db } = React.useContext(DataContext);
-  const promotions = (db[clientName] || EMPTY_WORKSPACE).promotions;
-  return (
-    <div>
-      <PageHeader title={`MAP & Pricing — ${clientName} (Sandbox)`} action={<PrimaryButton onClick={onAddPromoClick}><Plus className="w-4 h-4" /> Add promotion</PrimaryButton>} />
-      <Card title="Promotions">
-        <Table columns={["SKU", "Standard MAP", "Promo price", "Effective from", "Effective until", "Status"]}>
-          {promotions.map((p, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{p.sku}</td>
-              <td className="py-2 px-3 text-brand-charcoal">{p.standard != null ? `$${p.standard}` : "—"}</td>
-              <td className="py-2 px-3 text-emerald-700 font-bold">${p.promo}</td>
-              <td className="py-2 px-3 text-brand-taupe">{p.from}</td>
-              <td className="py-2 px-3 text-brand-taupe">{p.until}</td>
-              <td className="py-2 px-3"><Pill text={p.status} tone={STATUS_BG[p.status] || STATUS_BG.Scheduled} /></td>
-            </tr>
-          ))}
-        </Table>
-        <div className="mt-4 text-xs text-brand-copper bg-brand-beige/50 border border-brand-beige rounded-lg px-3 py-2">
-          Active promotions override the standard MAP during the effective date range for applicable merchants.
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-// ------------------- Violations View -------------------
 function ViolationsView({ onOpenViolation, clientName }) {
   const { db } = React.useContext(DataContext);
   const violations = (db[clientName] || EMPTY_WORKSPACE).violations;
@@ -550,31 +371,6 @@ function EmailCenterView({ clientName }) {
   );
 }
 
-function MerchantsView({ clientName }) {
-  const { db } = React.useContext(DataContext);
-  const merchants = (db[clientName] || EMPTY_WORKSPACE).merchants;
-  return (
-    <div>
-      <PageHeader title={`Merchants (Sellers) — ${clientName} (Sandbox)`} />
-      <Card>
-        <Table columns={["Merchant / channel", "Type", "Tracked SKUs", "Violations", "Compliance"]}>
-          {merchants.map((m) => (
-            <tr key={m.name} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 font-semibold text-brand-charcoal flex items-center gap-2"><Store className="w-4 h-4 text-brand-taupe" /> {m.name}</td>
-              <td className="py-2 px-3 text-brand-taupe">{m.type}</td>
-              <td className="py-2 px-3 text-brand-charcoal">{m.tracked}</td>
-              <td className="py-2 px-3">{m.violations > 0 ? <Pill text={m.violations} tone="bg-red-50 text-red-700 border-red-200" /> : "0"}</td>
-              <td className="py-2 px-3">
-                <span className={m.compliance >= 90 ? "text-emerald-700 font-bold" : "text-amber-700 font-bold"}>{m.compliance}%</span>
-              </td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
 function ReportsView({ clientName }) {
   const { shared } = React.useContext(DataContext);
   return (
@@ -700,10 +496,10 @@ function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
 const NAV = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "product", label: "Product Summary", icon: Package },
-  { id: "mapping", label: "Mapping Center", icon: Shuffle },
+  { id: "mapping", label: "Mapping Center", icon: Shuffle, needs: "mapping.read" },
   { id: "sources", label: "Sources & Terms", icon: Radar, needs: "sources.read" },
-  { id: "pricing", label: "MAP & Pricing", icon: DollarSign },
-  { id: "merchants", label: "Merchants (Sellers)", icon: Store },
+  { id: "pricing", label: "MAP Policies", icon: DollarSign },
+  { id: "merchants", label: "Sellers", icon: Store, needs: "sellers.read" },
   { id: "violations", label: "Violations", icon: AlertTriangle },
   { id: "email", label: "Email Center", icon: Mail },
   { id: "reports", label: "Reports", icon: FileText },
@@ -731,7 +527,6 @@ const BRAND_COLORS = {
 const initials = (name) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 
 // Local calendar date as YYYY-MM-DD (en-CA formats dates that way).
-const todayIso = (offsetDays = 0) => new Date(Date.now() + offsetDays * 86_400_000).toLocaleDateString("en-CA");
 
 export default function App() {
   // Workspace data per client name, plus lists shared by several screens. Loaded through the API client.
@@ -776,8 +571,6 @@ export default function App() {
   const [clientOpen, setClientOpen] = useState(false);
   const [violation, setViolation] = useState(null);
 
-  // Forms modals
-  const [modals, setModals] = useState({ product: false, exception: false });
   const [toasts, setToasts] = useState([]);
   const toastSeq = React.useRef(0);
 
@@ -811,10 +604,6 @@ export default function App() {
     }, duration);
   }, []);
   const workspaceCtx = useMemo(() => ({ client, actions, showToast }), [client, actions, showToast]);
-
-  const closeModal = (type) => {
-    setModals(prev => ({ ...prev, [type]: false }));
-  };
 
   const updateWorkspace = (clientName, fn) => {
     setDb(prev => ({ ...prev, [clientName]: fn(prev[clientName] || EMPTY_WORKSPACE) }));
@@ -894,68 +683,14 @@ export default function App() {
     showToast("Escalated to brand manager dashboard queue.", "info");
   };
 
-  const handleProductSubmit = async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const data = new FormData(form);
-    const num = (key) => {
-      const v = String(data.get(key) ?? '').trim();
-      return v === '' ? null : Number.parseFloat(v);
-    };
-    const sku = String(data.get('sku')).trim();
-    const entry = {
-      sku,
-      name: String(data.get('name')).trim(),
-      model: String(data.get('model')).trim(),
-      category: String(data.get('category') ?? '').trim(),
-      map: num('map'),
-      msrp: num('msrp'),
-    };
-    if (workspace.skus.some((s) => s.id.toLowerCase() === sku.toLowerCase())) {
-      showToast(`SKU "${sku}" already exists for ${activeClient}.`, 'info');
-      return;
-    }
-    try {
-      const row = await api.addSku(client, entry);
-      updateWorkspace(activeClient, (clientData) => ({ ...clientData, skus: [row, ...clientData.skus] }));
-      showToast(`SKU "${sku}" successfully registered for crawl monitors.`, 'success');
-      closeModal('product');
-      form.reset();
-    } catch (err) {
-      showToast(err.message || "Could not add the SKU.", 'info');
-    }
-  };
-
-  const handleExceptionSubmit = async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const data = new FormData(form);
-    const entry = {
-      seller: String(data.get('seller')).trim(),
-      scope: String(data.get('scope')).trim(),
-      promo: Number.parseFloat(String(data.get('discount'))),
-      start: String(data.get('start')),
-      end: String(data.get('end')),
-    };
-    if (entry.end < entry.start) {
-      showToast("The end date must be on or after the start date.", 'info');
-      return;
-    }
-    const promo = await api.addPromotion(client, entry, workspace.skus);
-    updateWorkspace(activeClient, (clientData) => ({ ...clientData, promotions: [promo, ...(clientData.promotions || [])] }));
-    showToast(`Pricing allowance exception authorized for ${entry.seller}.`, 'success');
-    closeModal('exception');
-    form.reset();
-  };
-
   const mainContent = useMemo(() => {
     switch (currentView) {
       case "overview": return <OverviewView onOpenViolation={setViolation} clientName={client.name} />;
-      case "product": return <ProductSummaryView clientName={client.name} onAddSkuClick={() => setModals(prev => ({ ...prev, product: true }))} />;
-      case "mapping": return <MappingCenterView clientName={client.name} />;
+      case "product": return <ProductSummaryView />;
+      case "mapping": return <MappingCenterView />;
       case "sources": return <SourcesTermsView skus={workspace.skus} />;
-      case "pricing": return <PricingView clientName={client.name} onAddPromoClick={() => setModals(prev => ({ ...prev, exception: true }))} />;
-      case "merchants": return <MerchantsView clientName={client.name} />;
+      case "pricing": return <MapPoliciesView />;
+      case "merchants": return <SellersView />;
       case "violations": return <ViolationsView onOpenViolation={setViolation} clientName={client.name} />;
       case "email": return <EmailCenterView clientName={client.name} />;
       case "reports": return <ReportsView clientName={client.name} />;
@@ -1174,109 +909,6 @@ export default function App() {
       >
         {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </button>
-
-      {/* ADD SKU MODAL */}
-      <div className={`modal fixed inset-0 bg-brand-charcoal/40 flex items-center justify-center z-50 transition-opacity ${modals.product ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-        <div className="bg-brand-white border border-brand-beige rounded-xl p-6 w-96 shadow-2xl">
-          <div className="flex justify-between items-center border-b border-brand-beige pb-3 mb-4">
-            <h3 className="text-sm font-bold text-brand-charcoal">Add Monitored SKU</h3>
-            <button onClick={() => closeModal('product')} className="text-brand-taupe hover:text-brand-charcoal"><X className="w-4 h-4" /></button>
-          </div>
-
-          <div className="mb-4 p-3 bg-brand-ivory border border-brand-beige rounded-lg text-center">
-            <p className="text-xs text-brand-taupe mb-2">Want to add multiple SKUs at once?</p>
-            <button type="button" onClick={() => showToast('Bulk upload arrives with catalogue import (Phase 2a).', 'info')} className="text-xs font-semibold bg-brand-white border border-brand-beige rounded px-3 py-1.5 text-brand-copper hover:bg-brand-beige cursor-pointer w-full flex items-center justify-center gap-2">
-              <FileText className="w-3.5 h-3.5" />
-              Upload CSV / Excel
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-px bg-brand-beige flex-1"></div>
-            <span className="text-[10px] uppercase font-bold text-brand-taupe tracking-wider">Or enter manually</span>
-            <div className="h-px bg-brand-beige flex-1"></div>
-          </div>
-
-          <form onSubmit={handleProductSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-brand-taupe mb-1">SKU Code *</label>
-              <input type="text" name="sku" required placeholder="e.g. LG-011" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-brand-taupe mb-1">Product Name *</label>
-              <input type="text" name="name" required placeholder="e.g. LG UltraGear Curved Monitor" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">Model / MPN *</label>
-                <input type="text" name="model" required placeholder="34WP65C-B" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">Category</label>
-                <input type="text" name="category" defaultValue="Monitor" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">MAP Price ($) *</label>
-                <input type="number" step="0.01" name="map" required placeholder="449.00" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">MSRP ($)</label>
-                <input type="number" step="0.01" name="msrp" placeholder="499.00" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-brand-taupe mb-1">Primary Merchant *</label>
-              <input type="text" name="seller" defaultValue="XYZ Electronics" required className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-            </div>
-            <div className="flex justify-end gap-2 border-t border-brand-beige pt-3">
-              <button type="button" onClick={() => closeModal('product')} className="text-xs font-semibold border border-brand-beige rounded-lg px-3 py-1.5 text-brand-charcoal hover:bg-brand-beige cursor-pointer">Cancel</button>
-              <PrimaryButton type="submit">Add SKU</PrimaryButton>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      {/* ADD EXCEPTION MODAL */}
-      <div className={`modal fixed inset-0 bg-brand-charcoal/40 flex items-center justify-center z-50 transition-opacity ${modals.exception ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-        <div className="bg-brand-white border border-brand-beige rounded-xl p-6 w-96 shadow-2xl">
-          <div className="flex justify-between items-center border-b border-brand-beige pb-3 mb-4">
-            <h3 className="text-sm font-bold text-brand-charcoal">New Pricing Allowance Promotion</h3>
-            <button onClick={() => closeModal('exception')} className="text-brand-taupe hover:text-brand-charcoal"><X className="w-4 h-4" /></button>
-          </div>
-          <form onSubmit={handleExceptionSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-brand-taupe mb-1">Merchant Storefront *</label>
-              <input type="text" name="seller" required placeholder="e.g. XYZ Electronics" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-brand-taupe mb-1">Product SKU *</label>
-              <input type="text" name="scope" required placeholder="LG-001" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">Promo Price ($) *</label>
-                <input type="number" step="0.01" name="discount" required placeholder="1399.00" className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">Start Date *</label>
-                <input type="date" name="start" required defaultValue={todayIso()} className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">End Date *</label>
-                <input type="date" name="end" required defaultValue={todayIso(7)} className="w-full px-3 py-2 text-sm border border-brand-beige rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-brand-beige pt-3">
-              <button type="button" onClick={() => closeModal('exception')} className="text-xs font-semibold border border-brand-beige rounded-lg px-3 py-1.5 text-brand-charcoal hover:bg-brand-beige cursor-pointer">Cancel</button>
-              <PrimaryButton type="submit">Create Promo</PrimaryButton>
-            </div>
-          </form>
-        </div>
-      </div>
 
       {/* TOAST alerts */}
       <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
