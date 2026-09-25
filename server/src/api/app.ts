@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { verifyToken, type TokenClaims } from '../lib/auth.js';
 import { config } from '../lib/config.js';
+import { parseOrigins } from '../lib/cors.js';
 import { withApi } from '../lib/db.js';
 import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
 import { closeRateLimiter } from '../lib/rateLimit.js';
@@ -81,7 +82,7 @@ export async function buildApp() {
   });
 
   await app.register(cors, {
-    origin: config.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
+    origin: parseOrigins(config.CORS_ORIGINS),
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'content-type'],
   });
