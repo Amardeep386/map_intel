@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { probeListingUrls, runEgressProbe } from '../../collector/egressProbe.js';
 import { enqueueRun } from '../../collector/runs.js';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { withApi } from '../../lib/db.js';
@@ -38,5 +39,26 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
       }),
     );
     return reply.code(202).send(result);
+  });
+
+  // Egress probe: can this API host reach the retailers as a US shopper? HTTP only, stores nothing.
+  // Takes a few minutes (polite per-host delays), so run it on a service that is awake.
+  app.post('/admin/egress-probe', { config: { permission: 'platform' } }, async (req) => {
+    const per = Math.min(Math.max(Number((req.body as { perSource?: number } | null)?.perSource ?? 3) || 3, 1), 5);
+    const urls = await withApi((db) => probeListingUrls(db, per));
+    const report = await runEgressProbe(urls, per);
+    await withApi((db) =>
+      recordAudit(db, {
+        accountId: null,
+        actor: actorFrom(req),
+        action: 'egress.probed',
+        entityType: 'egress_probe',
+        entityId: null,
+        summary: `Egress probe from ${report.egressLabel} (${report.egressIp ?? 'unknown IP'})`,
+        after: { egressLabel: report.egressLabel, egressIp: report.egressIp, results: report.results.length },
+        requestId: req.id,
+      }),
+    );
+    return report;
   });
 }

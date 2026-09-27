@@ -23,6 +23,7 @@
     "storage:init": "tsx src/scripts/storage-init.ts",
     "collect": "tsx src/scripts/collect.ts",
     "collect:report": "tsx src/scripts/report.ts",
+    "egress:probe": "tsx src/scripts/egress-probe.ts",
     "browsers:install": "playwright install chromium",
     "sellers:backfill": "tsx src/scripts/backfill-sellers.ts",
     "synthetic": "tsx src/scripts/synthetic-candidates.ts",
