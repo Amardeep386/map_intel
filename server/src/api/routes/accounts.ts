@@ -52,20 +52,31 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { evidenceId: string } }>('/evidence/:evidenceId', { config: { permission: 'user' } }, async (req) => {
     const { evidenceId } = req.params;
     if (!/^[0-9a-f-]{36}$/i.test(evidenceId)) throw new HttpError(404, 'evidence not found');
-    // Find the owning account first, check access, then read the evidence as that tenant.
-    const accountId = await withApi(async (db) => {
-      const { rows } = await db.query<{ account_id: string | null }>('SELECT app_evidence_account($1) AS account_id', [evidenceId]);
-      return rows[0]?.account_id ?? null;
+    // Listings are shared: find the accounts that own or map this one, use the first the caller
+    // may read, then read the evidence as that tenant.
+    const candidates = await withApi(async (db) => {
+      const { rows } = await db.query<{ accounts: string[] }>('SELECT app_evidence_accounts($1) AS accounts', [evidenceId]);
+      return rows[0]?.accounts ?? [];
     });
-    if (!accountId) throw new HttpError(404, 'evidence not found');
-    await requireAccountAction(req.user!, accountId, 'observations.read');
+    if (!candidates.length) throw new HttpError(404, 'evidence not found');
+    let accountId: string | null = null;
+    let denied: unknown = null;
+    for (const id of candidates) {
+      try {
+        await requireAccountAction(req.user!, id, 'observations.read');
+        accountId = id;
+        break;
+      } catch (err) {
+        denied = err;
+      }
+    }
+    if (!accountId) throw denied;
     const row = await withTenant(accountId, async (db) => {
       const { rows } = await db.query(
         `SELECT e.*, o.advertised_price, o.seller_name_raw, l.url
            FROM evidence e
            JOIN observation o ON o.id = e.observation_id AND o.observed_at = e.observed_at
            JOIN listing l ON l.id = o.listing_id
-           JOIN product p ON p.id = l.product_id
           WHERE e.id = $1`,
         [evidenceId],
       );
