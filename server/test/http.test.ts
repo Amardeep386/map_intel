@@ -14,3 +14,20 @@ test('proxyFromUrl splits credentials for Playwright', () => {
   assert.deepEqual(proxyFromUrl('http://proxy.example:8080'), { server: 'http://proxy.example:8080' });
   assert.deepEqual(proxyFromUrl('http://u%40x:p%3Ass@proxy.example:8080'), { server: 'http://proxy.example:8080', username: 'u@x', password: 'p:ss' });
 });
+
+test('withPageSlot: never more pages open than allowed, all run', async () => {
+  const { withPageSlot } = await import('../src/collector/browser.js');
+  let open = 0;
+  let peak = 0;
+  const task = () =>
+    withPageSlot(async () => {
+      open += 1;
+      peak = Math.max(peak, open);
+      await new Promise((r) => setTimeout(r, 10));
+      open -= 1;
+      return 1;
+    }, 2);
+  const done = await Promise.all(Array.from({ length: 7 }, task));
+  assert.equal(done.length, 7);
+  assert.equal(peak, 2);
+});

@@ -5,6 +5,21 @@ import type { FetchResult, SourceAdapter } from './types.js';
 
 let browser: Browser | null = null;
 
+// A small semaphore: at most COLLECT_BROWSER_PAGES pages open at once in this process, whichever
+// source queue asks (six source workers share one 512 MB instance).
+let open = 0;
+const waiting: (() => void)[] = [];
+export async function withPageSlot<T>(fn: () => Promise<T>, max = config.COLLECT_BROWSER_PAGES): Promise<T> {
+  if (open >= max) await new Promise<void>((resolve) => waiting.push(resolve));
+  open += 1;
+  try {
+    return await fn();
+  } finally {
+    open -= 1;
+    waiting.shift()?.();
+  }
+}
+
 /** Playwright wants the proxy credentials apart from the server address. */
 export function proxyFromUrl(raw: string | undefined): { server: string; username?: string; password?: string } | undefined {
   if (!raw) return undefined;
@@ -46,7 +61,12 @@ const MAX_SHOT_HEIGHT = 4000;
 
 /** Load the live page in headless Chromium; returns its HTML and a screenshot of what loaded. */
 export async function browserFetch(url: string, adapter: SourceAdapter): Promise<FetchResult> {
+  // Wait for the host's turn first, so a page slot is never held through a politeness delay.
   await politeWait(adapter.host);
+  return withPageSlot(() => browserFetchNow(url, adapter));
+}
+
+async function browserFetchNow(url: string, adapter: SourceAdapter): Promise<FetchResult> {
   const ctx = await newContext(adapter, true);
   try {
     const page = await ctx.newPage();
@@ -71,6 +91,10 @@ export async function browserFetch(url: string, adapter: SourceAdapter): Promise
  * exactly the captured (and hashed) HTML; images and CSS still load from the retailer's CDN.
  */
 export async function renderScreenshot(html: string, baseUrl: string, adapter: SourceAdapter): Promise<Buffer> {
+  return withPageSlot(() => renderScreenshotNow(html, baseUrl, adapter));
+}
+
+async function renderScreenshotNow(html: string, baseUrl: string, adapter: SourceAdapter): Promise<Buffer> {
   const ctx = await newContext(adapter, false);
   try {
     const page = await ctx.newPage();

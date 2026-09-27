@@ -66,6 +66,8 @@ const schema = z.object({
   COLLECT_HTTPS_PROXY: z.string().optional(),
   // Worker: concurrent jobs per source queue (headless pages are heavy on a 512 MB instance).
   COLLECT_CONCURRENCY: int(1),
+  // Headless pages open at once in this process, across all sources (memory: ~100-150 MB each).
+  COLLECT_BROWSER_PAGES: int(1),
   // How often the scheduler looks for schedules that are due (minutes).
   SCHEDULER_TICK_MINUTES: int(5),
 });
