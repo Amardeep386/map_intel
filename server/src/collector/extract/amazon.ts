@@ -1,7 +1,8 @@
 import * as cheerio from 'cheerio';
-import type { BlockReason, Extracted } from '../types.js';
+import type { BlockReason, DiscoveredItem, Extracted, ResultsPage } from '../types.js';
 import { emptyExtracted } from '../types.js';
 import { applyJsonLd, cleanText, genericBlock, normalizeAvailability, parsePrice } from './common.js';
+import { conditionFrom, withPage } from './results.js';
 
 type $ = cheerio.CheerioAPI;
 
@@ -108,4 +109,34 @@ export function detectAmazonBlock(html: string, status: number): BlockReason {
   // Outside the US Amazon may hide the buy box: "This item cannot be shipped to your selected delivery location."
   if (/cannot be shipped to your selected delivery location/i.test(html)) return 'geo_interstitial';
   return genericBlock(html, status);
+}
+
+export const amazonProductUrl = (asin: string) => `https://www.amazon.com/dp/${asin}`;
+
+/** Search results (/s?k=...): one card per ASIN; sponsored cards are kept and marked. */
+export function extractAmazonResults(html: string, url: string): ResultsPage {
+  const $ = cheerio.load(html);
+  const items: DiscoveredItem[] = [];
+  const seen = new Set<string>();
+  $('[data-component-type="s-search-result"][data-asin]').each((_, el) => {
+    const card = $(el);
+    const asin = (card.attr('data-asin') ?? '').toUpperCase();
+    if (!/^[A-Z0-9]{10}$/.test(asin) || seen.has(asin)) return;
+    seen.add(asin);
+    const text = card.text().replace(/\s+/g, ' ');
+    items.push({
+      url: amazonProductUrl(asin),
+      channelSku: asin,
+      title: cleanText(card.find('h2').first().text()) ?? cleanText(card.find('img.s-image').attr('alt')),
+      price: parsePrice(card.find('.a-price:not(.a-text-price) .a-offscreen').first().text()),
+      sellerName: null,
+      imageUrl: card.find('img.s-image').attr('src') ?? null,
+      condition: conditionFrom(cleanText(card.find('h2').first().text())),
+      format: /\bSponsored\b/.test(text) || card.find('.puis-sponsored-label-text').length ? 'sponsored' : null,
+    });
+  });
+  const page = Number(new URL(url).searchParams.get('page') ?? '1') || 1;
+  const hasNext = $('.s-pagination-next:not(.s-pagination-disabled)').length > 0;
+  const noResults = /No results for|did not match any products/i.test(html);
+  return { items, nextUrl: hasNext ? withPage(url, page + 1) : null, recognized: items.length > 0 || noResults };
 }

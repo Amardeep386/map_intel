@@ -134,6 +134,8 @@ export function genericBlock(html: string, status: number): BlockReason {
     .toLowerCase()
     .replace(/[\w.-]*captcha[\w-]*\.(?:net|com|io)\b/g, '');
   if (/captcha|robot check|are you a robot|robot or human|px-captcha|verify you are human/.test(head)) return 'captcha';
+  // HUMAN (PerimeterX) "Press & hold" overlay on a rendered page (Target): an iframe shown late in the DOM.
+  if (/<iframe[^>]+id="px-captcha-modal"[^>]*display:\s*block/i.test(html)) return 'captcha';
   if (status === 403 || /access denied|pardon our interruption|request blocked/.test(head)) return 'access_denied';
   return null;
 }

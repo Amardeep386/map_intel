@@ -11,6 +11,10 @@ test('genericBlock spots bot walls and rate limits', () => {
   assert.equal(genericBlock('<title>Robot or human?</title>', 200), 'captcha');
   assert.equal(genericBlock('<h1>Access Denied</h1> errors.edgesuite.net', 403), 'access_denied');
   assert.equal(genericBlock('', 429), 'rate_limited');
+  // Target in headless Chromium (Sep 2026): the "Press & hold" overlay deep in the DOM; a hidden one is not a block.
+  const filler = 'x'.repeat(60_000);
+  assert.equal(genericBlock(`<html>${filler}<iframe id="px-captcha-modal" style="display: block; position: fixed"></iframe></html>`, 200), 'captcha');
+  assert.equal(genericBlock(`<html>${filler}<iframe id="px-captcha-modal" style="display: none"></iframe></html>`, 200), null);
   assert.equal(genericBlock('<html><body>LG 65" OLED $1,499.99</body></html>', 200), null);
 });
 

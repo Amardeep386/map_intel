@@ -17,7 +17,8 @@ test('catalogue: every source declares a cost for every term type, and cost opti
       if (typeof c === 'string') assert.ok(s.options.some((o) => o.key === c && o.type === 'integer'), `${s.code}: ${c}`);
     }
   }
-  assert.equal(SOURCE_CATALOGUE.filter((s) => s.collectorStatus === 'live').length, 3);
+  // P2b: the six launch sources are live; Google Shopping stays planned.
+  assert.equal(SOURCE_CATALOGUE.filter((s) => s.collectorStatus === 'live').length, 6);
 });
 
 test('options: defaults fill in, overrides validate, unknown keys are refused', () => {
@@ -39,13 +40,13 @@ test('term cost: keyword follows search pages, identifier and url cost 1', () =>
   assert.equal(termCost(amazonSchema, values, 'seller'), 3);
 });
 
-const src = (code: string, subscribed: boolean, options: Record<string, unknown> = {}): CostSource => {
+const src = (code: string, subscribed: boolean, options: Record<string, unknown> = {}, status?: 'live' | 'planned'): CostSource => {
   const d = SOURCE_CATALOGUE.find((s) => s.code === code)!;
-  return { id: code, code, category: d.category, collectorStatus: d.collectorStatus, schema: optionsSchema(d), subscription: subscribed ? { active: true, options } : null };
+  return { id: code, code, category: d.category, collectorStatus: status ?? d.collectorStatus, schema: optionsSchema(d), subscription: subscribed ? { active: true, options } : null };
 };
 
 test('estimate: All / Some / None, only subscribed sources, planned sources flagged', () => {
-  const sources = [src('amazon_us', true), src('walmart_us', true, { search_pages: 1 }), src('ebay_us', true), src('bestbuy_us', false)];
+  const sources = [src('amazon_us', true), src('walmart_us', true, { search_pages: 1 }), src('ebay_us', true, {}, 'planned'), src('bestbuy_us', false)];
   const groups: CostGroup[] = [
     { id: 'g1', name: 'Names', termCounts: { keyword: 10 }, cells: { Marketplace: { mode: 'All', sourceIds: [] }, 'Online Seller': { mode: 'All', sourceIds: [] } } },
     { id: 'g2', name: 'IDs', termCounts: { identifier: 20 }, cells: { Marketplace: { mode: 'Some', sourceIds: ['amazon_us'] } } },
