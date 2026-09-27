@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   Plus, ChevronDown, ExternalLink, X, ChevronLeft, ChevronRight,
-  MapPin, Lock, Moon, Sun, Radar, Loader2
+  MapPin, Lock, Moon, Sun, Radar, Loader2, Activity
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -18,6 +18,7 @@ import { SourcesTermsView } from "./views/SourcesTermsView.jsx";
 import { MapPoliciesView, ProductSummaryView } from "./views/CatalogViews.jsx";
 import { MappingCenterView } from "./views/MappingCenterView.jsx";
 import { SellersView } from "./views/SellersView.jsx";
+import { DataHealthView } from "./views/DataHealthView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 
 // ---------- Format Currency Utility (USD) ----------
@@ -498,6 +499,7 @@ const NAV = [
   { id: "product", label: "Product Summary", icon: Package },
   { id: "mapping", label: "Mapping Center", icon: Shuffle, needs: "mapping.read" },
   { id: "sources", label: "Sources & Terms", icon: Radar, needs: "sources.read" },
+  { id: "health", label: "Data Health", icon: Activity, needs: "health.read" },
   { id: "pricing", label: "MAP Policies", icon: DollarSign },
   { id: "merchants", label: "Sellers", icon: Store, needs: "sellers.read" },
   { id: "violations", label: "Violations", icon: AlertTriangle },
@@ -691,6 +693,7 @@ export default function App() {
       case "sources": return <SourcesTermsView skus={workspace.skus} />;
       case "pricing": return <MapPoliciesView />;
       case "merchants": return <SellersView />;
+      case "health": return <DataHealthView />;
       case "violations": return <ViolationsView onOpenViolation={setViolation} clientName={client.name} />;
       case "email": return <EmailCenterView clientName={client.name} />;
       case "reports": return <ReportsView clientName={client.name} />;

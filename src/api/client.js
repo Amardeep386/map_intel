@@ -17,6 +17,7 @@ import {
 } from "./mock/data.js";
 import { mockConfig } from "./mock/config.js";
 import { mockCatalog } from "./mock/catalog.js";
+import { mockHealth } from "./mock/health.js";
 
 export const USE_MOCK = String(import.meta.env.VITE_USE_MOCK ?? "true").toLowerCase() !== "false";
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
@@ -38,7 +39,7 @@ const ALL_ACTIONS = [
   "account.read", "catalogue.read", "catalogue.write", "observations.read", "settings.read", "settings.write",
   "sources.read", "sources.write", "terms.read", "terms.write", "schedules.read", "schedules.write",
   "users.read", "users.manage", "audit.read", "credentials.read", "credentials.write",
-  "mapping.read", "mapping.write", "sellers.read", "sellers.write",
+  "mapping.read", "mapping.write", "sellers.read", "sellers.write", "health.read", "collection.run",
 ];
 
 const qs = (params) => {
@@ -406,6 +407,18 @@ export const api = {
   },
   revokeSuppression(client, suppressionId) {
     return USE_MOCK ? mockCatalog.revokeSuppression(client, suppressionId) : request(`/accounts/${client.id}/mapping/suppressions/${suppressionId}/revoke`, { method: "POST" });
+  },
+
+  // ---------------- Data Health (P2b) ----------------
+  dataHealth(client) {
+    return USE_MOCK ? mockHealth.health(client) : request(`/accounts/${client.id}/health`);
+  },
+  healthFailures(client, source) {
+    return USE_MOCK ? mockHealth.failures(client, source) : request(`/accounts/${client.id}/health/${source}/failures`);
+  },
+  /** Re-run the failed jobs of the latest run (optionally one source). */
+  rerunFailed(client, source) {
+    return USE_MOCK ? mockHealth.rerun(client, source) : request(`/accounts/${client.id}/health/rerun`, { method: "POST", body: source ? { source } : {} });
   },
 
   // ---------------- Evidence (real when the backend is on) ----------------
