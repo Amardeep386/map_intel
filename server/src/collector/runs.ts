@@ -69,15 +69,20 @@ export async function enqueueRun(
   return { crawlRunId, jobs: listingIds.length };
 }
 
-/** Count one finished job on its run (by outcome status) and close the run when all are done. */
-export async function recordRunProgress(db: Db, crawlRunId: string, status: string): Promise<void> {
-  await db.query(
+/**
+ * Count one finished job on its run (by outcome) and close the run when all are done.
+ * Returns true for the job that finished the run (jobs added later reopen it).
+ */
+export async function recordRunProgress(db: Db, crawlRunId: string, status: string): Promise<boolean> {
+  const { rows } = await db.query<{ finished: boolean }>(
     `UPDATE crawl_run
         SET jobs_done = jobs_done + 1,
             stats = jsonb_set(stats, ARRAY[$2::text], to_jsonb(coalesce((stats->>$2)::int, 0) + 1)),
             status = CASE WHEN jobs_done + 1 >= jobs_total THEN 'finished' ELSE status END,
             finished_at = CASE WHEN jobs_done + 1 >= jobs_total THEN now() ELSE finished_at END
-      WHERE id = $1`,
+      WHERE id = $1
+      RETURNING jobs_done >= jobs_total AS finished`,
     [crawlRunId, status],
   );
+  return rows[0]?.finished ?? false;
 }
