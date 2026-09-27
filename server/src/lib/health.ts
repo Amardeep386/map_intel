@@ -53,7 +53,7 @@ export interface HealthNumbers {
 // Failures that mean we never got a real page.
 const FETCH_FAILURES = new Set<FailureClass>(['blocked', 'timeout', 'network', 'auth']);
 
-export const THRESHOLDS = { blocked: 0.5, fetch: 0.5, extract: 0.9, coverage: 0.8, freshnessHours: 24, streak: 3 } as const;
+export const THRESHOLDS = { blocked: 0.5, fetch: 0.5, fetchDegraded: 0.9, extract: 0.9, coverage: 0.8, freshnessHours: 24, streak: 3 } as const;
 
 export function computeHealth(i: HealthInput): HealthNumbers {
   const skipped = i.jobs.filter((j) => j.status === 'skipped');
@@ -98,7 +98,11 @@ export function computeHealth(i: HealthInput): HealthNumbers {
     const extractRate = n.extractTotal ? extractOk / n.extractTotal : 1;
     const coverage = i.expectedListings ? i.observedListings / i.expectedListings : 1;
     const stale = !i.lastSuccessAt || i.now.getTime() - i.lastSuccessAt.getTime() > THRESHOLDS.freshnessHours * 3_600_000;
-    health = extractRate < THRESHOLDS.extract || coverage < THRESHOLDS.coverage || (stale && i.expectedListings > 0) ? 'Degraded' : 'Healthy';
+    const fetchRate = fetchOk / fetched.length;
+    health =
+      fetchRate < THRESHOLDS.fetchDegraded || extractRate < THRESHOLDS.extract || coverage < THRESHOLDS.coverage || (stale && i.expectedListings > 0)
+        ? 'Degraded'
+        : 'Healthy';
   }
   const failureStreak = health === 'Healthy' || health === 'Idle' ? 0 : i.previousStreak + 1;
   if (health === 'Degraded' && failureStreak >= THRESHOLDS.streak) health = 'Failing';

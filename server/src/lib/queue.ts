@@ -66,6 +66,23 @@ export function sourceQueue(sourceCode: string): Queue<CrawlJobData> {
   return q;
 }
 
+/** BullMQ priority: 1 is served first. Rechecks jump the queue; schedule priority 100 → 2, 0 → 102. */
+export function queuePriority(schedulePriority: number, kind: 'discover' | 'collect' | 'recheck'): number {
+  if (kind === 'recheck') return 1;
+  return 102 - Math.max(0, Math.min(100, schedulePriority)) + (kind === 'discover' ? 1 : 0);
+}
+
+/** Put crawl_job rows (already written) on their source queues. No database access. */
+export async function enqueueCrawlJobs(rows: { id: string; source_code: string; kind: 'discover' | 'collect' | 'recheck' }[], schedulePriority: number): Promise<void> {
+  const bySource = new Map<string, typeof rows>();
+  for (const r of rows) bySource.set(r.source_code, [...(bySource.get(r.source_code) ?? []), r]);
+  for (const [code, list] of bySource) {
+    await sourceQueue(code).addBulk(
+      list.map((r) => ({ name: r.kind, data: { crawlJobId: r.id }, opts: { jobId: r.id, priority: queuePriority(schedulePriority, r.kind) } })),
+    );
+  }
+}
+
 /** BullMQ does not close a connection it was handed, so close both (lets CLI scripts exit). */
 export async function closeQueue(): Promise<void> {
   for (const q of sourceQueues.values()) await q.close();

@@ -6,11 +6,11 @@ import { adapters } from '../collector/sources.js';
 import { config } from '../lib/config.js';
 import { DEFAULT_REQUEST_BUDGET, type CostGroup } from '../lib/cost.js';
 import { withSystem, type Db } from '../lib/db.js';
-import { sourceQueue } from '../lib/queue.js';
+import { enqueueCrawlJobs } from '../lib/queue.js';
 import type { ScheduleSelector } from '../lib/schedules.js';
 import type { OptionsSchema } from '../lib/sourceOptions.js';
 import { dueSlot } from './due.js';
-import { expandFiring, queuePriority, type ExpandInput, type FiringSchedule, type PlannedJob } from './expand.js';
+import { expandFiring, type ExpandInput, type FiringSchedule, type PlannedJob } from './expand.js';
 
 interface ScheduleRow {
   id: string;
@@ -147,13 +147,7 @@ export async function addJobs(
 
   // Inline runs (CLI) leave the jobs in the table for the caller to run; workers take them from Redis.
   if (opts.enqueue === false || inlineRuns.has(runId)) return rows.filter((r) => r.status === 'queued').length;
-  const bySource = new Map<string, typeof rows>();
-  for (const r of rows.filter((x) => x.status === 'queued')) bySource.set(r.source_code, [...(bySource.get(r.source_code) ?? []), r]);
-  for (const [code, list] of bySource) {
-    await sourceQueue(code).addBulk(
-      list.map((r) => ({ name: r.kind, data: { crawlJobId: r.id }, opts: { jobId: r.id, priority: queuePriority(schedulePriority, r.kind) } })),
-    );
-  }
+  await enqueueCrawlJobs(rows.filter((r) => r.status === 'queued'), schedulePriority);
   return rows.filter((r) => r.status === 'queued').length;
 }
 

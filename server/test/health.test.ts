@@ -17,6 +17,7 @@ test('bands: Blocked, Failing, Degraded (extraction, coverage, freshness), Idle'
   assert.equal(computeHealth({ ...base, jobs: [...ok(4), ...fail(6, 'blocked')] }).health, 'Blocked');
   assert.equal(computeHealth({ ...base, jobs: [...ok(4), ...fail(3, 'timeout'), ...fail(3, 'blocked')] }).health, 'Failing');
   assert.equal(computeHealth({ ...base, jobs: [...ok(8), ...fail(2, 'layout_changed')] }).health, 'Degraded');
+  assert.equal(computeHealth({ ...base, jobs: [...ok(8), ...fail(2, 'blocked')] }).health, 'Degraded'); // 20% blocked
   assert.equal(computeHealth({ ...base, observedListings: 7 }).health, 'Degraded');
   assert.equal(computeHealth({ ...base, lastSuccessAt: new Date('2026-09-25T12:00:00Z') }).health, 'Degraded');
   const idle = computeHealth({ ...base, jobs: [{ status: 'skipped', skipReason: 'not_executable', failureClass: null, found: null }], observations: [] });

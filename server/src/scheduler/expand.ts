@@ -162,8 +162,4 @@ export function expandFiring(input: ExpandInput): PlannedJob[] {
   return unique;
 }
 
-/** BullMQ priority: 1 is served first. Rechecks jump the queue; schedule priority 100 → 2, 0 → 102. */
-export function queuePriority(schedulePriority: number, kind: 'discover' | 'collect' | 'recheck'): number {
-  if (kind === 'recheck') return 1;
-  return 102 - Math.max(0, Math.min(100, schedulePriority)) + (kind === 'discover' ? 1 : 0);
-}
+export { queuePriority } from '../lib/queue.js';
