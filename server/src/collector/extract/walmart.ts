@@ -54,6 +54,8 @@ export function extractWalmart(html: string): Extracted {
 }
 
 export function detectWalmartBlock(html: string, status: number): BlockReason {
+  // A page carrying the product JSON is a real product page, whatever else its head mentions.
+  if (status < 400 && /"priceInfo"/.test(html) && /__NEXT_DATA__/.test(html)) return null;
   if (/Robot or human\?|px-captcha|\/blocked\?url=/i.test(html.slice(0, 50_000)) && !/__NEXT_DATA__/.test(html)) return 'captcha';
   return genericBlock(html, status);
 }

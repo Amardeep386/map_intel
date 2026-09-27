@@ -3,6 +3,7 @@
 // Used by `npm run egress:probe` (local) and POST /admin/egress-probe (on the Render API in Ohio).
 import { config } from '../lib/config.js';
 import type { Db } from '../lib/db.js';
+import { genericBlock } from './extract/common.js';
 import { browserLikeHeaders, politeWait, proxyDispatcher } from './http.js';
 import { robotsCheck } from './robots.js';
 import { adapters } from './sources.js';
@@ -41,14 +42,6 @@ export interface ProbeReport {
   egressIp: string | null;
   at: string;
   results: ProbeResult[];
-}
-
-// Generic bot-wall markers for sources whose adapter is not built yet.
-export function genericBlock(html: string, status: number): string | null {
-  if (status === 429) return 'rate_limited';
-  if (/px-captcha|perimeterx|captcha-delivery|g-recaptcha|hcaptcha|robot or human|are you a robot|verify you are a human/i.test(html)) return 'captcha';
-  if (status === 403 || /access denied|request unsuccessful|errors\.edgesuite\.net|pardon our interruption/i.test(html)) return 'access_denied';
-  return null;
 }
 
 async function egressIp(): Promise<string | null> {

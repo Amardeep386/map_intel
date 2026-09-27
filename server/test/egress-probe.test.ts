@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { genericBlock, summarizeProbe, type ProbeReport } from '../src/collector/egressProbe.js';
+import { summarizeProbe, type ProbeReport } from '../src/collector/egressProbe.js';
+import { genericBlock } from '../src/collector/extract/common.js';
 
 test('genericBlock spots bot walls and rate limits', () => {
   assert.equal(genericBlock('<div id="px-captcha"></div>', 200), 'captcha');
+  // A captcha provider named in the Content-Security-Policy is not a challenge (Walmart, Sep 2026).
+  const csp = '<meta http-equiv="Content-Security-Policy" content="frame-src https://www.recaptcha.net https://hcaptcha.com *.captcha.net">';
+  assert.equal(genericBlock(`<html><head>${csp}</head><body>LG fridge $1,499</body></html>`, 200), null);
   assert.equal(genericBlock('<title>Robot or human?</title>', 200), 'captcha');
   assert.equal(genericBlock('<h1>Access Denied</h1> errors.edgesuite.net', 403), 'access_denied');
   assert.equal(genericBlock('', 429), 'rate_limited');
