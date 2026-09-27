@@ -59,6 +59,15 @@ const schema = z.object({
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
     ),
   BESTBUY_API_KEY: z.string().optional(),
+  // eBay Browse API (OAuth client credentials). Off until both are set.
+  EBAY_CLIENT_ID: z.string().optional(),
+  EBAY_CLIENT_SECRET: z.string().optional(),
+  // Optional US proxy for all collector traffic (http://user:pass@host:port). Off when empty.
+  COLLECT_HTTPS_PROXY: z.string().optional(),
+  // Worker: concurrent jobs per source queue (headless pages are heavy on a 512 MB instance).
+  COLLECT_CONCURRENCY: int(1),
+  // How often the scheduler looks for schedules that are due (minutes).
+  SCHEDULER_TICK_MINUTES: int(5),
 });
 
 const parsed = schema.safeParse(process.env);

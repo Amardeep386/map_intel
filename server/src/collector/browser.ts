@@ -5,9 +5,21 @@ import type { FetchResult, SourceAdapter } from './types.js';
 
 let browser: Browser | null = null;
 
+/** Playwright wants the proxy credentials apart from the server address. */
+export function proxyFromUrl(raw: string | undefined): { server: string; username?: string; password?: string } | undefined {
+  if (!raw) return undefined;
+  const u = new URL(raw);
+  const server = `${u.protocol}//${u.host}`;
+  return u.username ? { server, username: decodeURIComponent(u.username), password: decodeURIComponent(u.password) } : { server };
+}
+
 async function getBrowser(): Promise<Browser> {
   if (!browser || !browser.isConnected()) {
-    browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled'] });
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--disable-blink-features=AutomationControlled'],
+      proxy: proxyFromUrl(config.COLLECT_HTTPS_PROXY),
+    });
   }
   return browser;
 }

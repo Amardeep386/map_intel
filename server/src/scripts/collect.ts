@@ -5,6 +5,7 @@
 import { parseArgs } from 'node:util';
 import { closeBrowser } from '../collector/browser.js';
 import { collectListing, type CollectOutcome } from '../collector/collect.js';
+import { closePoliteness } from '../collector/http.js';
 import { createCrawlRun, enqueueRun, selectListings, type RunScope } from '../collector/runs.js';
 import { closeDb, withSystem } from '../lib/db.js';
 import { closeQueue } from '../lib/queue.js';
@@ -79,6 +80,7 @@ async function main(): Promise<void> {
     }
   } finally {
     await closeBrowser();
+    await closePoliteness();
     await closeDb();
   }
 }

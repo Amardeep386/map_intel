@@ -3,7 +3,7 @@
 // Used by `npm run egress:probe` (local) and POST /admin/egress-probe (on the Render API in Ohio).
 import { config } from '../lib/config.js';
 import type { Db } from '../lib/db.js';
-import { browserLikeHeaders, politeWait } from './http.js';
+import { browserLikeHeaders, politeWait, proxyDispatcher } from './http.js';
 import { robotsCheck } from './robots.js';
 import { adapters } from './sources.js';
 import type { SourceAdapter } from './types.js';
@@ -72,7 +72,7 @@ async function probeOne(source: string, url: string): Promise<ProbeResult> {
   await politeWait(adapter.host);
   const started = Date.now();
   try {
-    const res = await fetch(url, { headers: browserLikeHeaders(adapter), redirect: 'follow', signal: AbortSignal.timeout(30_000) });
+    const res = await fetch(url, { headers: browserLikeHeaders(adapter), redirect: 'follow', signal: AbortSignal.timeout(30_000), ...({ dispatcher: proxyDispatcher() } as object) });
     const html = await res.text();
     const known = adapters[source];
     // A known adapter decides alone: Walmart, for one, loads its bot-check script on every normal page.

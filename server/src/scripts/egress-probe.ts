@@ -2,6 +2,7 @@
 // Checks from this machine's IP whether each retailer serves real pages (HTTP only, stores nothing).
 import { parseArgs } from 'node:util';
 import { probeListingUrls, runEgressProbe, summarizeProbe } from '../collector/egressProbe.js';
+import { closePoliteness } from '../collector/http.js';
 import { closeDb, withSystem } from '../lib/db.js';
 
 const { values } = parseArgs({ options: { per: { type: 'string', default: '3' }, json: { type: 'boolean', default: false } } });
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
     for (const r of report.results)
       console.log(`    ${r.source} ${r.status ?? '-'} ${r.block ?? ''} ${r.price ?? ''} ${r.ms ?? '-'}ms ${r.error ?? ''} ${r.url}`);
   } finally {
+    await closePoliteness();
     await closeDb();
   }
 }
