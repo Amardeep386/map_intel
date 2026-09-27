@@ -77,7 +77,9 @@ export async function dataHealthRoutes(app: FastifyInstance): Promise<void> {
       const fresh = withListings.filter((r) => r.last_success_at && now - new Date(r.last_success_at).getTime() <= FRESH_HOURS * 3_600_000);
       const lastRun = (
         await db.query<{ id: string; started_at: Date; finished_at: Date | null; status: string; egress_label: string | null; trigger: string }>(
-          'SELECT id, started_at, finished_at, status, egress_label, trigger FROM crawl_run WHERE account_id = $1 ORDER BY started_at DESC LIMIT 1',
+          `SELECT r.id, r.started_at, r.finished_at, r.status, r.egress_label, r.trigger FROM crawl_run r
+            WHERE r.account_id = $1 AND EXISTS (SELECT 1 FROM crawl_job j WHERE j.crawl_run_id = r.id)
+            ORDER BY r.started_at DESC LIMIT 1`,
           [req.params.accountId],
         )
       ).rows[0];

@@ -123,20 +123,18 @@ async function retireGoneListings(db: Db, accountId: string): Promise<number> {
   return ids.length ? retireListings(db, accountId, ids, 'Not found on 3 consecutive collections') : 0;
 }
 
-/** Write the health snapshots of a finished run (one per source the account subscribes to). */
+/** Write the health snapshots of a finished run (one per source it had jobs for). */
 export async function recordRunHealth(crawlRunId: string, now: Date = new Date()): Promise<void> {
   await withSystem(async (db) => {
     const run = (await db.query<{ account_id: string | null; egress_label: string | null }>('SELECT account_id, egress_label FROM crawl_run WHERE id = $1', [crawlRunId])).rows[0];
     if (!run?.account_id) return; // P0-style runs without an account have no per-account health
     const accountId = run.account_id;
 
-    const sources = (
-      await db.query<{ source_id: string }>(
-        `SELECT source_id FROM account_source WHERE account_id = $1 AND active
-         UNION SELECT DISTINCT source_id FROM crawl_job WHERE crawl_run_id = $2`,
-        [accountId, crawlRunId],
-      )
-    ).rows.map((r) => r.source_id);
+    // Only sources this run had work for (run or skipped): a run with nothing for a source (an
+    // under-notice re-check before Phase 4) must not replace that source's real health with "Idle".
+    const sources = (await db.query<{ source_id: string }>('SELECT DISTINCT source_id FROM crawl_job WHERE crawl_run_id = $1', [crawlRunId])).rows.map(
+      (r) => r.source_id,
+    );
 
     for (const sourceId of sources) {
       const jobs = (
