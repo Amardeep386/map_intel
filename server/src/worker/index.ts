@@ -3,13 +3,15 @@
 import { Worker } from 'bullmq';
 import { closeBrowser } from '../collector/browser.js';
 import { collectListing } from '../collector/collect.js';
+import { recordRunProgress } from '../collector/runs.js';
 import { closeDb, withSystem } from '../lib/db.js';
 import { COLLECT_QUEUE, redisConnection, type CollectJob } from '../lib/queue.js';
 
 const worker = new Worker<CollectJob>(
   COLLECT_QUEUE,
   async (job) => {
-    const outcome = await collectListing(job.data.listingId, job.data.crawlRunId);
+    const outcome = await collectListing(job.data.listingId, { crawlRunId: job.data.crawlRunId });
+    await withSystem((db) => recordRunProgress(db, job.data.crawlRunId, outcome.status));
     console.log(
       `[collect] ${outcome.productCode ?? '?'} ${outcome.source} -> ${outcome.status}` +
         (outcome.price !== null ? ` $${outcome.price}` : '') +
