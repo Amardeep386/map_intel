@@ -3,9 +3,9 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2b Collectors **in progress** (paused 27 Sep 2026: code complete, exit test not run yet). P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
-- **Last updated:** 27 Sep 2026 (Claude Code: Phase 2b)
-- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + the P2b egress-probe commit (`9fe9c83`, pushed so the Render API could run it). **Phase 2b is on branch `phase-2b-collectors`, pushed to origin, not merged.**
+- **Phase:** P2b Collectors **in progress** (paused 27 Sep 2026: code complete, exit test not run yet; the code is on `main` since 28 Sep). Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Last updated:** 28 Sep 2026 (Claude Code: demo catalogue, brand logos)
+- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
@@ -14,7 +14,8 @@
   1. **Ohio egress probe (free).** Run the PowerShell snippet in the 27 Sep log below ("How to run the Ohio probe"). It writes `server/reports/egress-render-ohio.json`; then ask Claude Code to read it and record the India vs Ohio table here.
   2. **Choose how the collector runs from the US:** GitHub Actions (free, test only; Claude Code adds a workflow and you add repo secrets) **or** a Render Starter background worker (billed by running time, about $0.25/day; suspend after testing). Render settings are in the 27 Sep log. You were leaning to the free option.
   3. When the first US run has finished: `cd server && npm run exit:p2b -- --check --scheduled` (or `--fire` first, then `--check --wait`). Tick P2b only if it passes; sources still blocked must show as failures in Data Health.
-  4. Merge `phase-2b-collectors` into `main` after the exit test and your browser check of Data Health.
+  4. Browser check of Data Health on the live site (P2b is already on `main`; tick P2b only after step 3 passes).
+  5. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
 
 ## Decisions so far
 | # | Decision | Date | Where decided |
@@ -115,6 +116,12 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 28 Sep 2026 — Brand logos (Claude Code)
+- **Files:** you added `docs/Apple Logo.png` and `docs/Samsung Logo.png`; the portal uses cropped copies `src/assets/apple.png` and `src/assets/samsung.png` (Samsung's grey card made transparent). `src/assets/lg.png` cropped the same way (it had wide white margins).
+- **`ClientLogo` (`src/App.jsx`):** shows Apple and Samsung; the LG `scale(2.3)` workaround is removed; the logo tile is always white, in dark mode too (Apple's mark is black and vanished on the dark card).
+- **Checked** in the browser (sample-data mode): client picker, sidebar switcher and page header, light and dark. Commits `511c0aa`, `2cfc942`, pushed to `main`.
+- Philips and Kawasaki logos (`src/assets`, `public`) are no longer used by any client; left in place.
+
 ### 28 Sep 2026 — Demo catalogue for the three sandboxes (Claude Code)
 - **Branch** `demo-catalogue` (from `phase-2b-collectors`), **merged into `main` and pushed on 28 Sep at your request (`bd96457`)**, so `main` and the live site now include the Phase 2b code too (P2b exit test still not run; Render free plan still has no worker, so nothing collects on its own). Source file: `docs/MAP_Intel_Demo_Catalogue_LG_Apple_Samsung.xlsx`, turned into `server/seeds/demo-catalogue.json` (products = columns A–J of the three "Product Summary" sheets; merchants = the three "Sources" sheets).
 - **Migration 024** (applied to Neon): `product.model_family`, `configuration`, `colour`, `internal_id`; `account_source.profile` (the brand's merchant-list entry: channel type, seller model, authorisation, priority, check frequency, collection method, notes, categories).
