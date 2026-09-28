@@ -9,6 +9,8 @@ import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from "recharts";
 import lgLogo from "./assets/lg.png";
+import appleLogo from "./assets/apple.png";
+import samsungLogo from "./assets/samsung.png";
 import philipsLogo from "./assets/philips.png";
 import kawasakiLogo from "./assets/kawasaki.png";
 import { api } from "./api/client.js";
@@ -68,12 +70,15 @@ function ClientLogo({ name, className }) {
   let src = null;
   const lowerName = name.toLowerCase();
   if (lowerName === "lg") src = lgLogo;
+  else if (lowerName === "apple") src = appleLogo;
+  else if (lowerName === "samsung") src = samsungLogo;
   else if (lowerName === "philips") src = philipsLogo;
   else if (lowerName === "kawasaki") src = kawasakiLogo;
 
   if (src && !error) {
     return (
-      <div className={`flex items-center justify-center overflow-hidden bg-brand-white ${className || "w-5 h-5 rounded-sm"}`}>
+      // Always a white tile, in dark mode too: brand marks are made for white (Apple's is black).
+      <div className={`flex items-center justify-center overflow-hidden bg-white ${className || "w-5 h-5 rounded-sm"}`}>
         <img 
           src={src} 
           alt={name} 
