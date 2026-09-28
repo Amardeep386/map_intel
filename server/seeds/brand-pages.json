@@ -1,0 +1,21 @@
+{
+  "_note": "Brand / browse pages per pilot account and source, used as url terms in the 'Brand pages' group. Search is disallowed by robots.txt on Walmart, eBay, Target and Home Depot, so these pages are how those sources discover listings. Found in the retailers' sitemaps and checked against robots.txt on 27 Sep 2026. Apple is not sold at Home Depot.",
+  "lg": {
+    "walmart_us": ["https://www.walmart.com/browse/electronics/3944?facet=brand%3ALG"],
+    "target_us": ["https://www.target.com/b/lg-electronics/-/N-4y41g"],
+    "homedepot_us": ["https://www.homedepot.com/b/Appliances/LG/N-5yc1vZbv1wZ8qk"],
+    "ebay_us": ["https://www.ebay.com/b/LG-TVs/11071/bn_711365", "https://www.ebay.com/b/LG-Laptops-Netbooks/175672/bn_2780175"]
+  },
+  "apple": {
+    "walmart_us": ["https://www.walmart.com/browse/electronics/3944?facet=brand%3AApple"],
+    "target_us": ["https://www.target.com/b/apple/-/N-5y3ej"],
+    "homedepot_us": [],
+    "ebay_us": ["https://www.ebay.com/b/Apple-Cell-Phones-Smartphones/9355/bn_319682", "https://www.ebay.com/b/Apple-PC-Laptops-Netbooks/177/bn_7114675266"]
+  },
+  "samsung": {
+    "walmart_us": ["https://www.walmart.com/brand/samsung/10030086", "https://www.walmart.com/browse/electronics/3944?facet=brand%3ASamsung"],
+    "target_us": ["https://www.target.com/b/samsung/-/N-5y4wr"],
+    "homedepot_us": ["https://www.homedepot.com/b/Appliances/Samsung/N-5yc1vZbv1wZa0f"],
+    "ebay_us": ["https://www.ebay.com/b/Samsung-TVs/11071/bn_734995", "https://www.ebay.com/b/Samsung-Smart-Watches/178893/bn_158104"]
+  }
+}

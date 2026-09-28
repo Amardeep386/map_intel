@@ -35,9 +35,24 @@ const sourcePatch = z
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'nothing to change');
 
+const profileText = (max: number) => z.string().trim().max(max).optional();
 const subscriptionBody = z.object({
   active: z.boolean(),
   options: z.record(z.unknown()).optional(),
+  // The brand's merchant-list entry for this source; missing = keep, {} = clear.
+  profile: z
+    .object({
+      channelType: profileText(120),
+      sellerModel: profileText(120),
+      authorisation: profileText(200),
+      priority: profileText(20),
+      checkFrequency: profileText(60),
+      collectionMethod: profileText(200),
+      notes: profileText(500),
+      categories: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
+    })
+    .strict()
+    .optional(),
 });
 
 export async function sourceRoutes(app: FastifyInstance): Promise<void> {
@@ -131,12 +146,14 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
         const overrides = b.options ?? source.subscription?.options ?? {};
         const { errors } = resolveOptions(source.schema, overrides);
         if (errors.length) throw new HttpError(400, errors.join('; '));
+        const profile = b.profile ?? source.subscription?.profile ?? {};
         await db.query(
-          `INSERT INTO account_source (account_id, source_id, active, options, created_by) VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (account_id, source_id) DO UPDATE SET active = EXCLUDED.active, options = EXCLUDED.options`,
-          [accountId, source.id, b.active, JSON.stringify(overrides), req.user!.sub],
+          `INSERT INTO account_source (account_id, source_id, active, options, profile, created_by) VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (account_id, source_id) DO UPDATE SET active = EXCLUDED.active, options = EXCLUDED.options, profile = EXCLUDED.profile`,
+          [accountId, source.id, b.active, JSON.stringify(overrides), JSON.stringify(profile), req.user!.sub],
         );
         const before = source.subscription;
+        const profileChanged = JSON.stringify(profile) !== JSON.stringify(before?.profile ?? {});
         await recordAudit(db, {
           accountId,
           actor: actorFrom(req),
@@ -147,9 +164,11 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
             ? `Subscribed to ${source.name}`
             : before.active !== b.active
               ? `${b.active ? 'Resumed' : 'Paused'} ${source.name}`
-              : `Changed ${source.name} options`,
+              : profileChanged && JSON.stringify(overrides) === JSON.stringify(before.options)
+                ? `Changed ${source.name} merchant details`
+                : `Changed ${source.name} options`,
           before: before ?? undefined,
-          after: { active: b.active, options: overrides },
+          after: { active: b.active, options: overrides, profile },
           requestId: req.id,
         });
         const { estimate, sources } = await accountEstimate(db, accountId);

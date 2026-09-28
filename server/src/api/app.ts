@@ -17,6 +17,7 @@ import { sellerRoutes } from './routes/sellers.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
 import { credentialRoutes } from './routes/credentials.js';
+import { dataHealthRoutes } from './routes/dataHealth.js';
 import { healthRoutes } from './routes/health.js';
 import { matrixRoutes } from './routes/matrix.js';
 import { scheduleRoutes } from './routes/schedules.js';
@@ -150,6 +151,7 @@ export async function buildApp() {
   await app.register(sellerRoutes);
   await app.register(mappingRoutes);
   await app.register(collectionRoutes);
+  await app.register(dataHealthRoutes);
   await app.register(credentialRoutes);
   await app.register(sourceRoutes);
   await app.register(termRoutes);

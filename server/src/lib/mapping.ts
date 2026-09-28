@@ -417,7 +417,7 @@ export async function retireListings(db: Db, accountId: string, listingIds: stri
 /** Create (or find) a listing and its seller for a candidate found outside a crawl (import, synthetic data). */
 export async function upsertListing(
   db: Db,
-  l: { sourceId: string; url: string; channelSku?: string | null; title?: string | null; sellerName?: string | null; imageUrl?: string | null; origin: 'import' | 'synthetic' },
+  l: { sourceId: string; url: string; channelSku?: string | null; title?: string | null; sellerName?: string | null; imageUrl?: string | null; origin: 'import' | 'synthetic' | 'collector' },
   ctx?: MatchContext,
 ): Promise<{ listingId: string; sellerId: string | null; created: boolean }> {
   let sellerId: string | null = null;

@@ -1,7 +1,8 @@
 import * as cheerio from 'cheerio';
-import type { BlockReason, Extracted } from '../types.js';
+import type { BlockReason, Extracted, ResultsPage } from '../types.js';
 import { emptyExtracted } from '../types.js';
 import { applyJsonLd, cleanText, genericBlock, normalizeAvailability, parsePrice } from './common.js';
+import { harvestResults, withPage } from './results.js';
 
 // Best Buy's product pages carry a schema.org Product in JSON-LD. The DOM selectors below are
 // the fallback for when the JSON-LD is missing or has no offer (and cover the marketplace
@@ -78,4 +79,25 @@ export function detectBestBuyBlock(html: string, status: number): BlockReason {
   if (/Choose a country|international\.bestbuy|intl-splash/i.test(html.slice(0, 30_000)) && !/"@type"\s*:\s*"Product"/.test(html))
     return 'geo_interstitial';
   return genericBlock(html, status);
+}
+
+export const bestBuyProductUrl = (sku: string) => `https://www.bestbuy.com/site/${sku}.p?skuId=${sku}`;
+
+export function bestBuySearchUrl(query: string, page: number): string {
+  const u = new URL('https://www.bestbuy.com/site/searchpage.jsp');
+  u.searchParams.set('st', query);
+  u.searchParams.set('intl', 'nosplash');
+  if (page > 1) u.searchParams.set('cp', String(page));
+  return u.href;
+}
+
+/** Search results: old (/site/...<sku>.p) and new (/product/.../sku/<sku>) product links. */
+export function extractBestBuyResults(html: string, url: string): ResultsPage {
+  const page = harvestResults(html, url, {
+    pattern: /bestbuy\.com\/(?:site\/[^?#]*?\/(\d{7})\.p|product\/[^?#]*?\/sku\/(\d{7}))/,
+    canonical: (sku) => bestBuyProductUrl(sku),
+    card: 'li',
+  });
+  const n = Number(new URL(url).searchParams.get('cp') ?? '1') || 1;
+  return { ...page, nextUrl: page.items.length >= 18 ? withPage(url, n + 1, 'cp') : null };
 }

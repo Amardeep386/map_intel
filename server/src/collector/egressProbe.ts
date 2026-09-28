@@ -3,7 +3,8 @@
 // Used by `npm run egress:probe` (local) and POST /admin/egress-probe (on the Render API in Ohio).
 import { config } from '../lib/config.js';
 import type { Db } from '../lib/db.js';
-import { browserLikeHeaders, politeWait } from './http.js';
+import { genericBlock } from './extract/common.js';
+import { browserLikeHeaders, politeWait, proxyDispatcher } from './http.js';
 import { robotsCheck } from './robots.js';
 import { adapters } from './sources.js';
 import type { SourceAdapter } from './types.js';
@@ -43,14 +44,6 @@ export interface ProbeReport {
   results: ProbeResult[];
 }
 
-// Generic bot-wall markers for sources whose adapter is not built yet.
-export function genericBlock(html: string, status: number): string | null {
-  if (status === 429) return 'rate_limited';
-  if (/px-captcha|perimeterx|captcha-delivery|g-recaptcha|hcaptcha|robot or human|are you a robot|verify you are a human/i.test(html)) return 'captcha';
-  if (status === 403 || /access denied|request unsuccessful|errors\.edgesuite\.net|pardon our interruption/i.test(html)) return 'access_denied';
-  return null;
-}
-
 async function egressIp(): Promise<string | null> {
   try {
     const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(10_000) });
@@ -72,7 +65,7 @@ async function probeOne(source: string, url: string): Promise<ProbeResult> {
   await politeWait(adapter.host);
   const started = Date.now();
   try {
-    const res = await fetch(url, { headers: browserLikeHeaders(adapter), redirect: 'follow', signal: AbortSignal.timeout(30_000) });
+    const res = await fetch(url, { headers: browserLikeHeaders(adapter), redirect: 'follow', signal: AbortSignal.timeout(30_000), ...({ dispatcher: proxyDispatcher() } as object) });
     const html = await res.text();
     const known = adapters[source];
     // A known adapter decides alone: Walmart, for one, loads its bot-check script on every normal page.

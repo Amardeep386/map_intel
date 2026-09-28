@@ -9,9 +9,11 @@ import {
 } from "../ui.jsx";
 import { TONE, formatDay } from "../format.js";
 import { attempt, useWorkspace } from "../workspace.js";
+import { DEMO_MERCHANTS } from "../api/mock/demo.js";
 
 const CLASSES = ["MAP Authorised", "Unauthorised", "Brand Direct", "Unknown"];
-const SOURCES = [["amazon_us", "Amazon"], ["walmart_us", "Walmart"], ["bestbuy_us", "Best Buy"], ["ebay_us", "eBay"], ["target_us", "Target"], ["homedepot_us", "Home Depot"], ["google_shopping_us", "Google Shopping"]];
+// Every merchant on the brands' lists is a catalogue source (server/src/collector/catalogue.ts).
+const SOURCES = DEMO_MERCHANTS.map((m) => [m.source, m.name]).sort((x, y) => x[1].localeCompare(y[1]));
 
 export function SellersView() {
   const { client, can, showToast } = useWorkspace();

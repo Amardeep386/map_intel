@@ -127,8 +127,15 @@ export function applyJsonLd(html: string, into: Extracted): Extracted {
 /** Generic bot-wall detection shared by all retailers. */
 export function genericBlock(html: string, status: number): BlockReason {
   if (status === 429) return 'rate_limited';
-  const head = html.slice(0, 20_000).toLowerCase();
+  // Pages list captcha providers' domains in their Content-Security-Policy (Walmart: captcha.net);
+  // a domain name is not a challenge, so drop them before looking for the words.
+  const head = html
+    .slice(0, 20_000)
+    .toLowerCase()
+    .replace(/[\w.-]*captcha[\w-]*\.(?:net|com|io)\b/g, '');
   if (/captcha|robot check|are you a robot|robot or human|px-captcha|verify you are human/.test(head)) return 'captcha';
+  // HUMAN (PerimeterX) "Press & hold" overlay on a rendered page (Target): an iframe shown late in the DOM.
+  if (/<iframe[^>]+id="px-captcha-modal"[^>]*display:\s*block/i.test(html)) return 'captcha';
   if (status === 403 || /access denied|pardon our interruption|request blocked/.test(head)) return 'access_denied';
   return null;
 }

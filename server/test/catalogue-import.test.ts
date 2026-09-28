@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import ExcelJS from 'exceljs';
 import {
-  extractRows, guessMapping, parseDate, parseMoney, planMap, planProducts, readTable, validGtin,
+  extractRows, guessMapping, IMPORT_FIELDS, parseDate, parseMoney, planMap, planProducts, readTable, validGtin,
   type ExistingProduct, type MapVersion,
 } from '../src/lib/catalogueImport.js';
 
@@ -58,7 +58,10 @@ test('rows missing a required field are problems, and an unmapped required field
 });
 
 const existing: ExistingProduct[] = [
-  { id: 'p1', code: 'LG-P01', name: 'LG 65 C6', model: 'OLED65C6PUA', category: 'TV', group: null, msrp: 2999, status: 'Active', identifiers: { asin: ['B0GRK5D3RW'] } },
+  {
+    id: 'p1', code: 'LG-P01', name: 'LG 65 C6', model: 'OLED65C6PUA', category: 'TV', group: null, modelFamily: null, configuration: null,
+    colour: null, internalId: null, msrp: 2999, status: 'Active', identifiers: { asin: ['B0GRK5D3RW'] },
+  },
 ];
 
 test('product diff: new, changed fields only, unchanged, and blanks never clear', () => {
@@ -119,4 +122,27 @@ test('MAP plan: a later version closes the one in force; earlier or overlapping 
   assert.equal(same.unchanged, 1);
   const early = planMap([row(2, 'LG-P01', '1400', '2026-01-01')], products, versions);
   assert.match(early.problems[0].reason, /must start after/);
+});
+
+test('the demo sheet (columns A–J) maps without choosing columns, and its details are compared like other fields', () => {
+  const header = ['Product Name', 'SKU', 'MAP Price (USD)', 'Brand', 'Category', 'Model Family', 'Configuration', 'Colour', 'Internal ID', 'Status'];
+  const mapping = guessMapping('products', header);
+  assert.deepEqual(
+    [mapping.name, mapping.code, mapping.category, mapping.modelFamily, mapping.configuration, mapping.colour, mapping.internalId, mapping.status],
+    [0, 1, 4, 5, 6, 7, 8, 9],
+  );
+  assert.equal(guessMapping('map', ['SKU', 'MAP Price (USD)']).amount, 1);
+
+  const blank = Object.fromEntries(IMPORT_FIELDS.products.map((f) => [f.key, '']));
+  const rows = [
+    { line: 2, values: { ...blank, code: 'MJW44LL/A', name: 'iPhone 18 Pro Max 256GB Black', model: 'MJW44LL/A', modelFamily: 'iPhone 18 Pro Max', configuration: '256GB', colour: 'Black', internalId: 'APL-001' } },
+    { line: 3, values: { ...blank, code: 'LG-P01', colour: 'Black' } },
+  ];
+  const plan = planProducts(rows, existing, new Map());
+  assert.equal(plan.problems.length, 0);
+  const added = plan.changes.find((c) => c.kind === 'new')!;
+  assert.deepEqual(added.fields.internalId, [null, 'APL-001']);
+  assert.deepEqual(added.fields.configuration, [null, '256GB']);
+  const changed = plan.changes.find((c) => c.kind === 'changed')!;
+  assert.deepEqual(changed.fields, { colour: [null, 'Black'] });
 });

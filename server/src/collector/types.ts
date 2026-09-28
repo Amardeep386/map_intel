@@ -1,3 +1,9 @@
+export type Condition = 'new' | 'used' | 'refurbished' | 'open_box';
+
+/** Why a fetch or extraction did not produce a price (source health, retries). */
+export const FAILURE_CLASSES = ['blocked', 'layout_changed', 'timeout', 'empty', 'auth', 'robots', 'network', 'not_found'] as const;
+export type FailureClass = (typeof FAILURE_CLASSES)[number];
+
 export type Availability = 'in_stock' | 'limited' | 'out_of_stock' | 'preorder' | 'unknown';
 
 /** What an extractor read from one product page. Anything it could not read is null. */
@@ -13,6 +19,8 @@ export interface Extracted {
   fulfilledBy: string | null;
   promoText: string | null;
   couponText: string | null;
+  condition: Condition | null;
+  imageUrl: string | null;
   /** Which rules produced the values, for debugging extractor drift. */
   hits: Record<string, string>;
 }
@@ -30,6 +38,8 @@ export function emptyExtracted(): Extracted {
     fulfilledBy: null,
     promoText: null,
     couponText: null,
+    condition: null,
+    imageUrl: null,
     hits: {},
   };
 }
@@ -46,9 +56,55 @@ export interface FetchResult {
   fetchedAt: Date;
 }
 
+/** One listing seen on a search or browse results page (discovery). */
+export interface DiscoveredItem {
+  url: string; // canonical product (or offer) URL
+  channelSku: string | null;
+  title: string | null;
+  price: number | null;
+  sellerName: string | null;
+  imageUrl: string | null;
+  condition: Condition | null;
+  format: string | null; // e.g. auction, buy_it_now, sponsored
+}
+
+export interface ResultsPage {
+  items: DiscoveredItem[];
+  /** Next results page, when the page links one (already absolute). */
+  nextUrl: string | null;
+  /** False when the page did not have the results structure at all (layout changed, not "no results"). */
+  recognized: boolean;
+}
+
+/** One seller's offer on a product page (all-sellers capture). Rank 1 is the buy box / main offer. */
+export interface Offer {
+  url: string; // canonical offer URL: its own listing
+  sellerName: string | null;
+  sellerId: string | null;
+  price: number | null;
+  listPrice: number | null;
+  currency: string | null;
+  condition: Condition | null;
+  availability: Availability;
+  fulfilledBy: string | null;
+  rank: number;
+}
+
 export interface SourceAdapter {
   code: string;
   host: string;
+  /** Search results URL for a query, when the source has search and robots.txt allows it. */
+  searchUrl?(query: string, page: number): string;
+  /** A product page URL from the source's own id (ASIN, item id, SKU). */
+  productUrl?(channelSku: string): string;
+  /** True for product pages; false for search / browse pages on the same host. */
+  isProductUrl?(url: string): boolean;
+  /** Read a search or browse results page. Must never throw. */
+  extractResults?(html: string, url: string): ResultsPage;
+  /** Every seller's offer on a product page (beyond the main one). Must never throw. */
+  extractOffers?(html: string, url: string): Offer[];
+  /** The page never shows a price without JavaScript: go straight to the browser. */
+  browserFirst?: boolean;
   /** Parse the product page. Must never throw on unexpected HTML; return nulls instead. */
   extract(html: string, url: string): Extracted;
   /** Detect bot walls / interstitials so we do not record them as prices. */

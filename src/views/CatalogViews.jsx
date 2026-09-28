@@ -26,7 +26,8 @@ export function ProductSummaryView() {
   useEffect(() => { attempt(showToast, load); }, [load, showToast]);
 
   const needle = q.toLowerCase();
-  const filtered = (rows ?? []).filter((s) => [s.code, s.name, s.model, s.upc, s.ean, s.asin, ...(s.alts ?? [])].some((x) => (x ?? "").toLowerCase().includes(needle)));
+  const filtered = (rows ?? []).filter((s) =>
+    [s.code, s.name, s.model, s.upc, s.ean, s.asin, s.internalId, s.modelFamily, s.configuration, s.colour, s.category, ...(s.alts ?? [])].some((x) => (x ?? "").toLowerCase().includes(needle)));
   const writable = can("catalogue.write");
   return (
     <div>
@@ -36,24 +37,27 @@ export function ProductSummaryView() {
       />
       <Card>
         <div className="flex justify-between mb-4 gap-3 flex-wrap items-center">
-          <SearchBox value={q} onChange={setQ} placeholder="Search SKU, MPN, UPC, ASIN, alt SKU, product name..." />
+          <SearchBox value={q} onChange={setQ} placeholder="Search SKU, internal ID, product name, family, colour, UPC, ASIN..." />
           <label className="text-xs text-brand-taupe flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={showRetired} onChange={(e) => setShowRetired(e.target.checked)} /> Show retired SKUs
           </label>
         </div>
-        <Table columns={["SKU", "Product name", "Model / MPN", "UPC", "Category", "MAP in force", "Lowest seen", "Listings", "Violations", "Status"]}>
+        <Table columns={["Product name", "SKU", "MAP in force", "Brand", "Category", "Model family", "Configuration", "Colour", "Internal ID", "Status", "Lowest seen", "Listings", "Violations"]}>
           {filtered.map((s) => (
             <tr key={s.id} onClick={() => setSel(s)} className="hover:bg-brand-beige/20 cursor-pointer">
-              <Td className="font-semibold">{s.code}</Td>
-              <Td className="font-medium">{s.name}</Td>
-              <Td className="text-brand-taupe">{s.model || "—"}</Td>
-              <Td className="text-brand-taupe font-mono text-xs">{s.upc || "—"}</Td>
-              <Td className="text-brand-taupe">{s.category || "—"}</Td>
+              <Td className="font-medium min-w-[16rem]">{s.name}</Td>
+              <Td className="font-semibold whitespace-nowrap">{s.code}</Td>
               <Td>{money(s.map)}</Td>
+              <Td className="text-brand-taupe">{s.brand || client.name}</Td>
+              <Td className="text-brand-taupe whitespace-nowrap">{s.category || "—"}</Td>
+              <Td className="text-brand-taupe whitespace-nowrap">{s.modelFamily || "—"}</Td>
+              <Td className="text-brand-taupe text-xs min-w-[14rem]">{s.configuration || "—"}</Td>
+              <Td className="text-brand-taupe">{s.colour || "—"}</Td>
+              <Td className="text-brand-taupe whitespace-nowrap">{s.internalId || "—"}</Td>
+              <Td><Pill text={s.status} tone={TONE[s.status]} /></Td>
               <Td className={`font-semibold ${s.current != null && s.map != null && s.current < s.map ? "text-red-600" : "text-brand-charcoal"}`}>{money(s.current)}</Td>
               <Td>{s.listings ?? "—"}</Td>
               <Td>{s.violations > 0 ? <Pill text={s.violations} tone={TONE.Unauthorised} /> : <span className="text-brand-taupe">0</span>}</Td>
-              <Td><Pill text={s.status} tone={TONE[s.status]} /></Td>
             </tr>
           ))}
         </Table>
@@ -80,7 +84,9 @@ function ProductDrawer({ productId, onClose, onEdit }) {
           <div className="space-y-2.5 text-xs">
             <KV k="Model / MPN" v={p.model || "—"} /><KV k="UPC" v={p.upc || "—"} /><KV k="EAN" v={p.ean || "—"} /><KV k="ASIN" v={p.asin || "—"} />
             <KV k="Alt SKUs (1–6)" v={alts.length ? alts.join(" · ") : "—"} /><KV k="MSRP (reference)" v={money(p.msrp)} />
-            <KV k="Product group" v={[p.category, p.group].filter(Boolean).join(" / ") || "—"} /><KV k="Status" v={p.status} />
+            <KV k="Product group" v={[p.category, p.group].filter(Boolean).join(" / ") || "—"} /><KV k="Model family" v={p.modelFamily || "—"} />
+            <KV k="Configuration" v={p.configuration || "—"} /><KV k="Colour" v={p.colour || "—"} /><KV k="Internal ID" v={p.internalId || "—"} />
+            <KV k="Status" v={p.status} />
           </div>
         </Card>
         <Card title="MAP history" className="md:col-span-2">
@@ -127,6 +133,7 @@ function SkuModal({ product, onClose, onSaved }) {
     const alts = [1, 2, 3, 4, 5, 6].map((i) => text(`alt${i}`) || null);
     const body = {
       name: text("name"), model: text("model"), category: text("category"), group: text("group"), msrp: num("msrp"),
+      modelFamily: text("modelFamily"), configuration: text("configuration"), colour: text("colour"), internalId: text("internalId"),
       upc: text("upc") || undefined, ean: text("ean") || undefined, asin: text("asin") || undefined, alts,
     };
     setBusy(true);
@@ -149,6 +156,10 @@ function SkuModal({ product, onClose, onSaved }) {
           <Field label="Model / MPN *"><input name="model" required defaultValue={v("model")} className={inputCls} /></Field>
           <Field label="Category"><input name="category" defaultValue={v("category")} className={inputCls} /></Field>
           <Field label="Product group"><input name="group" defaultValue={v("group")} className={inputCls} /></Field>
+          <Field label="Model family"><input name="modelFamily" defaultValue={v("modelFamily")} className={inputCls} /></Field>
+          <Field label="Internal ID"><input name="internalId" defaultValue={v("internalId")} className={inputCls} /></Field>
+          <Field label="Configuration"><input name="configuration" defaultValue={v("configuration")} className={inputCls} /></Field>
+          <Field label="Colour"><input name="colour" defaultValue={v("colour")} className={inputCls} /></Field>
           <Field label="MSRP"><input name="msrp" type="number" step="0.01" min="0" defaultValue={v("msrp")} className={inputCls} /></Field>
           {!product && <Field label="MAP (optional, in force from today)"><input name="map" type="number" step="0.01" min="0" className={inputCls} /></Field>}
           {product && (

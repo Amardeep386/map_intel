@@ -1,70 +1,37 @@
 // Mock data for screens whose backend arrives in a later phase.
-// Moved out of App.jsx unchanged in Phase 0; the API client (../client.js) serves it.
+// Moved out of App.jsx in Phase 0; the API client (../client.js) serves it.
+import { DEMO_CLIENTS, demoFor } from "./demo.js";
 
-export const CLIENTS = [
-  { name: "LG", status: "Sandbox", skus: 10, merchants: 3, live: true },
-  { name: "Philips", status: "Active", skus: 24, merchants: 7, live: false },
-  { name: "Kawasaki", status: "Active", skus: 18, merchants: 5, live: false },
-  { name: "Citizen", status: "Active", skus: 12, merchants: 4, live: false },
-];
+// The three sandboxes and their catalogue come from the demo catalogue (./demo.js). Violations are
+// sample data (Phase 3), generated from the brand's own SKUs and tracked merchants.
+export const CLIENTS = DEMO_CLIENTS;
 
-export const SKUS = [
-  { id: "LG-001", name: 'LG 55" OLED C4', model: "OLED55C4PUA", category: "TV", map: 1499, current: 1395, violations: 3, status: "Active" },
-  { id: "LG-002", name: 'LG 65" OLED C4', model: "OLED65C4PUA", category: "TV", map: 1799, current: 1799, violations: 0, status: "Active" },
-  { id: "LG-003", name: 'LG 27" UltraGear Monitor', model: "27GP850-B", category: "Monitor", map: 349, current: 299, violations: 4, status: "Active" },
-  { id: "LG-004", name: 'LG 75" QNED85', model: "75QNED85UQA", category: "TV", map: 1699, current: 1549, violations: 2, status: "Active" },
-  { id: "LG-005", name: "LG WM3600HWA Washer", model: "WM3600HWA", category: "Appliance", map: 1149, current: 1095, violations: 1, status: "Active" },
-  { id: "LG-006", name: 'LG 34" UltraWide Monitor', model: "34WP65C-B", category: "Monitor", map: 449, current: 449, violations: 0, status: "Active" },
-  { id: "LG-007", name: "LG French Door Refrigerator", model: "LRFVS3006S", category: "Appliance", map: 2199, current: 1999, violations: 2, status: "Active" },
-  { id: "LG-008", name: "LG Soundbar SN7Y", model: "SN7Y", category: "Audio", map: 349, current: 299, violations: 1, status: "Active" },
-  { id: "LG-009", name: 'LG 43" QNED80', model: "43QNED80URA", category: "TV", map: 549, current: 549, violations: 0, status: "Paused" },
-  { id: "LG-010", name: "LG UltraGear 34GP63A", model: "34GP63A-B", category: "Monitor", map: 379, current: 329, violations: 1, status: "Active" },
-];
+const GAPS = [-6.9, -14.3, -4.7, -8.8, -3.3, -9.1, -13.2, -2.4, -11.6, -5.5];
+const DURATIONS = ["6h", "2d", "1d", "3d", "4h", "5d", "12h"];
+const STATUSES = ["Open", "Notified", "Open", "Resolved"];
+const severity = (gap) => (gap <= -10 ? "Critical" : gap <= -7 ? "High" : gap <= -4 ? "Medium" : "Low");
 
-export const MERCHANTS = [
-  { name: "XYZ Electronics", type: "Marketplace (Amazon)", tracked: 10, violations: 8, compliance: 74 },
-  { name: "Best Buy", type: "Retailer", tracked: 8, violations: 4, compliance: 96 },
-  { name: "TechMart", type: "Marketplace (Walmart)", tracked: 5, violations: 3, compliance: 88 },
-];
-
-export const VIOLATIONS = [
-  { id: "VIO-0123", sku: "LG-001", product: 'LG 55" OLED C4', merchant: "XYZ Electronics (Amazon)", map: 1499, advertised: 1395, gap: -6.9, duration: "6h", severity: "Critical", status: "Open" },
-  { id: "VIO-0124", sku: "LG-003", product: 'LG 27" UltraGear Monitor', merchant: "XYZ Electronics (Amazon)", map: 349, advertised: 299, gap: -14.3, duration: "2d", severity: "Critical", status: "Open" },
-  { id: "VIO-0125", sku: "LG-005", product: "LG WM3600HWA Washer", merchant: "Best Buy", map: 1149, advertised: 1095, gap: -4.7, duration: "1d", severity: "Medium", status: "Notified" },
-  { id: "VIO-0126", sku: "LG-004", product: 'LG 75" QNED85', merchant: "TechMart (Walmart)", map: 1699, advertised: 1549, gap: -8.8, duration: "3d", severity: "High", status: "Open" },
-  { id: "VIO-0127", sku: "LG-008", product: "LG Soundbar SN7Y", merchant: "XYZ Electronics (Amazon)", map: 349, advertised: 299, gap: -14.3, duration: "12h", severity: "High", status: "Resolved" },
-  { id: "VIO-0128", sku: "LG-007", product: "LG French Door Refrigerator", merchant: "Best Buy", map: 2199, advertised: 1999, gap: -9.1, duration: "5d", severity: "Critical", status: "Open" },
-  { id: "VIO-0129", sku: "LG-010", product: "LG UltraGear 34GP63A", merchant: "TechMart (Walmart)", map: 379, advertised: 329, gap: -13.2, duration: "2d", severity: "Medium", status: "Notified" },
-  { id: "VIO-0130", sku: "LG-001", product: 'LG 55" OLED C4', merchant: "Best Buy", map: 1499, advertised: 1450, gap: -3.3, duration: "4h", severity: "Low", status: "Open" },
-];
-
-export const MAPPING_STAGE = [
-  { product: "LG 55 OLED C4 Series", merchant: "XYZ Electronics (Amazon)", price: 1395, match: "LG-001", confidence: 98 },
-  { product: "LG OLED C4 55 inch TV", merchant: "Best Buy", price: 1450, match: "LG-001", confidence: 95 },
-  { product: 'LG 27" UltraGear Monitor', merchant: "TechMart (Walmart)", price: 299, match: "LG-003", confidence: 99 },
-  { product: "LG Soundbar SN7Y", merchant: "XYZ Electronics (Amazon)", price: 299, match: null, confidence: 61 },
-];
-
-export const MAPPING_INCLUDE = [
-  { product: 'LG 55" OLED C4', merchant: "XYZ Electronics (Amazon)", url: "amazon.com/8OCIH3F3Q8", mappedOn: "Aug 23, 2026", by: "Auto Rule" },
-  { product: 'LG 27" UltraGear Monitor', merchant: "Best Buy", url: "bestbuy.com/site/6577865", mappedOn: "Aug 22, 2026", by: "Auto Rule" },
-  { product: "LG WM3600HWA Washer", merchant: "TechMart (Walmart)", url: "walmart.com/ip/7a9f10e3", mappedOn: "Aug 21, 2026", by: "Analyst" },
-];
-
-export const MAPPING_EXCLUDE = [
-  { product: "LG Soundbar SN7Y", merchant: "XYZ Electronics (Amazon)", reason: "Accessory", excludedOn: "Aug 21, 2026" },
-  { product: "LG Remote Control", merchant: "Best Buy", reason: "Accessory", excludedOn: "Aug 22, 2026" },
-  { product: 'LG 55" OLED C3 (Old Model)', merchant: "TechMart (Walmart)", reason: "Out of scope", excludedOn: "Aug 21, 2026" },
-];
-
-export const PROMOTIONS = [
-  { sku: 'LG 55" OLED C4', standard: 1499, promo: 1399, from: "Aug 17, 2026", until: "Aug 23, 2026", status: "Active" },
-  { sku: 'LG 27" UltraGear Monitor', standard: 349, promo: 299, from: "Sep 01, 2026", until: "Sep 07, 2026", status: "Scheduled" },
-];
+/** Sample violations: every fourth SKU, at one of the brand's tracked merchants that sells its category. */
+function sampleViolations(products, merchants) {
+  const sellers = merchants.filter((m) => m.track && m.channelType !== "Price comparison");
+  const out = [];
+  products.filter((p) => p.status === "Active").forEach((p, i) => {
+    if (i % 4 !== 0 || !sellers.length) return;
+    const k = out.length;
+    const carrying = sellers.filter((m) => m.categories.includes(p.category));
+    const m = (carrying.length ? carrying : sellers)[k % (carrying.length || sellers.length)];
+    const gap = GAPS[k % GAPS.length];
+    out.push({
+      id: `VIO-${String(123 + k).padStart(4, "0")}`, sku: p.sku, product: p.name, merchant: m.name, map: p.map,
+      advertised: Math.round(p.map * (1 + gap / 100) * 100) / 100, gap, duration: DURATIONS[k % DURATIONS.length], severity: severity(gap), status: STATUSES[k % STATUSES.length],
+    });
+  });
+  return out;
+}
 
 export const EMAILS = [
-  { date: "Aug 23, 2026", seller: "XYZ Electronics", violation: "VIO-0123", template: "First Warning", status: "Delivered", opened: "Yes", response: "Pending" },
-  { date: "Aug 22, 2026", seller: "TechMart", violation: "VIO-0124", template: "MAP Notice", status: "Delivered", opened: "No", response: "Awaited" },
+  { date: "Aug 23, 2026", seller: "Walmart.com", violation: "VIO-0123", template: "First Warning", status: "Delivered", opened: "Yes", response: "Pending" },
+  { date: "Aug 22, 2026", seller: "Newegg", violation: "VIO-0124", template: "MAP Notice", status: "Delivered", opened: "No", response: "Awaited" },
   { date: "Aug 21, 2026", seller: "Best Buy", violation: "VIO-0125", template: "MAP Reminder", status: "Delivered", opened: "Yes", response: "Resolved" },
 ];
 
@@ -95,8 +62,8 @@ export const USERS = [
 
 export const AUDIT_LOG = [
   { time: "Today, 10:15 AM", user: "Fenil Dholaviya", action: "Sent violation email for VIO-0123" },
-  { time: "Today, 09:50 AM", user: "Auto Rule", action: "Mapped LG-003 to XYZ Electronics" },
-  { time: "Yesterday, 04:12 PM", user: "analyst@mirethos.com", action: "Excluded LG Remote Control from tracking" },
+  { time: "Today, 09:50 AM", user: "Auto Rule", action: "Mapped 14Z90T-G.AAB2U1 to a Walmart.com listing" },
+  { time: "Yesterday, 04:12 PM", user: "analyst@mirethos.com", action: "Excluded an open-box LG gram listing on eBay" },
 ];
 
 export const SEVERITY_DIST = [
@@ -112,20 +79,26 @@ export const TREND = [
   { day: "Aug 22", count: 24 },
 ];
 
-/** Mock workspace for one client (same generator as before Phase 0, but works for any client name). */
-export function mockWorkspace(clientName, skuCount = 10, merchantCount = 3) {
-  const isLg = clientName === "LG";
+/** Mock workspace for one sandbox: its demo SKUs, tracked merchants and sample violations. */
+export function mockWorkspace(clientName) {
+  const { products, merchants } = demoFor(clientName);
+  const violations = sampleViolations(products, merchants);
+  const skus = products.map((p) => {
+    const mine = violations.filter((v) => v.sku === p.sku);
+    return {
+      id: p.sku, name: p.name, model: p.sku, brand: p.brand, category: p.category, modelFamily: p.modelFamily, configuration: p.configuration,
+      colour: p.colour, internalId: p.internalId, map: p.map, current: mine.length ? Math.min(...mine.map((v) => v.advertised)) : null,
+      violations: mine.filter((v) => v.status !== "Resolved").length, status: p.status,
+    };
+  });
+  const tracked = merchants.filter((m) => m.track);
   return {
-    skus: isLg
-      ? [...SKUS]
-      : SKUS.map((s, i) => ({ ...s, id: `${clientName}-00${i + 1}`, name: `${clientName} Product ${i + 1}`, violations: Math.floor(Math.random() * 3) })).slice(0, skuCount),
-    violations: isLg
-      ? [...VIOLATIONS]
-      : VIOLATIONS.map((v, i) => ({ ...v, id: `VIO-${Math.random().toString(36).substr(2, 5).toUpperCase()}`, sku: `${clientName}-00${i + 1}`, product: `${clientName} Product ${i + 1}` })).slice(0, merchantCount * 2),
-    merchants: [...MERCHANTS],
-    mappingStage: isLg ? [...MAPPING_STAGE] : [],
-    mappingInclude: isLg ? [...MAPPING_INCLUDE] : [],
-    mappingExclude: isLg ? [...MAPPING_EXCLUDE] : [],
-    promotions: isLg ? [...PROMOTIONS] : [],
+    skus,
+    violations,
+    merchants: tracked.map((m) => {
+      const carried = products.filter((p) => m.categories.includes(p.category)).length;
+      const open = violations.filter((v) => v.merchant === m.name).length;
+      return { name: m.name, type: m.channelType, tracked: carried, violations: open, compliance: carried ? Math.round(100 - (open / carried) * 100) : 100 };
+    }),
   };
 }

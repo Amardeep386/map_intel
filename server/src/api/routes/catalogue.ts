@@ -38,9 +38,14 @@ interface ProductRow {
   id: string;
   product_code: string;
   name: string;
+  brand: string;
   model_number: string | null;
   category: string | null;
   product_group: string | null;
+  model_family: string | null;
+  configuration: string | null;
+  colour: string | null;
+  internal_id: string | null;
   standard_price: number | null;
   status: string;
   map_amount: number | null;
@@ -63,6 +68,12 @@ interface OfferRow {
 }
 
 const optionalText = (max: number) => z.string().trim().max(max).optional();
+const detailsBody = {
+  modelFamily: optionalText(120),
+  configuration: optionalText(300),
+  colour: optionalText(60),
+  internalId: optionalText(64),
+};
 const identifiersBody = {
   upc: optionalText(14),
   ean: optionalText(14),
@@ -79,6 +90,7 @@ const newProduct = z.object({
   group: optionalText(100),
   map: z.coerce.number().positive().max(10_000_000).optional(),
   msrp: z.coerce.number().positive().max(10_000_000).optional(),
+  ...detailsBody,
   ...identifiersBody,
 });
 
@@ -89,6 +101,7 @@ const productPatch = z.object({
   group: z.string().trim().max(100).optional(),
   msrp: z.coerce.number().positive().max(10_000_000).nullable().optional(),
   status: z.enum(['Active', 'Paused', 'Retired']).optional(),
+  ...detailsBody,
   ...identifiersBody,
 });
 
@@ -113,9 +126,14 @@ function productView(p: ProductRow, offers: OfferRow[]) {
     id: p.id,
     code: p.product_code,
     name: p.name,
+    brand: p.brand,
     model: p.model_number,
     category: p.category,
     group: p.product_group,
+    modelFamily: p.model_family,
+    configuration: p.configuration,
+    colour: p.colour,
+    internalId: p.internal_id,
     map: p.map_amount,
     msrp: p.standard_price,
     current: priced.length ? Math.min(...priced) : null,
@@ -145,7 +163,8 @@ function productView(p: ProductRow, offers: OfferRow[]) {
 async function loadProducts(db: Db, where: string, params: unknown[]): Promise<ProductRow[]> {
   return (
     await db.query<ProductRow>(
-      `SELECT p.id, p.product_code, p.name, p.model_number, p.category, p.product_group, p.standard_price, p.status,
+      `SELECT p.id, p.product_code, p.name, p.brand, p.model_number, p.category, p.product_group, p.model_family, p.configuration,
+              p.colour, p.internal_id, p.standard_price, p.status,
               ${MAP_NOW_SQL} AS map_amount,
               (SELECT count(*) FROM listing_match m WHERE m.product_id = p.id AND m.state = 'Included')::int AS listings,
               coalesce((SELECT json_agg(json_build_object('type', i.type, 'value', i.value, 'slot', i.slot) ORDER BY i.type, i.slot, i.value)
@@ -206,7 +225,8 @@ async function existingProducts(db: Db): Promise<ExistingProduct[]> {
     }
     return {
       id: p.id, code: p.product_code, name: p.name, model: p.model_number, category: p.category,
-      group: p.product_group, msrp: p.standard_price, status: p.status, identifiers,
+      group: p.product_group, modelFamily: p.model_family, configuration: p.configuration, colour: p.colour,
+      internalId: p.internal_id, msrp: p.standard_price, status: p.status, identifiers,
     };
   });
 }
@@ -223,17 +243,22 @@ async function applyProductChange(db: Db, accountId: string, brand: string, c: P
   if (c.kind === 'new') {
     productId = (
       await db.query<{ id: string }>(
-        `INSERT INTO product (account_id, product_code, name, brand, category, model_number, product_group, standard_price, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 'Active')) RETURNING id`,
-        [accountId, c.code, f('name'), brand, f('category') ?? null, f('model') ?? null, f('group') ?? null, f('msrp') ?? null, f('status') ?? null],
+        `INSERT INTO product (account_id, product_code, name, brand, category, model_number, product_group, standard_price, status,
+                              model_family, configuration, colour, internal_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 'Active'), $10, $11, $12, $13) RETURNING id`,
+        [accountId, c.code, f('name'), brand, f('category') ?? null, f('model') ?? null, f('group') ?? null, f('msrp') ?? null, f('status') ?? null,
+          f('modelFamily') ?? null, f('configuration') ?? null, f('colour') ?? null, f('internalId') ?? null],
       )
     ).rows[0].id;
   } else {
     await db.query(
       `UPDATE product SET name = coalesce($2, name), model_number = coalesce($3, model_number), category = coalesce($4, category),
-              product_group = coalesce($5, product_group), standard_price = coalesce($6, standard_price), status = coalesce($7, status)
+              product_group = coalesce($5, product_group), standard_price = coalesce($6, standard_price), status = coalesce($7, status),
+              model_family = coalesce($8, model_family), configuration = coalesce($9, configuration), colour = coalesce($10, colour),
+              internal_id = coalesce($11, internal_id)
         WHERE id = $1`,
-      [productId, f('name') ?? null, f('model') ?? null, f('category') ?? null, f('group') ?? null, f('msrp') ?? null, f('status') ?? null],
+      [productId, f('name') ?? null, f('model') ?? null, f('category') ?? null, f('group') ?? null, f('msrp') ?? null, f('status') ?? null,
+        f('modelFamily') ?? null, f('configuration') ?? null, f('colour') ?? null, f('internalId') ?? null],
     );
   }
   const alts = Array.from({ length: 6 }, (_, i) => f(`alt${i + 1}`) as string | undefined);
@@ -308,11 +333,13 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     const created = await withTenant(accountId, async (db) => {
       const brand = (await db.query<{ brand: string }>('SELECT brand FROM account WHERE id = $1', [accountId])).rows[0]?.brand;
       const { rows } = await db.query<{ id: string }>(
-        `INSERT INTO product (account_id, product_code, name, brand, category, model_number, standard_price, product_group)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO product (account_id, product_code, name, brand, category, model_number, standard_price, product_group,
+                              model_family, configuration, colour, internal_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (account_id, product_code) DO NOTHING
          RETURNING id`,
-        [accountId, b.code, b.name, brand ?? '', b.category || null, b.model, b.msrp ?? null, b.group || null],
+        [accountId, b.code, b.name, brand ?? '', b.category || null, b.model, b.msrp ?? null, b.group || null,
+          b.modelFamily || null, b.configuration || null, b.colour || null, b.internalId || null],
       );
       if (!rows[0]) throw new HttpError(409, `SKU ${b.code} already exists`);
       try {
@@ -332,7 +359,8 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
         entityType: 'product',
         entityId: rows[0].id,
         summary: `Added SKU ${b.code}`,
-        after: { code: b.code, name: b.name, model: b.model, category: b.category || null, group: b.group ?? null, msrp: b.msrp ?? null, map: b.map ?? null, upc: b.upc ?? null, ean: b.ean ?? null, asin: b.asin ?? null, alts: b.alts ?? [] },
+        after: { code: b.code, name: b.name, model: b.model, category: b.category || null, group: b.group ?? null,
+          modelFamily: b.modelFamily || null, configuration: b.configuration || null, colour: b.colour || null, internalId: b.internalId || null, msrp: b.msrp ?? null, map: b.map ?? null, upc: b.upc ?? null, ean: b.ean ?? null, asin: b.asin ?? null, alts: b.alts ?? [] },
       });
       const [p] = await loadProducts(db, 'p.id = $1', [rows[0].id]);
       return productView(p, []);
@@ -351,15 +379,21 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
                 category = CASE WHEN $4::text IS NULL THEN category ELSE nullif($4, '') END,
                 product_group = CASE WHEN $5::text IS NULL THEN product_group ELSE nullif($5, '') END,
                 standard_price = CASE WHEN $6::boolean THEN $7 ELSE standard_price END,
-                status = coalesce($8, status)
+                status = coalesce($8, status),
+                model_family = CASE WHEN $9::text IS NULL THEN model_family ELSE nullif($9, '') END,
+                configuration = CASE WHEN $10::text IS NULL THEN configuration ELSE nullif($10, '') END,
+                colour = CASE WHEN $11::text IS NULL THEN colour ELSE nullif($11, '') END,
+                internal_id = CASE WHEN $12::text IS NULL THEN internal_id ELSE nullif($12, '') END
           WHERE id = $1`,
-        [productId, b.name ?? null, b.model ?? null, b.category ?? null, b.group ?? null, b.msrp !== undefined, b.msrp ?? null, b.status ?? null],
+        [productId, b.name ?? null, b.model ?? null, b.category ?? null, b.group ?? null, b.msrp !== undefined, b.msrp ?? null, b.status ?? null,
+          b.modelFamily ?? null, b.configuration ?? null, b.colour ?? null, b.internalId ?? null],
       );
       await writeIdentifiers(db, req.params.accountId, productId, { upc: b.upc, ean: b.ean, asin: b.asin, model: b.model, alts: b.alts });
       const [after] = await loadProducts(db, 'p.id = $1', [productId]);
       const view = (p: ProductRow) => {
         const v = productView(p, []);
-        return { name: v.name, model: v.model, category: v.category, group: v.group, msrp: v.msrp, status: v.status, upc: v.upc, ean: v.ean, asin: v.asin, alts: v.alts };
+        return { name: v.name, model: v.model, category: v.category, group: v.group, modelFamily: v.modelFamily, configuration: v.configuration,
+          colour: v.colour, internalId: v.internalId, msrp: v.msrp, status: v.status, upc: v.upc, ean: v.ean, asin: v.asin, alts: v.alts };
       };
       await audit(db, req, {
         action: 'product.updated',

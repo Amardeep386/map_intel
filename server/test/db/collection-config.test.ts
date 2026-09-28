@@ -52,7 +52,9 @@ test('catalogue lists all 7 sources with collector-declared options', async () =
   const amazon = sources.find((s: { code: string }) => s.code === 'amazon_us');
   assert.equal(amazon.collectorStatus, 'live');
   assert.ok(amazon.options.some((o: { key: string }) => o.key === 'buy_box_only'));
-  assert.equal(sources.find((s: { code: string }) => s.code === 'ebay_us').collectorStatus, 'planned');
+  // P2b: the six launch sources are live; Google Shopping has no collector yet.
+  assert.equal(sources.find((s: { code: string }) => s.code === 'ebay_us').collectorStatus, 'live');
+  assert.equal(sources.find((s: { code: string }) => s.code === 'google_shopping_us').collectorStatus, 'planned');
   assert.equal((await call(app, u.manager, 'POST', '/sources', {})).statusCode, 403);
 });
 
@@ -128,9 +130,9 @@ test('matrix: cells drive the request estimate; Some must use subscribed sources
   // Active terms in the generated group: 2 keyword (one deactivated) + 3 identifier.
   const all = (await call(app, u.manager, 'PUT', `${base}/matrix/${groupId}/Marketplace`, { mode: 'All' })).json();
   const g = all.groups.find((x: { id: string }) => x.id === groupId);
-  // amazon: 2×3 + 3×1 = 9; walmart: 2×2 + 3 = 7; ebay (planned): 2×3 + 3 = 9
+  // amazon: 2×3 + 3×1 = 9; walmart: 2×2 + 3 = 7; ebay: 2×3 + 3 = 9 (live since P2b, so nothing is 'planned')
   assert.equal(g.requests, 25);
-  assert.equal(g.plannedRequests, 9);
+  assert.equal(g.plannedRequests, 0);
   const some = (await call(app, u.manager, 'PUT', `${base}/matrix/${groupId}/Marketplace`, { mode: 'Some', sourceCodes: ['amazon_us'] })).json();
   assert.equal(some.groups.find((x: { id: string }) => x.id === groupId).requests, 9);
   assert.equal(

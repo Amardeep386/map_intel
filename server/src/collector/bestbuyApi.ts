@@ -1,6 +1,7 @@
 // Optional: Best Buy Products API (https://developer.bestbuy.com). Used for price and stock when
 // BESTBUY_API_KEY is set; the product page is still fetched for evidence.
 import { config } from '../lib/config.js';
+import { ApiAuthError } from './apiError.js';
 import type { Extracted } from './types.js';
 import { emptyExtracted } from './types.js';
 
@@ -27,6 +28,7 @@ export async function bestBuyApiLookup(opts: { sku?: string | null; model?: stri
   const show = 'sku,name,salePrice,regularPrice,onlineAvailability,orderable,modelNumber,marketplace,sellerId';
   const url = `https://api.bestbuy.com/v1/products(${filter})?apiKey=${config.BESTBUY_API_KEY}&show=${show}&format=json&pageSize=5`;
   const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (res.status === 401 || res.status === 403) throw new ApiAuthError('Best Buy API', res.status);
   if (!res.ok) throw new Error(`Best Buy API ${res.status}`);
   const body = (await res.json()) as { products?: BbProduct[] };
   const p = body.products?.[0];

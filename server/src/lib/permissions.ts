@@ -27,6 +27,8 @@ export const ACCOUNT_ACTIONS = [
   'audit.read',
   'credentials.read', // metadata only; secrets are never returned
   'credentials.write',
+  'health.read', // Data Health: source health, failures
+  'collection.run', // re-run failed jobs
 ] as const;
 export type AccountAction = (typeof ACCOUNT_ACTIONS)[number];
 
@@ -52,6 +54,7 @@ const READ_ALL: AccountAction[] = [
   'users.read',
   'audit.read',
   'credentials.read',
+  'health.read',
 ];
 
 const GRANTS: Record<AccountRole, ReadonlySet<AccountAction>> = {

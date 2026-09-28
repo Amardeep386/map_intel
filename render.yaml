@@ -4,7 +4,7 @@
 # Free plan: web services only (no background workers, no pre-deploy command), and the service
 # sleeps after 15 minutes idle (the first request after that takes about a minute).
 # So the API runs on the native Node runtime (no Playwright image needed) and applies migrations
-# when it starts. The collector worker is below, commented out, for when a paid plan is chosen.
+# when it starts. The collector worker below is a paid Starter service (Phase 2b).
 services:
   - type: web
     name: map-intel-api
@@ -35,28 +35,37 @@ services:
       - { key: VAULT_KEYS, sync: false }            # id:base64key[,id:base64key] (credential vault)
       - { key: VAULT_ACTIVE_KEY, sync: false }
 
-  # Collector worker (paid plans only). Uses the Playwright Docker image for the headless browser.
-  # - type: worker
-  #   name: map-intel-collector
-  #   runtime: docker
-  #   rootDir: server
-  #   dockerfilePath: ./Dockerfile
-  #   dockerCommand: node dist/worker/index.js
-  #   region: ohio
-  #   plan: starter
-  #   envVars:
-  #     - { key: NODE_ENV, value: production }
-  #     - { key: DATABASE_URL, sync: false }
-  #     - { key: DATABASE_SSL, value: "true" }
-  #     - { key: REDIS_URL, sync: false }
-  #     - { key: S3_REGION, sync: false }
-  #     - { key: S3_BUCKET, sync: false }
-  #     - { key: S3_ACCESS_KEY_ID, sync: false }
-  #     - { key: S3_SECRET_ACCESS_KEY, sync: false }
-  #     - { key: S3_FORCE_PATH_STYLE, value: "false" }
-  #     - { key: S3_OBJECT_LOCK_DAYS, value: "365" }
-  #     - { key: JWT_SECRET, sync: false }            # copy from the API service
-  #     - { key: VAULT_KEYS, sync: false }            # same as the API: the worker decrypts source logins
-  #     - { key: VAULT_ACTIVE_KEY, sync: false }
-  #     - { key: COLLECT_EGRESS_LABEL, value: render-ohio }
-  #     - { key: BESTBUY_API_KEY, sync: false }
+  # Collector worker (Phase 2b): Starter plan, Ohio (US egress). Docker image with Chromium.
+  # The scheduler tick runs inside it; one queue per source; evidence to S3 under Object Lock.
+  # From this blueprint it deploys main. Until phase-2b-collectors is merged, create it by hand in
+  # the dashboard on that branch with the same settings (see docs/progress.md, US egress).
+  - type: worker
+    name: map-intel-collector
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    dockerCommand: node dist/worker/index.js
+    region: ohio
+    plan: starter
+    branch: main
+    envVars:
+      - { key: NODE_ENV, value: production }
+      - { key: NODE_OPTIONS, value: "--max-old-space-size=256" }  # leave room for Chromium on 512 MB
+      - { key: DATABASE_URL, sync: false }          # Neon owner URL (the worker writes as the system)
+      - { key: DATABASE_SSL, value: "true" }
+      - { key: REDIS_URL, sync: false }             # same Upstash URL as the API
+      - { key: S3_REGION, sync: false }
+      - { key: S3_BUCKET, sync: false }             # mapintel-evidence (Object Lock enabled)
+      - { key: S3_ACCESS_KEY_ID, sync: false }
+      - { key: S3_SECRET_ACCESS_KEY, sync: false }
+      - { key: S3_FORCE_PATH_STYLE, value: "false" }
+      - { key: S3_OBJECT_LOCK_DAYS, value: "365" }  # Governance; the worker refuses to start without a lock
+      - { key: JWT_SECRET, sync: false }            # required by config; not used by the worker
+      - { key: COLLECT_EGRESS_LABEL, value: render-ohio }
+      - { key: COLLECT_CONCURRENCY, value: "1" }    # jobs at a time per source queue
+      - { key: COLLECT_BROWSER_PAGES, value: "1" }  # headless pages at a time in the whole worker
+      - { key: SCHEDULER_TICK_MINUTES, value: "5" }
+      - { key: BESTBUY_API_KEY, sync: false }       # optional
+      - { key: EBAY_CLIENT_ID, sync: false }        # optional (eBay Browse API)
+      - { key: EBAY_CLIENT_SECRET, sync: false }    # optional
+      - { key: COLLECT_HTTPS_PROXY, sync: false }   # optional US proxy, empty = direct

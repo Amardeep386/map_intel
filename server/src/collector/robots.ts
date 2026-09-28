@@ -1,5 +1,6 @@
 // Minimal robots.txt check (User-agent: * group, longest-match Allow/Disallow, * and $ wildcards).
 // Results are cached per host for 12 hours (15 minutes when robots.txt was unreachable).
+import { proxyDispatcher } from './http.js';
 
 interface Rule {
   allow: boolean;
@@ -69,6 +70,7 @@ export async function robotsCheck(url: string, userAgent: string): Promise<{ all
       const res = await fetch(`${u.protocol}//${u.host}/robots.txt`, {
         headers: { 'user-agent': userAgent },
         signal: AbortSignal.timeout(15_000),
+        ...({ dispatcher: proxyDispatcher() } as object),
       });
       if (res.ok) rules = parseRobots(await res.text());
       else if (res.status >= 500) unreachable = `HTTP ${res.status}`;

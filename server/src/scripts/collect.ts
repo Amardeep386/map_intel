@@ -5,7 +5,8 @@
 import { parseArgs } from 'node:util';
 import { closeBrowser } from '../collector/browser.js';
 import { collectListing, type CollectOutcome } from '../collector/collect.js';
-import { createCrawlRun, enqueueRun, selectListings, type RunScope } from '../collector/runs.js';
+import { closePoliteness } from '../collector/http.js';
+import { createCrawlRun, enqueueRun, recordRunProgress, selectListings, type RunScope } from '../collector/runs.js';
 import { closeDb, withSystem } from '../lib/db.js';
 import { closeQueue } from '../lib/queue.js';
 
@@ -50,7 +51,8 @@ async function runInline(): Promise<void> {
     [...bySource.values()].map(async (list) => {
       for (const id of list) {
         try {
-          const r = await collectListing(id, crawlRunId);
+          const r = await collectListing(id, { crawlRunId });
+          await withSystem((db) => recordRunProgress(db, crawlRunId, r.status));
           results.push(r);
           console.log(
             `${(r.productCode ?? '').padEnd(8)} ${r.source.padEnd(11)} ${r.status.padEnd(14)} ` +
@@ -79,6 +81,7 @@ async function main(): Promise<void> {
     }
   } finally {
     await closeBrowser();
+    await closePoliteness();
     await closeDb();
   }
 }

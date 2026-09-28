@@ -1,15 +1,68 @@
+import { Redis } from 'ioredis';
+import { ProxyAgent, type Dispatcher } from 'undici';
 import { config } from '../lib/config.js';
 import type { FetchResult, SourceAdapter } from './types.js';
 
-// One request at a time per retailer host, with a minimum gap plus random jitter.
-const nextSlot = new Map<string, number>();
+// Politeness: one request at a time per retailer host, with a minimum gap plus random jitter.
+// The next free slot per host lives in Redis, so every worker process, the CLI and the API's
+// egress probe share it. If Redis is unreachable the slot is kept in memory (this process only).
+
+/**
+ * Claim a request slot: the host's next slot is max(now, stored); the one after it is that + gap.
+ * Returns [the claimed slot, the new stored value]. Pure, so the Lua script below can mirror it.
+ */
+export function claimSlot(stored: number | null, now: number, gap: number): [number, number] {
+  const slot = Math.max(now, stored ?? 0);
+  return [slot, slot + gap];
+}
+
+const CLAIM_LUA = `
+local now = tonumber(ARGV[1])
+local gap = tonumber(ARGV[2])
+local slot = tonumber(redis.call('GET', KEYS[1]) or '0')
+if slot < now then slot = now end
+redis.call('SET', KEYS[1], slot + gap, 'PX', (slot + gap - now) + 60000)
+return slot`;
+
+const memorySlots = new Map<string, number>();
+let redis: Redis | null = null;
+
+function slotRedis(): Redis {
+  redis ??= new Redis(config.REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 3000, enableOfflineQueue: false, lazyConnect: true });
+  return redis;
+}
+
+async function claim(host: string, now: number, gap: number): Promise<number> {
+  try {
+    const r = slotRedis();
+    if (r.status === 'wait') await r.connect();
+    return Number(await r.eval(CLAIM_LUA, 1, `polite:${host}`, now, gap));
+  } catch {
+    const [slot, next] = claimSlot(memorySlots.get(host) ?? null, now, gap);
+    memorySlots.set(host, next);
+    return slot;
+  }
+}
 
 export async function politeWait(host: string): Promise<void> {
   const now = Date.now();
-  const slot = Math.max(now, nextSlot.get(host) ?? 0);
   const gap = config.COLLECT_MIN_DELAY_MS + Math.floor(Math.random() * config.COLLECT_JITTER_MS);
-  nextSlot.set(host, slot + gap);
+  const slot = await claim(host, now, gap);
   if (slot > now) await new Promise((r) => setTimeout(r, slot - now));
+}
+
+export async function closePoliteness(): Promise<void> {
+  const r = redis;
+  redis = null;
+  if (r && r.status !== 'end' && r.status !== 'wait') await r.quit().catch(() => undefined);
+}
+
+// Optional US proxy for every collector request (and the browser, see browser.ts).
+let proxyAgent: Dispatcher | null = null;
+export function proxyDispatcher(): Dispatcher | undefined {
+  if (!config.COLLECT_HTTPS_PROXY) return undefined;
+  proxyAgent ??= new ProxyAgent(config.COLLECT_HTTPS_PROXY);
+  return proxyAgent;
 }
 
 export function browserLikeHeaders(adapter: SourceAdapter): Record<string, string> {
@@ -31,6 +84,8 @@ export async function httpFetch(url: string, adapter: SourceAdapter): Promise<Fe
     headers: browserLikeHeaders(adapter),
     redirect: 'follow',
     signal: AbortSignal.timeout(30_000),
+    // Node's fetch is undici underneath and accepts a dispatcher (the proxy).
+    ...({ dispatcher: proxyDispatcher() } as object),
   });
   const html = await res.text();
   return { method: 'http', status: res.status, finalUrl: res.url || url, html, fetchedAt };

@@ -191,19 +191,25 @@ function MatrixTab({ matrix, canEdit, onCell }) {
 // ---------------------------------------------------------------------------
 function SourcesTab({ sources, canEdit, onToggle, onOptions }) {
   const [q, setQ] = useState("");
-  const list = sources.filter((s) => `${s.name} ${s.family?.name ?? ""} ${s.category} ${s.country}`.toLowerCase().includes(q.toLowerCase()));
+  const list = sources.filter((s) => `${s.name} ${s.family?.name ?? ""} ${s.category} ${s.country} ${s.subscription?.profile?.channelType ?? ""}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <>
       <div className="flex justify-between mb-3 gap-2 flex-wrap">
         <SearchBox placeholder="Search sources by name, family, category..." value={q} onChange={setQ} />
       </div>
-      <Table columns={["Source", "Family", "Category", "Country", "Collector", "Options", "Subscribed"]}>
-        {list.map((s) => (
-          <tr key={s.code} className="hover:bg-brand-beige/20">
+      <Table columns={["Source", "Family", "Category", "Country", "Priority", "Check frequency", "Authorisation", "Collector", "Options", "Subscribed"]}>
+        {list.map((s) => {
+          const pr = s.subscription?.profile ?? {};
+          const details = [pr.channelType, pr.sellerModel, pr.categories?.length ? `Covers: ${pr.categories.join(", ")}` : null, pr.collectionMethod, pr.notes].filter(Boolean).join(" · ");
+          return (
+          <tr key={s.code} className="hover:bg-brand-beige/20" title={details || undefined}>
             <Td className="font-semibold">{s.name}</Td>
             <Td className="text-brand-taupe">{s.family?.name ?? "—"}</Td>
             <Td className="text-brand-taupe">{s.category}</Td>
             <Td className="text-brand-taupe">{s.country}</Td>
+            <Td className="text-brand-taupe">{pr.priority ?? "—"}</Td>
+            <Td className="text-brand-taupe whitespace-nowrap">{pr.checkFrequency ?? "—"}</Td>
+            <Td className="text-brand-taupe text-xs">{pr.authorisation ?? "—"}</Td>
             <Td><Pill text={s.collectorStatus === "live" ? "Live" : "Planned"} tone={STATUS_TONE[s.collectorStatus]} /></Td>
             <Td>
               <button onClick={() => onOptions(s)} className="text-xs text-brand-copper hover:underline cursor-pointer inline-flex items-center gap-1">
@@ -213,10 +219,11 @@ function SourcesTab({ sources, canEdit, onToggle, onOptions }) {
             </Td>
             <Td><Toggle on={!!s.subscription?.active} disabled={!canEdit} onChange={(v) => onToggle(s, v)} /></Td>
           </tr>
-        ))}
+          );
+        })}
       </Table>
       <div className="mt-3">
-        <Note>Options are declared by each source's collector, not hard-coded per account. "Planned" sources can be subscribed and costed now; their collectors arrive in Phase 2b.</Note>
+        <Note>Options are declared by each source's collector, not hard-coded per account. "Planned" sources can be subscribed and costed now; their jobs are skipped until a collector is built. Priority, check frequency and authorisation come from the brand's merchant list (hover a row for channel, seller model, categories and notes).</Note>
       </div>
     </>
   );
@@ -492,7 +499,7 @@ function ImportModal({ onClose, onDone }) {
         </Field>
         <Field label="…or paste rows">
           <textarea className={`${inputCls} h-28 font-mono text-xs`} value={csv} onChange={(e) => { setCsv(e.target.value); setReport(null); }}
-            placeholder={"type,value,product_code,group\nkeyword,LG 65 inch OLED C6,LG-P01,Names\nseller,https://www.amazon.com/s?me=XYZ,,Known offenders"} />
+            placeholder={"type,value,product_code,group\nkeyword,LG gram 14 Core Ultra 5,14Z90T-G.AAB2U1,Names\nseller,https://www.amazon.com/s?me=XYZ,,Known offenders"} />
         </Field>
         <Field label="Group for rows without one">
           <input className={inputCls} value={defaultGroup} onChange={(e) => setDefaultGroup(e.target.value)} />

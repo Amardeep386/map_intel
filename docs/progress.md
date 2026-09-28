@@ -3,18 +3,18 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2a Catalogue **done** (exit test 14/14, 25 Sep 2026); browser checks by you still to do. P1 done 24 Sep 2026, P0 done 23 Sep 2026.
-- **Last updated:** 25 Sep 2026 (Claude Code: Phase 2a)
-- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` (P1 merged and pushed 25 Sep, plus deploy fixes). Phase 2a is on branch `phase-2a-catalogue`, **not pushed or merged**.
+- **Phase:** P2b Collectors **in progress** (paused 27 Sep 2026: code complete, exit test not run yet). P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Last updated:** 27 Sep 2026 (Claude Code: Phase 2b)
+- **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + the P2b egress-probe commit (`9fe9c83`, pushed so the Render API could run it). **Phase 2b is on branch `phase-2b-collectors`, pushed to origin, not merged.**
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
-- **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1 and P2a screen on the API. Mock mode runs the real matcher (server `lib/*.ts`) on synthetic candidates.
-- **Env (server/.env, never committed):** `DATABASE_URL` (owner: migrations, seed, worker), `DATABASE_URL_API` (role `mapintel_api`: the API), `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL` (invite links). The same variables are listed in `render.yaml`.
-- **Next step:**
-  1. Browser checks for P2a (Log, 25 Sep), then merge `phase-2a-catalogue` into `main` and push (the migrations are already applied to Neon).
-  2. Load the real LG, Apple and Samsung SKU lists through Product Summary → Import catalogue (dry run first) when the files arrive; MAP files the same way through MAP Policies.
-  3. Decide on US egress for the collector (Open questions); it gates Phase 2b.
-  4. Start Phase 2b. It stages listings through `stageCandidate` (see Log) and should number its migrations from 020.
+- **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
+- **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
+- **Next step (resume here):**
+  1. **Ohio egress probe (free).** Run the PowerShell snippet in the 27 Sep log below ("How to run the Ohio probe"). It writes `server/reports/egress-render-ohio.json`; then ask Claude Code to read it and record the India vs Ohio table here.
+  2. **Choose how the collector runs from the US:** GitHub Actions (free, test only; Claude Code adds a workflow and you add repo secrets) **or** a Render Starter background worker (billed by running time, about $0.25/day; suspend after testing). Render settings are in the 27 Sep log. You were leaning to the free option.
+  3. When the first US run has finished: `cd server && npm run exit:p2b -- --check --scheduled` (or `--fire` first, then `--check --wait`). Tick P2b only if it passes; sources still blocked must show as failures in Data Health.
+  4. Merge `phase-2b-collectors` into `main` after the exit test and your browser check of Data Health.
 
 ## Decisions so far
 | # | Decision | Date | Where decided |
@@ -40,14 +40,22 @@
 | 19 | Until the P2b collectors run, the Mapping Center is fed by a seeded synthetic-candidate generator (origin `synthetic`, removable) and a listing CSV/XLSX import. Exit-test volume: 300 candidates per brand per day (your answer) | 25 Sep 2026 | Phase 2a |
 | 20 | Precedence: suppression → rules by priority (exclusions 10–30 before inclusions 50–70) → confidence band. An inclusion rule never includes a used, accessory, variant, bundle or other-region listing; a person's Include / Exclude is never overridden by the matcher | 25 Sep 2026 | Phase 2a |
 | 21 | Migrations 007–019 belong to P2a, 020+ to P2b | 25 Sep 2026 | Phase 2a |
+| 22 | US egress: free HTTP probe on the Render (Ohio) API first, then a US collector run. No API keys yet: Best Buy and eBay API paths stay behind env keys | 27 Sep 2026 | Phase 2b |
+| 23 | Discovery respects robots.txt: search on Amazon and Best Buy only; Walmart, eBay, Target and Home Depot discover through brand / browse pages (url terms, `server/seeds/brand-pages.json`) because their search pages are disallowed | 27 Sep 2026 | Phase 2b |
+| 24 | Evidence: S3 Object Lock Governance, 365 days per object. Versioning + Object Lock enabled on `mapintel-evidence` (irreversible); the worker refuses to start in production without it | 27 Sep 2026 | Phase 2b |
+| 25 | A blocked, failed or robots-skipped page never stores a price, even if one could be read; a suspicious price is stored as `held` and rechecked once; two consistent readings publish | 27 Sep 2026 | Phase 2b |
+| 26 | One BullMQ queue per source (own limiter), one headless page at a time per worker; retries only for timeout / network / blocked, the retry through the browser | 27 Sep 2026 | Phase 2b |
+| 27 | We do not try to get past bot challenges (e.g. Target's "Press & hold"): they are recorded as `blocked` and shown in Data Health | 27 Sep 2026 | Phase 2b |
+| 28 | Demo catalogue replaces the placeholder SKUs: `docs/MAP_Intel_Demo_Catalogue_LG_Apple_Samsung.xlsx` columns A–J (127 SKUs, MAP from 28 Sep 2026) and its merchant lists. Placeholders are retired, not deleted; the 13 whose model number is a sheet SKU are renamed to it (listings and prices carry over). Each brand subscribes to its Track = Y merchants; merchants without a collector are `planned`. "Check listing" loads as Paused | 28 Sep 2026 | Demo catalogue (your answers) |
 
 ## Open questions
-- **US egress for collection.** From India, Best Buy drops every connection and Amazon returns bot checks on 21 of 26 pages. Options:
+- **US egress for collection.** Probe from India, 27 Sep: Amazon captcha / geo page, Best Buy connection dropped, eBay and Home Depot 403 at the edge; Walmart works over HTTP; Target works over HTTP but shows headless browsers a "Press & hold" challenge. **Ohio probe still to run** (next step 1). Options:
   - run the worker on Render Ohio (already planned);
   - a US residential or ISP proxy;
   - licensed data.
   - Amazon may still block datacenter IPs, so test the Render option first.
-- **Best Buy API key.** Official, free and reliable; recommended.
+- **Best Buy API key and eBay Browse API keys.** Official, free and reliable; recommended. The code switches on with `BESTBUY_API_KEY` / `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET`. eBay keys also allow keyword search, which robots.txt does not allow on the website.
+- **Target prices come from its own API (`redsky.target.com`, robots.txt disallows all).** Our collector never calls it; Target's page JavaScript does when a headless browser renders an allowed page. Add to the legal review.
 - **Amazon source.** Official API or a data provider, versus fetching pages. Part of the legal review.
 - Brand users log in during the pilot, or reports only?
 - Volume: SKUs per pilot brand, launch sources, checks per day.
@@ -59,13 +67,20 @@
 - [x] P0 Groundwork: backend skeleton, bug fixes, API client, collector proof of concept, enforcement-channel spike (verified 23 Sep 2026)
 - [x] P1 Foundation: accounts, roles, audit log, vault, sources, subscriptions, schedules, terms (exit test 30/30, 24 Sep 2026)
 - [x] P2a Catalogue: products, MAP history, promo windows, policy docs, sellers, Mapping Center (exit test 14/14, 25 Sep 2026)
-- [ ] P2b Collectors: scheduler, production collectors, evidence capture, observation store, source health
+- [ ] P2b Collectors: scheduler, production collectors, evidence capture, observation store, source health (code complete on `phase-2b-collectors`; exit test waits for a US run)
 - [ ] P3 Detection & reporting: rules, violations, dashboard, reports, evidence links, email alerts (pilot go-live)
 - [ ] P4 Enforcement & learning: cases, notices, marketplace channels, learning loop, alerts
 - [ ] P5 Scale & governance: onboarding, budget, tickets, SSO, API
 
 ## Known issues carried forward
-- **No real catalogue or MAP yet.** The 10 placeholder SKUs per brand have no MSRP and no MAP; the real lists arrive later and load through the import (dry run first).
+- **P2b extractors for eBay, Target and Home Depot are untested on real US pages** (India is blocked there). Unit tests use small pages in each site's shape; replace them with real fixtures from the first US run (`server/test/fixtures/README.md`). Watch Data Health for `layout_changed`.
+- **Evidence from before 27 Sep is not locked.** Object Lock was only enabled on the bucket on 27 Sep; P0 and smoke-test files have hashes but no retention.
+- **Other sellers on a listing are counted, not captured.** Walmart's other offers load in the browser (`otherOffers` is recorded in the observation's extract); Amazon's offer panel (AOD) is not built. Pilot subscriptions use buy box only.
+- **Seller-storefront terms are not crawled** (recorded as not executable).
+- **Under-notice re-check schedules** fire every 6 h with no work until Phase 4 cases exist (empty runs, no health snapshots).
+- **pg deprecation warning** from P1 `server/src/api/configData.ts` `accountEstimate` (parallel queries on one client). Harmless now; breaks on pg 9.
+- **Development runs left in the database:** crawl runs from the 27 Sep smoke tests (a few Walmart observations with evidence, one cancelled LG run).
+- **Demo catalogue, not the brands' own files.** Since 28 Sep the sandboxes hold the demo catalogue (127 SKUs with MAP, see the 28 Sep log). The brands' real lists still load through the import (dry run first). LG-022 is Paused ("Check listing": specs to confirm). A fresh `db:seed` still loads the old placeholders from `pilot-skus.json`; run `npm run catalogue:demo -- --commit` after it.
 - **Image similarity is not scored.** No product images are captured until P2b; the signal shows n/a and its weight goes to the other five.
 - **Matcher accuracy is measured on synthetic data only.** 0 wrong automatic decisions on 2,700 simulated candidates and in the exit test, but the generator and the matcher were written together. Real listings from P2b are the real test: watch the review band and wrong includes in the first weeks.
 - **Synthetic listings in the shared database.** The exit test leaves one LG day (about 400 listings, marked "Synthetic" in the portal) for browser checks. They show on the live site once P2a is merged. Remove with `cd server && npm run synthetic -- --clear`.
@@ -100,6 +115,45 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 28 Sep 2026 — Demo catalogue for the three sandboxes (Claude Code)
+- **Branch** `demo-catalogue` (from `phase-2b-collectors`, not pushed). Source file: `docs/MAP_Intel_Demo_Catalogue_LG_Apple_Samsung.xlsx`, turned into `server/seeds/demo-catalogue.json` (products = columns A–J of the three "Product Summary" sheets; merchants = the three "Sources" sheets).
+- **Migration 024** (applied to Neon): `product.model_family`, `configuration`, `colour`, `internal_id`; `account_source.profile` (the brand's merchant-list entry: channel type, seller model, authorisation, priority, check frequency, collection method, notes, categories).
+- **Server:** product import, create, edit and read carry the four new fields (import headers map without choosing: Model Family, Configuration, Colour, Internal ID; MAP import also accepts "MAP Price (USD)"); product API returns `brand`; `PUT /subscriptions/:code` takes an optional `profile`. Source catalogue: Amazon.com, Walmart.com and The Home Depot use the sheet's names; 18 merchants added as `planned` (Newegg, Micro Center, Abt, B&H, Adorama, Costco, Sam's Club, Staples, Office Depot, Crutchfield, P.C. Richard & Son, Expercom, Verizon, AT&T, T-Mobile, LG.com, Apple.com, Samsung.com).
+- **Loader:** `cd server && npm run catalogue:demo` (dry run) / `-- --commit`. Through the API as the seed admin: retire SKUs not in the sheet (with their included listings and product terms), rename placeholders whose model is a sheet SKU, product import, MAP import, subscriptions (Track = Y on with profile, others paused), name + identifier terms. Safe to re-run.
+- **Portal:** Product Summary shows columns A–J (then Lowest seen, Listings, Violations); drawer and Add/Edit SKU have the new fields; Source catalogue shows priority, check frequency and authorisation (hover for the rest); Sellers' source list covers every merchant. Sample-data mode now uses the same file: clients are the LG, Apple and Samsung sandboxes (Philips, Kawasaki, Citizen removed), SKUs and MAP from the sheet, merchants = tracked merchants, sample violations generated from them.
+- **Tests:** `npm test` 113/113 (new: demo sheet mapping, seed file vs source catalogue). Portal build OK, lint 0 errors.
+- **Effect on P2b:** the exit test's listings were on the placeholders; 17 placeholders are now retired, so fewer seeded listings are collected. The 13 converted SKUs keep theirs. New SKUs have no listings yet; they are found through the new name / identifier terms and brand pages once the collector runs from the US.
+
+### 27 Sep 2026 — Phase 2b Collectors (Claude Code), paused before the exit test
+- **Branch** `phase-2b-collectors` (pushed, not merged). Commits: M0 `90c5ddd` (egress probe; also on `main` as `9fe9c83`), M1 `a00be58`, M2 `46159b3`, fix `515069c`, M3 `87141e0`, M4 `62413d6`, M6 `32a561e`, M8 `2a251f6`, M9 `4d04271`, M10 `af5ae7c`, M11a `d0b4eee`, fix `c26d4a7`, docs: this commit. (M5 evidence and M7 matcher hand-off are inside M4 and M6.)
+- **Migrations 020–023** (applied to Neon): 020 `crawl_run` gains account / schedule / slot (one run per slot) + `crawl_job` ledger; 021 observation `held`, `failure_class`, `validation`, `seller_id`, `condition`, `offer_rank`, evidence lock columns, `app_evidence_accounts`; 022 `source_health_snapshot` (append-only); 023 skip reason `cancelled`.
+- **Server** (`server/src`):
+  - `scheduler/`: `expand.ts` (schedules × subscriptions × terms → jobs; listings first; budget; under-notice schedules never take the sweep's work), `due.ts`, `tick.ts` (fires due schedules, writes jobs, queues them per source).
+  - `collector/`: `jobs.ts` (collect / recheck / discover runner, retries, matcher hand-off via `stageCandidate` + `listing_discovery`), `collect.ts` (API → HTTP → headless, validate, evidence), `outcome.ts`, `failure.ts`, `discovery.ts`, `http.ts` (Redis-shared politeness, proxy hook), `browser.ts` (one page at a time), `extract/{results,ebay,target,homedepot}.ts`, `ebayApi.ts`, `egressProbe.ts`.
+  - `lib/`: `validate.ts`, `health.ts`, `sourceCatalogue.ts`, per-source queues in `queue.ts`, `storage.ts` (lock status, `verifyEvidence`).
+  - Routes: `GET /accounts/:id/health`, `GET /accounts/:id/health/:source/failures`, `POST /accounts/:id/health/rerun`, `POST /admin/egress-probe`. Permissions `health.read`, `collection.run`.
+  - Worker: scheduler tick every 5 min + one worker per source; refuses to start in production without Object Lock.
+  - Scripts: `npm run egress:probe`; `npm run scheduler -- --tick | --fire <schedule> --account <slug> [--inline] | --run <id> --inline | --cancel <id>`; `npm run exit:p2b -- --setup | --fire | --check [--wait] [--scheduled]`.
+- **Portal:** `src/views/DataHealthView.jsx` (prototype layout, drawer with failures and evidence), `src/api/mock/health.js`, client functions, one nav entry in `App.jsx`. Checked in mock mode.
+- **Pilot configuration changed** (`exit:p2b --setup`, through the API, audited): all 6 launch sources subscribed for LG, Apple, Samsung; a "Brand pages" group with url terms (LG 5, Apple 4, Samsung 6) sent to Marketplace + Online Seller. Catalogue: eBay, Target, Home Depot now `live`.
+- **Found and fixed:** Walmart pages were all flagged "captcha" (Walmart's CSP names captcha.net); the evidence bucket had no Object Lock (enabled with versioning); the pilots' under-notice schedule (priority 20, empty selector) would have taken all daily-sweep work; Target's headless "Press & hold" page is now detected as blocked.
+- **Tests:** `npm test` 111/111; `npm run test:db` 79/79 (2 P1 expectations updated: eBay is live). Portal build OK, lint 0 errors.
+- **Smoke tests from India:** 2 LG Walmart listings collected with evidence (re-hash OK); LG daily sweep fired inline: 67 jobs planned, 22 not executable (search disallowed), 4 Walmart collects OK, health snapshots written.
+- **How to run the Ohio probe (free, you):** open PowerShell, paste:
+  ```powershell
+  cd "E:\Claude Mirethos docs\Map Intel\Map Intel\server"
+  $api = "https://map-intel-api.onrender.com"
+  $email = Read-Host "Admin email"
+  $pw = Read-Host "Admin password" -AsSecureString
+  $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw))
+  Invoke-RestMethod "$api/health" | Out-Null
+  $token = (Invoke-RestMethod -Method Post "$api/auth/login" -ContentType "application/json" -Body (@{ email = $email; password = $plain } | ConvertTo-Json)).token
+  Invoke-RestMethod -Method Post "$api/admin/egress-probe" -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body '{"perSource":3}' -TimeoutSec 600 | ConvertTo-Json -Depth 5 | Out-File -Encoding utf8 reports\egress-render-ohio.json
+  ```
+  The probe deployed on `main` still has the Walmart CSP false positive: judge Walmart by the extracted prices in the report.
+- **Render worker settings (if you choose Render):** Background Worker, repo `map_intel`, branch `phase-2b-collectors`, region Ohio, Docker, root `server`, Dockerfile `./Dockerfile`, command `node dist/worker/index.js`, Starter. Env: `NODE_ENV=production`, `NODE_OPTIONS=--max-old-space-size=256`, `DATABASE_URL` (owner URL, copy from the API service), `DATABASE_SSL=true`, `REDIS_URL`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (copy), `S3_FORCE_PATH_STYLE=false`, `S3_OBJECT_LOCK_DAYS=365`, `JWT_SECRET` (copy), `COLLECT_EGRESS_LABEL=render-ohio`, `COLLECT_CONCURRENCY=1`, `COLLECT_BROWSER_PAGES=1`, `SCHEDULER_TICK_MINUTES=5`. Healthy logs: `evidence lock: bucket enabled, 365 days per object`, then `collector worker started (egress render-ohio …)`. On start it fires today's daily sweeps.
+- **Not done yet:** Ohio probe results, a US collection run, the exit test, merge to `main`.
+
 ### 25 Sep 2026 — Phase 2a Catalogue (Claude Code)
 - **Branch** `phase-2a-catalogue`. Commits:
   - M1 `d1a8cb2`, M2 `be03e9a`, M3 `f0f5c6c`, M4 `b37d799`, M5 `315216a`, M6 `315bbc9`
