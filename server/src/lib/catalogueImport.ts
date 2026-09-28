@@ -24,6 +24,10 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldSpec[]> = {
     { key: 'model', label: 'Model / MPN', required: false, synonyms: ['model', 'mpn', 'model_number', 'part_number', 'manufacturer_part_number'] },
     { key: 'category', label: 'Category', required: false, synonyms: ['category', 'product_category', 'type'] },
     { key: 'group', label: 'Product group', required: false, synonyms: ['group', 'product_group', 'line', 'product_line', 'series'] },
+    { key: 'modelFamily', label: 'Model family', required: false, synonyms: ['model_family', 'family'] },
+    { key: 'configuration', label: 'Configuration', required: false, synonyms: ['configuration', 'config', 'specs', 'variant'] },
+    { key: 'colour', label: 'Colour', required: false, synonyms: ['colour', 'color', 'finish'] },
+    { key: 'internalId', label: 'Internal ID', required: false, synonyms: ['internal_id', 'internal_code', 'brand_id'] },
     { key: 'msrp', label: 'MSRP', required: false, synonyms: ['msrp', 'rrp', 'list_price', 'standard_price', 'srp'] },
     { key: 'upc', label: 'UPC', required: false, synonyms: ['upc', 'upc_code', 'gtin', 'gtin12'] },
     { key: 'ean', label: 'EAN', required: false, synonyms: ['ean', 'ean13', 'ean_code', 'gtin13'] },
@@ -33,7 +37,7 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldSpec[]> = {
   ],
   map: [
     { key: 'code', label: 'SKU (product code)', required: true, synonyms: ['sku', 'code', 'product_code', 'item', 'model', 'mpn'] },
-    { key: 'amount', label: 'MAP', required: true, synonyms: ['map', 'amount', 'map_price', 'minimum_advertised_price', 'price'] },
+    { key: 'amount', label: 'MAP', required: true, synonyms: ['map', 'amount', 'map_price', 'map_price_usd', 'minimum_advertised_price', 'price'] },
     { key: 'from', label: 'Effective from', required: true, synonyms: ['from', 'start', 'effective_from', 'start_date', 'effective_date', 'date'] },
     { key: 'to', label: 'Effective to', required: false, synonyms: ['to', 'end', 'effective_to', 'end_date', 'until'] },
     { key: 'region', label: 'Region', required: false, synonyms: ['region', 'country', 'market'] },
@@ -194,6 +198,10 @@ export interface ExistingProduct {
   model: string | null;
   category: string | null;
   group: string | null;
+  modelFamily: string | null;
+  configuration: string | null;
+  colour: string | null;
+  internalId: string | null;
   msrp: number | null;
   status: string;
   /** Identifier values by field key: upc, ean, asin (any of several), alt1..alt6. */
@@ -270,6 +278,10 @@ export function planProducts(rows: RawRow[], existing: ExistingProduct[], owners
       model: v.model || null,
       category: v.category || null,
       group: v.group || null,
+      modelFamily: v.modelFamily || null,
+      configuration: v.configuration || null,
+      colour: v.colour || null,
+      internalId: v.internalId || null,
       msrp,
       status,
     };
@@ -282,7 +294,8 @@ export function planProducts(rows: RawRow[], existing: ExistingProduct[], owners
       continue;
     }
     const before: Record<string, string | number | null> = {
-      name: cur.name, model: cur.model, category: cur.category, group: cur.group, msrp: cur.msrp, status: cur.status,
+      name: cur.name, model: cur.model, category: cur.category, group: cur.group, modelFamily: cur.modelFamily,
+      configuration: cur.configuration, colour: cur.colour, internalId: cur.internalId, msrp: cur.msrp, status: cur.status,
     };
     for (const [k, val] of Object.entries(next)) {
       if (val === null) continue;

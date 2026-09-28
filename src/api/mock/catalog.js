@@ -6,6 +6,7 @@ import { generateCandidates, defaultBasePrice } from "../../../server/src/lib/sy
 import { proposeProduct, scoreCandidate } from "../../../server/src/lib/matching.ts";
 import { decide, suppressionHits } from "../../../server/src/lib/matchRules.ts";
 import { mockWorkspace } from "./data.js";
+import { DEMO_MAP_FROM, DEMO_MERCHANTS } from "./demo.js";
 
 const RULES = [
   ["EXC-CONDITION", "Used, refurbished, renewed or open box", "exclude", { type: "condition", values: ["used", "refurbished", "renewed", "open box", "pre-owned", "for parts"] }, "Used or refurbished", 10],
@@ -21,7 +22,7 @@ const SCOPES = [
   { id: "listing", label: "This listing" }, { id: "seller_product", label: "Seller + product" },
   { id: "url_pattern", label: "URL pattern" }, { id: "source", label: "Source" },
 ];
-const SOURCE_NAMES = { amazon_us: "Amazon", walmart_us: "Walmart", bestbuy_us: "Best Buy", ebay_us: "eBay", target_us: "Target", homedepot_us: "Home Depot" };
+const SOURCE_NAMES = Object.fromEntries(DEMO_MERCHANTS.map((m) => [m.source, m.name]));
 
 const state = {};
 let seq = 1;
@@ -34,10 +35,11 @@ function account(client) {
   const skus = mockWorkspace(client.name).skus;
   const products = skus.map((s) => ({
     id: s.id, code: s.id, name: s.name, brand: client.name, model: s.model || null, category: s.category || null, group: null,
+    modelFamily: s.modelFamily ?? null, configuration: s.configuration ?? null, colour: s.colour ?? null, internalId: s.internalId ?? null,
     msrp: s.msrp ?? null, status: s.status || "Active", upc: s.upc || null, ean: null, asin: null, alts: [null, null, null, null, null, null],
   }));
   const maps = products.filter((_, i) => skus[i].map).map((p, i) => ({
-    id: id("map"), productId: p.id, amount: skus.find((s) => s.id === p.id).map, region: null, from: "2026-01-15T05:00:00Z", to: null, source: "import", importSeq: 1, note: null, i,
+    id: id("map"), productId: p.id, amount: skus.find((s) => s.id === p.id).map, region: null, from: `${DEMO_MAP_FROM}T04:00:00Z`, to: null, source: "import", importSeq: 2, note: "Demo catalogue MAP", i,
   }));
   const a = { products, maps, promos: [], policies: [], imports: [], sellers: [], listings: [], suppressions: [], rules: clone(RULES), events: [] };
   state[client.name] = a;
@@ -128,7 +130,8 @@ export const mockCatalog = {
   addProduct(client, body) {
     const a = account(client);
     if (a.products.some((p) => p.code.toLowerCase() === body.code.toLowerCase())) throw new Error(`SKU ${body.code} already exists`);
-    const p = { id: body.code, code: body.code, name: body.name, brand: client.name, model: body.model, category: body.category || null, group: body.group || null, msrp: body.msrp ?? null, status: "Active", upc: body.upc || null, ean: body.ean || null, asin: body.asin || null, alts: [...(body.alts ?? []), null, null, null, null, null, null].slice(0, 6) };
+    const p = { id: body.code, code: body.code, name: body.name, brand: client.name, model: body.model, category: body.category || null, group: body.group || null,
+      modelFamily: body.modelFamily || null, configuration: body.configuration || null, colour: body.colour || null, internalId: body.internalId || null, msrp: body.msrp ?? null, status: "Active", upc: body.upc || null, ean: body.ean || null, asin: body.asin || null, alts: [...(body.alts ?? []), null, null, null, null, null, null].slice(0, 6) };
     a.products.push(p);
     if (body.map) a.maps.push({ id: id("map"), productId: p.id, amount: body.map, region: null, from: now(), to: null, source: "manual" });
     return this.products(client, { retired: true }).find((x) => x.id === p.id);
@@ -136,7 +139,7 @@ export const mockCatalog = {
   updateProduct(client, productId, body) {
     const a = account(client);
     const p = a.products.find((x) => x.id === productId);
-    for (const k of ["name", "model", "category", "group", "msrp", "status", "upc", "ean", "asin"]) if (body[k] !== undefined) p[k] = body[k];
+    for (const k of ["name", "model", "category", "group", "modelFamily", "configuration", "colour", "internalId", "msrp", "status", "upc", "ean", "asin"]) if (body[k] !== undefined) p[k] = body[k];
     if (body.alts) body.alts.forEach((v, i) => { if (v !== undefined) p.alts[i] = v || null; });
     return this.products(client, { retired: true }).find((x) => x.id === productId);
   },

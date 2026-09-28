@@ -50,7 +50,7 @@ export const SOURCE_CATALOGUE: SourceDeclaration[] = [
   {
     code: 'amazon_us',
     internalName: 'amazon.com',
-    displayName: 'Amazon',
+    displayName: 'Amazon.com',
     family: { code: 'amazon', name: 'Amazon' },
     category: 'Marketplace',
     country: 'US',
@@ -69,7 +69,7 @@ export const SOURCE_CATALOGUE: SourceDeclaration[] = [
   {
     code: 'walmart_us',
     internalName: 'walmart.com',
-    displayName: 'Walmart',
+    displayName: 'Walmart.com',
     family: { code: 'walmart', name: 'Walmart' },
     category: 'Marketplace',
     country: 'US',
@@ -133,7 +133,7 @@ export const SOURCE_CATALOGUE: SourceDeclaration[] = [
   {
     code: 'homedepot_us',
     internalName: 'homedepot.com',
-    displayName: 'Home Depot',
+    displayName: 'The Home Depot',
     family: { code: 'homedepot', name: 'Home Depot' },
     category: 'Online Seller',
     country: 'US',
@@ -156,7 +156,45 @@ export const SOURCE_CATALOGUE: SourceDeclaration[] = [
     options: [searchPages(1, 3), { key: 'follow_to_seller', label: 'Follow offers to the seller page', type: 'boolean', default: false }],
     costs: searchCosts(1),
   },
+  // Merchants on the brands' merchant lists (docs/MAP_Intel_Demo_Catalogue_LG_Apple_Samsung.xlsx)
+  // with no collector yet: subscribable and costed, their jobs are skipped as no_collector.
+  merchant('newegg_us', 'Newegg', 'newegg.com', 'https://www.newegg.com', 'Marketplace'),
+  merchant('microcenter_us', 'Micro Center', 'microcenter.com', 'https://www.microcenter.com'),
+  merchant('abt_us', 'Abt Electronics', 'abt.com', 'https://www.abt.com'),
+  merchant('bhphoto_us', 'B&H Photo Video', 'bhphotovideo.com', 'https://www.bhphotovideo.com'),
+  merchant('adorama_us', 'Adorama', 'adorama.com', 'https://www.adorama.com'),
+  merchant('costco_us', 'Costco', 'costco.com', 'https://www.costco.com'),
+  merchant('samsclub_us', "Sam's Club", 'samsclub.com', 'https://www.samsclub.com'),
+  merchant('staples_us', 'Staples', 'staples.com', 'https://www.staples.com'),
+  merchant('officedepot_us', 'Office Depot', 'officedepot.com', 'https://www.officedepot.com'),
+  merchant('crutchfield_us', 'Crutchfield', 'crutchfield.com', 'https://www.crutchfield.com'),
+  merchant('pcrichard_us', 'P.C. Richard & Son', 'pcrichard.com', 'https://www.pcrichard.com'),
+  merchant('expercom_us', 'Expercom', 'expercom.com', 'https://www.expercom.com'),
+  merchant('verizon_us', 'Verizon', 'verizon.com', 'https://www.verizon.com'),
+  merchant('att_us', 'AT&T', 'att.com', 'https://www.att.com'),
+  merchant('tmobile_us', 'T-Mobile', 't-mobile.com', 'https://www.t-mobile.com'),
+  // Brand stores: the brand's own list price (reference, not enforced).
+  merchant('lg_com_us', 'LG.com', 'lg.com', 'https://www.lg.com/us'),
+  merchant('apple_com_us', 'Apple.com', 'apple.com', 'https://www.apple.com/shop'),
+  merchant('samsung_com_us', 'Samsung.com', 'samsung.com', 'https://www.samsung.com/us'),
 ];
+
+/** A merchant without a collector: one search page per keyword, like a source added by hand. */
+function merchant(code: string, displayName: string, internalName: string, baseUrl: string, category: SourceCategory = 'Online Seller'): SourceDeclaration {
+  return {
+    code,
+    internalName,
+    displayName,
+    family: { code: code.replace(/_us$/, ''), name: displayName },
+    category,
+    country: 'US',
+    baseUrl,
+    collectorStatus: 'planned',
+    capability: { http: false, browser: false, api: false },
+    options: [searchPages(1, 3)],
+    costs: searchCosts(1),
+  };
+}
 
 /** What goes into source.options_schema. */
 export function optionsSchema(d: Pick<SourceDeclaration, 'options' | 'costs'>): { options: SourceOption[]; costs: TermCosts } {

@@ -13,6 +13,19 @@ export interface CatalogueSource extends CostSource {
   baseUrl: string;
   active: boolean;
   capability: Record<string, unknown>;
+  subscription: (CostSource['subscription'] & { profile?: MerchantProfile }) | null;
+}
+
+/** How the brand's merchant list describes a subscribed source (account_source.profile). Descriptive only. */
+export interface MerchantProfile {
+  channelType?: string;
+  sellerModel?: string;
+  authorisation?: string;
+  priority?: string;
+  checkFrequency?: string;
+  collectionMethod?: string;
+  notes?: string;
+  categories?: string[];
 }
 
 /** Every catalogue source, with this account's subscription (RLS limits account_source to the tenant). */
@@ -20,7 +33,7 @@ export async function loadSources(db: Db): Promise<CatalogueSource[]> {
   const { rows } = await db.query(
     `SELECT s.id, s.code, s.display_name, s.internal_name, s.category, s.country, s.base_url, s.active, s.capability,
             s.options_schema, s.collector_status, f.code AS family_code, f.name AS family_name,
-            a.active AS sub_active, a.options AS sub_options
+            a.active AS sub_active, a.options AS sub_options, a.profile AS sub_profile
        FROM source s
        LEFT JOIN source_family f ON f.id = s.family_id
        LEFT JOIN account_source a ON a.source_id = s.id
@@ -39,7 +52,7 @@ export async function loadSources(db: Db): Promise<CatalogueSource[]> {
     family: r.family_code ? { code: r.family_code, name: r.family_name } : null,
     collectorStatus: r.collector_status,
     schema: normaliseSchema(r.options_schema),
-    subscription: r.sub_active === null ? null : { active: r.sub_active, options: r.sub_options ?? {} },
+    subscription: r.sub_active === null ? null : { active: r.sub_active, options: r.sub_options ?? {}, profile: r.sub_profile ?? {} },
   }));
 }
 
@@ -67,7 +80,7 @@ export function sourceView(s: CatalogueSource) {
     active: s.active,
     capability: s.capability,
     options: s.schema.options,
-    subscription: s.subscription ? { active: s.subscription.active, overrides: s.subscription.options, values } : null,
+    subscription: s.subscription ? { active: s.subscription.active, overrides: s.subscription.options, values, profile: s.subscription.profile ?? {} } : null,
   };
 }
 

@@ -139,3 +139,20 @@ test('next run: valid cron + timezone; bad input gives a readable error', () => 
   assert.match((nextRun('0 6 * * *', 'Mars/Base') as { error: string }).error, /timezone/);
   assert.match((nextRun('99 6 * * *', 'UTC') as { error: string }).error, /invalid cadence/);
 });
+
+test('demo catalogue: every merchant on the brands\' lists is a catalogue source, with unique codes and SKUs', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const demo = JSON.parse(await readFile(new URL('../seeds/demo-catalogue.json', import.meta.url), 'utf8'));
+  const codes = SOURCE_CATALOGUE.map((s) => s.code);
+  assert.equal(new Set(codes).size, codes.length);
+  for (const [slug, a] of Object.entries(demo.accounts) as [string, { merchants: { source: string; website: string }[]; products: { sku: string; map: number }[] }][]) {
+    for (const m of a.merchants) {
+      const s = SOURCE_CATALOGUE.find((d) => d.code === m.source);
+      assert.ok(s, `${slug}: ${m.source} missing from the catalogue`);
+      assert.equal(new URL(s.baseUrl).hostname, new URL(m.website).hostname, `${slug}: ${m.source} website`);
+    }
+    const skus = a.products.map((p) => p.sku.toLowerCase());
+    assert.equal(new Set(skus).size, skus.length, `${slug}: duplicate SKU`);
+    assert.ok(a.products.every((p) => p.map > 0), `${slug}: MAP`);
+  }
+});

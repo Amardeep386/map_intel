@@ -1,5 +1,6 @@
 // In-memory stand-in for the Phase 1 configuration API, used when VITE_USE_MOCK=true.
 // Same response shapes as server/src/api/routes/*; the cost estimate is simplified.
+import { DEMO_MERCHANTS, demoFor, merchantProfile } from "./demo.js";
 
 const opt = {
   pages: (def, max = 5) => ({ key: "search_pages", label: "Search result pages per keyword", type: "integer", default: def, min: 1, max }),
@@ -7,18 +8,25 @@ const opt = {
 };
 
 const CATALOGUE = [
-  { code: "amazon_us", name: "Amazon", family: { code: "amazon", name: "Amazon" }, category: "Marketplace", collectorStatus: "live",
+  { code: "amazon_us", name: "Amazon.com", family: { code: "amazon", name: "Amazon" }, category: "Marketplace", collectorStatus: "live",
     options: [{ key: "buy_box_only", label: "Capture buy box only", type: "boolean", default: true }, { key: "include_variants", label: "Colour and size variants", type: "boolean", default: false }, opt.newOnly, { key: "seller_direct_only", label: "Seller-direct only", type: "boolean", default: false }, opt.pages(2)] },
-  { code: "walmart_us", name: "Walmart", family: { code: "walmart", name: "Walmart" }, category: "Marketplace", collectorStatus: "live",
+  { code: "walmart_us", name: "Walmart.com", family: { code: "walmart", name: "Walmart" }, category: "Marketplace", collectorStatus: "live",
     options: [{ key: "all_sellers", label: "Record every seller on a listing", type: "boolean", default: true }, opt.newOnly, opt.pages(2)] },
   { code: "bestbuy_us", name: "Best Buy", family: { code: "bestbuy", name: "Best Buy" }, category: "Online Seller", collectorStatus: "live",
     options: [{ key: "use_api", label: "Use the Best Buy Products API when available", type: "boolean", default: true }, opt.pages(1, 3)] },
-  { code: "ebay_us", name: "eBay", family: { code: "ebay", name: "eBay" }, category: "Marketplace", collectorStatus: "planned",
+  { code: "ebay_us", name: "eBay", family: { code: "ebay", name: "eBay" }, category: "Marketplace", collectorStatus: "live",
     options: [opt.newOnly, { key: "buy_it_now_only", label: "Buy It Now only (skip auctions)", type: "boolean", default: true }, opt.pages(3)] },
-  { code: "target_us", name: "Target", family: { code: "target", name: "Target" }, category: "Online Seller", collectorStatus: "planned", options: [opt.pages(1, 3)] },
-  { code: "homedepot_us", name: "Home Depot", family: { code: "homedepot", name: "Home Depot" }, category: "Online Seller", collectorStatus: "planned", options: [opt.pages(1, 3)] },
+  { code: "target_us", name: "Target", family: { code: "target", name: "Target" }, category: "Online Seller", collectorStatus: "live", options: [opt.pages(1, 3)] },
+  { code: "homedepot_us", name: "The Home Depot", family: { code: "homedepot", name: "Home Depot" }, category: "Online Seller", collectorStatus: "live", options: [opt.pages(1, 3)] },
   { code: "google_shopping_us", name: "Google Shopping", family: { code: "google", name: "Google" }, category: "Price Comparison", collectorStatus: "planned", options: [opt.pages(1, 3)] },
-].map((s) => ({ ...s, id: s.code, country: "US", active: true }));
+];
+// The other merchants on the brands' lists: no collector yet (server/src/collector/catalogue.ts).
+for (const m of DEMO_MERCHANTS) {
+  if (CATALOGUE.some((s) => s.code === m.source)) continue;
+  CATALOGUE.push({ code: m.source, name: m.name, family: { code: m.source.replace(/_us$/, ""), name: m.name }, category: /marketplace/i.test(m.channelType) ? "Marketplace" : "Online Seller", collectorStatus: "planned", options: [opt.pages(1, 3)] });
+}
+CATALOGUE.forEach((s) => Object.assign(s, { id: s.code, country: "US", active: true }));
+CATALOGUE.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
 
 const CATEGORIES = ["Marketplace", "Online Seller", "Price Comparison"];
 const state = {};
@@ -28,7 +36,8 @@ const now = () => new Date().toISOString();
 
 function account(name) {
   state[name] ??= {
-    subs: { amazon_us: {}, walmart_us: {}, bestbuy_us: {} },
+    // Subscribed to the brand's Track = Y merchants, with their merchant-list details.
+    subs: Object.fromEntries(demoFor(name).merchants.filter((m) => m.track).map((m) => [m.source, { profile: merchantProfile(m) }])),
     groups: [],
     terms: [],
     cells: {},
@@ -50,7 +59,7 @@ function log(a, action, summary, before, after) {
 }
 
 const values = (s, overrides) => Object.fromEntries(s.options.map((o) => [o.key, overrides?.[o.key] ?? o.default]));
-const sourceView = (a, s) => ({ ...s, subscription: a.subs[s.code] ? { active: a.subs[s.code].active !== false, overrides: a.subs[s.code].options || {}, values: values(s, a.subs[s.code].options) } : null });
+const sourceView = (a, s) => ({ ...s, subscription: a.subs[s.code] ? { active: a.subs[s.code].active !== false, overrides: a.subs[s.code].options || {}, values: values(s, a.subs[s.code].options), profile: a.subs[s.code].profile ?? {} } : null });
 
 function estimate(a) {
   const groups = a.groups.map((g) => {
@@ -113,7 +122,7 @@ export const mockConfig = {
   setSubscription(client, code, body) {
     const a = account(client.name);
     const before = a.subs[code];
-    a.subs[code] = { active: body.active, options: body.options ?? before?.options ?? {} };
+    a.subs[code] = { active: body.active, options: body.options ?? before?.options ?? {}, profile: body.profile ?? before?.profile ?? {} };
     const s = CATALOGUE.find((x) => x.code === code);
     log(a, before ? "subscription.updated" : "subscription.created", `${before ? "Changed" : "Subscribed to"} ${s.name}`, before, a.subs[code]);
     const e = estimate(a);

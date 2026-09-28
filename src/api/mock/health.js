@@ -13,12 +13,12 @@ function sourceRow(code, name, over) {
 }
 
 const SOURCES = () => [
-  sourceRow("amazon_us", "Amazon", { health: "Blocked", lastSuccessAt: ago(52), failureStreak: 2, observed: 1, expected: 10, fetch: { ok: 3, total: 29 }, extraction: { ok: 3, total: 3 }, evidence: { ok: 1, total: 1 }, jobs: { planned: 29, executed: 29, skipped: {} }, failures: { blocked: 26 }, mainFailure: "blocked" }),
+  sourceRow("amazon_us", "Amazon.com", { health: "Blocked", lastSuccessAt: ago(52), failureStreak: 2, observed: 1, expected: 10, fetch: { ok: 3, total: 29 }, extraction: { ok: 3, total: 3 }, evidence: { ok: 1, total: 1 }, jobs: { planned: 29, executed: 29, skipped: {} }, failures: { blocked: 26 }, mainFailure: "blocked" }),
   sourceRow("bestbuy_us", "Best Buy", { observed: 9, expected: 10, discovered: 41, fetch: { ok: 30, total: 30 }, extraction: { ok: 29, total: 30 }, evidence: { ok: 9, total: 9 }, held: 1, jobs: { planned: 30, executed: 30, skipped: {} }, failures: { layout_changed: 1 }, mainFailure: "layout_changed" }),
   sourceRow("ebay_us", "eBay", { health: "Degraded", failureStreak: 1, observed: 6, expected: 8, discovered: 38, fetch: { ok: 9, total: 10 }, extraction: { ok: 9, total: 9 }, evidence: { ok: 6, total: 6 }, jobs: { planned: 10, executed: 10, skipped: { not_executable: 11 } }, failures: { timeout: 1 }, mainFailure: "timeout" }),
-  sourceRow("homedepot_us", "Home Depot", { observed: 3, expected: 3, discovered: 24, fetch: { ok: 5, total: 5 }, extraction: { ok: 5, total: 5 }, evidence: { ok: 3, total: 3 }, jobs: { planned: 5, executed: 5, skipped: { not_executable: 22 } } }),
+  sourceRow("homedepot_us", "The Home Depot", { observed: 3, expected: 3, discovered: 24, fetch: { ok: 5, total: 5 }, extraction: { ok: 5, total: 5 }, evidence: { ok: 3, total: 3 }, jobs: { planned: 5, executed: 5, skipped: { not_executable: 22 } } }),
   sourceRow("target_us", "Target", { health: "Failing", lastSuccessAt: null, failureStreak: 3, observed: 0, expected: 4, fetch: { ok: 0, total: 6 }, extraction: { ok: 0, total: 0 }, jobs: { planned: 6, executed: 6, skipped: { not_executable: 22 } }, failures: { blocked: 6 }, mainFailure: "blocked" }),
-  sourceRow("walmart_us", "Walmart", { observed: 8, expected: 8, discovered: 15, fetch: { ok: 10, total: 10 }, extraction: { ok: 10, total: 10 }, evidence: { ok: 8, total: 8 }, jobs: { planned: 10, executed: 10, skipped: { not_executable: 22 } } }),
+  sourceRow("walmart_us", "Walmart.com", { observed: 8, expected: 8, discovered: 15, fetch: { ok: 10, total: 10 }, extraction: { ok: 10, total: 10 }, evidence: { ok: 8, total: 8 }, jobs: { planned: 10, executed: 10, skipped: { not_executable: 22 } } }),
 ];
 
 const FAILURES = {
