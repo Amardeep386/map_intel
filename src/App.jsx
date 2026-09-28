@@ -83,10 +83,7 @@ function ClientLogo({ name, className }) {
           src={src} 
           alt={name} 
           className="w-full h-full object-contain"
-          style={{ 
-            padding: '2px',
-            transform: lowerName === "lg" ? 'scale(2.3)' : 'scale(1)' 
-          }}
+          style={{ padding: '2px' }}
           onError={() => setError(true)} 
         />
       </div>
