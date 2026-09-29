@@ -902,9 +902,15 @@ export default function App() {
               <div className="text-brand-taupe">{accountRole ?? (currentUser?.role === "member" ? "Member" : "Admin")}</div>
             </div>
           </div>
-          <button onClick={handleLogout} className="text-[10px] text-brand-copper hover:underline cursor-pointer">
-            Exit
-          </button>
+          <div className={`flex items-center gap-2 ${navCollapsed ? "flex-col" : ""}`}>
+            <button onClick={() => setIsDark(!isDark)} title={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              className="text-brand-taupe hover:text-brand-charcoal hover:bg-brand-beige rounded-md p-1 cursor-pointer">
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button onClick={handleLogout} className="text-[10px] text-brand-copper hover:underline cursor-pointer">
+              Exit
+            </button>
+          </div>
         </div>
       </div>
 
@@ -913,15 +919,6 @@ export default function App() {
 
       {/* Slide-out drawer details */}
       <ViolationDrawer violation={violation} onClose={() => setViolation(null)} onSendWarning={handleSendWarning} onResolve={handleResolveViolation} onEscalate={handleEscalateViolation} />
-
-      {/* Floating Theme Toggle */}
-      <button 
-        onClick={() => setIsDark(!isDark)} 
-        className="fixed bottom-6 right-6 p-3 bg-brand-charcoal text-brand-white rounded-full shadow-lg hover:bg-brand-taupe transition-colors z-50 cursor-pointer flex items-center justify-center"
-        title="Toggle Theme"
-      >
-        {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-      </button>
 
       {/* TOAST alerts */}
       <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
