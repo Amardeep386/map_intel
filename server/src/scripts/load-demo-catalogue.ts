@@ -8,7 +8,7 @@
 //   4. imports the MAP column as a MAP file (in force from mapEffectiveFrom);
 //   5. subscribes each brand to its Track = Y merchants with their merchant-list details and pauses
 //      subscriptions to merchants not tracked;
-//   6. generates name and identifier terms for the new SKUs (the groups the pilot already uses).
+//   6. generates a "{Brand} {SKU}" keyword term per new SKU in the "Brand SKUs" group (see reset-terms.ts).
 // Everything except step 1 goes through the API as the seed admin, so it is audited like a user's
 // change. Safe to run again: unchanged rows are skipped.
 //
@@ -217,15 +217,10 @@ async function loadAccount(
     for (const code of pause) await ok(app, token, 'PUT', `${base}/subscriptions/${code}`, { active: false });
   }
 
-  // 6. Terms for the new SKUs, in the groups the pilot's subscription matrix already uses.
+  // 6. Terms for the new SKUs, in the single "Brand SKUs" group (its matrix cells are set by reset-terms.ts).
   if (commit) {
-    for (const body of [
-      { group: 'F26: Brand + Product Name', template: '{Brand} {Product Name}', identifierTypes: [] },
-      { group: 'Identifiers (MPN / ASIN)', template: null, identifierTypes: ['MPN', 'ASIN'] },
-    ]) {
-      const r = await ok(app, token, 'POST', `${base}/terms/generate`, { ...body, dryRun: false });
-      console.log(`terms "${body.group}": +${r.created} (${r.alreadyExist} already there)`);
-    }
+    const r = await ok(app, token, 'POST', `${base}/terms/generate`, { group: 'Brand SKUs', template: '{Brand} {Code}', identifierTypes: [], dryRun: false });
+    console.log(`terms "Brand SKUs": +${r.created} (${r.alreadyExist} already there)`);
     const est = (await ok(app, token, 'GET', `${base}/subscriptions`)).estimate;
     console.log(`projected requests / cycle: ${est.total} of ${est.budget}${est.overBudget ? ' — OVER BUDGET' : ''}`);
   }
