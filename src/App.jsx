@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   Plus, ChevronDown, ExternalLink, X, ChevronLeft, ChevronRight,
-  MapPin, Lock, Moon, Sun, Radar, Loader2, Activity
+  MapPin, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -573,6 +573,9 @@ export default function App() {
   
   const [view, setView] = useState("overview");
   const [clientOpen, setClientOpen] = useState(false);
+  // Sidebar can shrink to an icon rail so wide screens (e.g. Product Summary) get the full width.
+  const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem("navCollapsed") === "1"; } catch { return false; } });
+  const toggleNav = () => setNavCollapsed((c) => { try { localStorage.setItem("navCollapsed", c ? "0" : "1"); } catch { /* storage unavailable */ } return !c; });
   const [violation, setViolation] = useState(null);
 
   const [toasts, setToasts] = useState([]);
@@ -833,26 +836,31 @@ export default function App() {
       <div className="flex h-screen bg-brand-ivory font-sans text-brand-charcoal select-none">
       
       {/* Sidebar */}
-      <div className="w-60 bg-brand-sidebar text-brand-charcoal flex flex-col shrink-0 border-r border-brand-beige shadow-lg">
-        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-brand-beige">
+      <div className={`${navCollapsed ? "w-14" : "w-60"} bg-brand-sidebar text-brand-charcoal flex flex-col shrink-0 border-r border-brand-beige shadow-lg transition-[width] duration-200`}>
+        <div className={`flex items-center gap-2.5 py-4 border-b border-brand-beige ${navCollapsed ? "flex-col px-2" : "px-4"}`}>
           <img src="/favicon.ico" alt="Mirethos Logo" className="w-6.5 h-6.5 bg-brand-white p-1 rounded-md" />
-          <span className="text-brand-charcoal text-sm font-bold tracking-wide">MIRETHOS</span>
+          {!navCollapsed && <span className="text-brand-charcoal text-sm font-bold tracking-wide flex-1">MIRETHOS</span>}
+          <button onClick={toggleNav} title={navCollapsed ? "Expand menu" : "Collapse menu"} className="text-brand-taupe hover:text-brand-charcoal hover:bg-brand-beige rounded-md p-1 cursor-pointer">
+            {navCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
         </div>
 
         {/* Client selector details */}
-        <div className="px-3 py-3 border-b border-brand-beige relative">
-          <button onClick={() => setClientOpen((o) => !o)} className="w-full flex items-center justify-between hover:bg-brand-beige rounded-lg px-2.5 py-2 text-sm cursor-pointer">
+        <div className={`${navCollapsed ? "px-1.5" : "px-3"} py-3 border-b border-brand-beige relative`}>
+          <button onClick={() => setClientOpen((o) => !o)} title={navCollapsed ? client.name : undefined} className={`w-full flex items-center hover:bg-brand-beige rounded-lg py-2 text-sm cursor-pointer ${navCollapsed ? "justify-center px-1" : "justify-between px-2.5"}`}>
             <div className="flex items-center gap-2">
               <ClientLogo name={client.name} className="w-6 h-6 rounded-md border border-brand-beige shadow-sm p-0.5" />
-              <div className="text-left">
-                <div className="text-brand-charcoal text-sm font-semibold">{client.name}</div>
-                <div className="text-[10px] text-brand-taupe font-medium">{client.status}</div>
-              </div>
+              {!navCollapsed && (
+                <div className="text-left">
+                  <div className="text-brand-charcoal text-sm font-semibold">{client.name}</div>
+                  <div className="text-[10px] text-brand-taupe font-medium">{client.status}</div>
+                </div>
+              )}
             </div>
-            <ChevronDown className="w-4 h-4 text-brand-taupe" />
+            {!navCollapsed && <ChevronDown className="w-4 h-4 text-brand-taupe" />}
           </button>
           {clientOpen && (
-            <div className="absolute left-3 right-3 top-full mt-1 bg-brand-white border border-brand-beige rounded-lg overflow-hidden z-10 shadow-xl">
+            <div className={`absolute ${navCollapsed ? "left-1.5 w-52" : "left-3 right-3"} top-full mt-1 bg-brand-white border border-brand-beige rounded-lg overflow-hidden z-10 shadow-xl`}>
               {clients.map((c) => (
                 <button key={c.name} onClick={() => { setActiveClient(c.name); setClientOpen(false); }}
                   className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-beige flex justify-between items-center cursor-pointer ${c.name === activeClient ? "text-brand-charcoal font-bold" : "text-brand-taupe"}`}>
@@ -873,23 +881,23 @@ export default function App() {
             const Icon = n.icon;
             const active = currentView === n.id;
             return (
-              <button key={n.id} onClick={() => setView(n.id)}
-                className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors border-l-2 cursor-pointer ${
+              <button key={n.id} onClick={() => setView(n.id)} title={navCollapsed ? n.label : undefined}
+                className={`relative w-full flex items-center gap-2.5 py-2 text-sm ${navCollapsed ? "justify-center px-0" : "px-4"} transition-colors border-l-2 cursor-pointer ${
                   active ? "bg-brand-beige border-brand-copper text-brand-charcoal font-semibold" : "border-transparent text-brand-taupe hover:text-brand-charcoal hover:bg-brand-beige/50"
                 }`}>
-                <Icon className="w-4 h-4" />
-                <span className="flex-1 text-left">{n.label}</span>
-                {navBadges[n.id] ? <span className="text-[9px] font-bold bg-brand-copper text-brand-white rounded-full px-1.5 py-0.5">{navBadges[n.id]}</span> : null}
+                <Icon className="w-4 h-4 shrink-0" />
+                {!navCollapsed && <span className="flex-1 text-left">{n.label}</span>}
+                {navBadges[n.id] ? <span className={`${navCollapsed ? "absolute top-0.5 right-1.5" : ""} text-[9px] font-bold bg-brand-copper text-brand-white rounded-full px-1.5 py-0.5`}>{navBadges[n.id]}</span> : null}
               </button>
             );
           })}
         </nav>
 
         {/* Bottom User Avatar */}
-        <div className="px-4 py-3 border-t border-brand-beige flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className={`py-3 border-t border-brand-beige flex items-center justify-between ${navCollapsed ? "flex-col gap-2 px-1" : "px-4"}`}>
+          <div className="flex items-center gap-2" title={navCollapsed ? currentUser?.name || "Fenil Dholaviya" : undefined}>
             <div className="w-7 h-7 rounded-full bg-brand-copper flex items-center justify-center text-xs text-brand-white font-bold">{initials(currentUser?.name || "Fenil Dholaviya")}</div>
-            <div className="text-[11px]">
+            <div className={`text-[11px] ${navCollapsed ? "hidden" : ""}`}>
               <div className="text-brand-charcoal font-bold">{currentUser?.name || "Fenil Dholaviya"}</div>
               <div className="text-brand-taupe">{accountRole ?? (currentUser?.role === "member" ? "Member" : "Admin")}</div>
             </div>

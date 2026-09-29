@@ -2,7 +2,7 @@
 // product drawer, the import modal (file -> column mapping -> dry-run diff -> commit), and
 // MAP Policies (MAP history, promotion windows, policy documents).
 import React, { useCallback, useEffect, useState } from "react";
-import { Plus, Upload, ExternalLink, FileText, Pencil, Download, Ban } from "lucide-react";
+import { Plus, Upload, ExternalLink, FileText, Pencil, Download, Ban, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "../api/client.js";
 import {
   Card, Drawer, Field, KPI, KV, Modal, Note, PageHeader, Pill, PrimaryButton, SearchBox, SecondaryButton, Table, Tabs, Td, inputCls,
@@ -11,6 +11,8 @@ import { TONE, fileToBase64, formatDay, money } from "../format.js";
 import { attempt, formatWhen, useWorkspace } from "../workspace.js";
 
 // ============ PRODUCTS ============
+const PAGE_SIZES = [15, 25, 50, 100];
+
 export function ProductSummaryView() {
   const { client, can, showToast } = useWorkspace();
   const [rows, setRows] = useState(null);
@@ -19,6 +21,8 @@ export function ProductSummaryView() {
   const [sel, setSel] = useState(null);
   const [editing, setEditing] = useState(null); // {} = new SKU, product = edit
   const [importing, setImporting] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
 
   const load = useCallback(async () => {
     setRows((await attempt(showToast, () => api.products(client, showRetired ? { retired: 1 } : {}))) ?? []);
@@ -28,6 +32,9 @@ export function ProductSummaryView() {
   const needle = q.toLowerCase();
   const filtered = (rows ?? []).filter((s) =>
     [s.code, s.name, s.model, s.upc, s.ean, s.asin, s.internalId, s.modelFamily, s.configuration, s.colour, s.category, ...(s.alts ?? [])].some((x) => (x ?? "").toLowerCase().includes(needle)));
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const current = Math.min(page, pages - 1);
+  const visible = filtered.slice(current * pageSize, (current + 1) * pageSize);
   const writable = can("catalogue.write");
   return (
     <div>
@@ -37,21 +44,21 @@ export function ProductSummaryView() {
       />
       <Card>
         <div className="flex justify-between mb-4 gap-3 flex-wrap items-center">
-          <SearchBox value={q} onChange={setQ} placeholder="Search SKU, internal ID, product name, family, colour, UPC, ASIN..." />
+          <SearchBox value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search SKU, internal ID, product name, family, colour, UPC, ASIN..." />
           <label className="text-xs text-brand-taupe flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={showRetired} onChange={(e) => setShowRetired(e.target.checked)} /> Show retired SKUs
+            <input type="checkbox" checked={showRetired} onChange={(e) => { setShowRetired(e.target.checked); setPage(0); }} /> Show retired SKUs
           </label>
         </div>
-        <Table columns={["Product name", "SKU", "MAP in force", "Brand", "Category", "Model family", "Configuration", "Colour", "Internal ID", "Status", "Lowest seen", "Listings", "Violations"]}>
-          {filtered.map((s) => (
+        <Table compact columns={["Product name", "SKU", "MAP in force", "Brand", "Category", "Model family", "Configuration", "Colour", "Internal ID", "Status", "Lowest seen", "Listings", "Violations"]}>
+          {visible.map((s) => (
             <tr key={s.id} onClick={() => setSel(s)} className="hover:bg-brand-beige/20 cursor-pointer">
-              <Td className="font-medium min-w-[16rem]">{s.name}</Td>
+              <Td className="font-medium min-w-[11rem]">{s.name}</Td>
               <Td className="font-semibold whitespace-nowrap">{s.code}</Td>
               <Td>{money(s.map)}</Td>
               <Td className="text-brand-taupe">{s.brand || client.name}</Td>
-              <Td className="text-brand-taupe whitespace-nowrap">{s.category || "—"}</Td>
-              <Td className="text-brand-taupe whitespace-nowrap">{s.modelFamily || "—"}</Td>
-              <Td className="text-brand-taupe text-xs min-w-[14rem]">{s.configuration || "—"}</Td>
+              <Td className="text-brand-taupe">{s.category || "—"}</Td>
+              <Td className="text-brand-taupe">{s.modelFamily || "—"}</Td>
+              <Td className="text-brand-taupe min-w-[9rem]">{s.configuration || "—"}</Td>
               <Td className="text-brand-taupe">{s.colour || "—"}</Td>
               <Td className="text-brand-taupe whitespace-nowrap">{s.internalId || "—"}</Td>
               <Td><Pill text={s.status} tone={TONE[s.status]} /></Td>
@@ -61,7 +68,23 @@ export function ProductSummaryView() {
             </tr>
           ))}
         </Table>
-        <div className="text-xs text-brand-taupe mt-3">{rows ? `Showing ${filtered.length} of ${rows.length} SKUs` : "Loading…"}</div>
+        <div className="flex items-center justify-between gap-3 flex-wrap mt-3 text-xs text-brand-taupe">
+          <div>
+            {!rows ? "Loading…" : filtered.length
+              ? `Showing ${current * pageSize + 1}–${current * pageSize + visible.length} of ${filtered.length} SKUs${filtered.length !== rows.length ? ` (${rows.length} total)` : ""}`
+              : `Showing 0 of ${rows.length} SKUs`}
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5">Rows per page
+              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }} className="border border-brand-beige bg-brand-white text-brand-charcoal rounded-md px-1.5 py-1 cursor-pointer">
+                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <SecondaryButton onClick={() => setPage(current - 1)} disabled={current === 0}><ChevronLeft className="w-4 h-4" /> Previous</SecondaryButton>
+            <span className="font-semibold text-brand-charcoal whitespace-nowrap">Page {current + 1} of {pages}</span>
+            <SecondaryButton onClick={() => setPage(current + 1)} disabled={current >= pages - 1}>Next <ChevronRight className="w-4 h-4" /></SecondaryButton>
+          </div>
+        </div>
       </Card>
       {sel && <ProductDrawer productId={sel.id} onClose={() => setSel(null)} onEdit={(p) => { setSel(null); setEditing(p); }} />}
       {editing && <SkuModal product={editing.id ? editing : null} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />}

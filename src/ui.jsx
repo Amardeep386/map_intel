@@ -69,14 +69,15 @@ export function SearchBox({ value, onChange, placeholder }) {
   );
 }
 
-export function Table({ columns, children }) {
+// compact: smaller text and tighter cells so wide tables fit the screen without sideways scrolling.
+export function Table({ columns, children, compact }) {
   return (
     <div className="overflow-x-auto border border-brand-beige rounded-lg">
-      <table className="w-full text-sm border-collapse">
+      <table className={`w-full border-collapse ${compact ? "text-xs [&_td]:px-2 [&_td]:py-1.5" : "text-sm"}`}>
         <thead>
-          <tr className="border-b border-brand-beige text-left text-xs text-brand-charcoal bg-brand-beige">
+          <tr className={`border-b border-brand-beige text-left text-brand-charcoal bg-brand-beige ${compact ? "text-[11px]" : "text-xs"}`}>
             {columns.map((c) => (
-              <th key={c} className="py-2 px-3 font-semibold whitespace-nowrap">{c}</th>
+              <th key={c} className={`font-semibold ${compact ? "py-1.5 px-2 leading-tight" : "py-2 px-3 whitespace-nowrap"}`}>{c}</th>
             ))}
           </tr>
         </thead>
