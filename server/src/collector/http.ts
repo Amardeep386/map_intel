@@ -65,7 +65,11 @@ export async function politeWait(adapter: Pick<SourceAdapter, 'host' | 'pace'>):
 export async function closePoliteness(): Promise<void> {
   const r = redis;
   redis = null;
-  if (r && r.status !== 'end' && r.status !== 'wait') await r.quit().catch(() => undefined);
+  if (!r || r.status === 'end' || r.status === 'wait') return;
+  // A client that never connected (no Redis, e.g. a GitHub runner) keeps reconnecting, and quit()
+  // waits for it forever: drop it instead.
+  if (r.status === 'ready') await r.quit().catch(() => undefined);
+  else r.disconnect(false);
 }
 
 // Optional US proxy for every collector request (and the browser, see browser.ts).

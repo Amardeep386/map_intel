@@ -3,18 +3,19 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2b Collectors **in progress**, finishing through a first real slice: **Amazon.com on the LG Sandbox** (branch `amazon-lg-slice`, 30 Sep 2026; code M1–M5 done, US egress being probed). Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Phase:** P2b Collectors **in progress**, finishing through a first real slice: **Amazon.com on the LG Sandbox** (branch `amazon-lg-slice`, 30 Sep 2026; code M1–M5 done; **both free US probes are blocked by Amazon**: stopped at M6d, waiting for your choice of route). Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
 - **Last updated:** 30 Sep 2026 (Claude Code: Amazon LG slice M1–M6b)
 - **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here): Amazon LG slice, M6b onwards** (details in the 30 Sep log).
-  1. **GitHub Actions egress probe (free).** Push `amazon-lg-slice`, and put `.github/workflows/egress-probe.yml` on `main` (GitHub only offers "Run workflow" for workflows on the default branch). Add repo secrets `DATABASE_URL` (owner URL), `DATABASE_SSL` (`true`), `JWT_SECRET`. Then Actions → Egress probe → Run workflow, branch `amazon-lg-slice`, defaults. Download the `egress-github-actions` artifact into `server/reports/` and ask Claude Code to read it.
-  2. **If Amazon gives real pages** (product price or results items) from the runner: Claude Code adds `.github/workflows/amazon-lg-slice.yml` (M6c); you add the S3 secrets; fire discovery once, work the 60–89 review queue in the Mapping Center, then let monitoring run on two consecutive days (M7). **If blocked:** Claude Code writes up the options (M6d); no proxies.
+- **Next step (resume here): Amazon LG slice, choose the Amazon route** (M6d, options under Open questions → "Amazon from US datacentres is blocked").
+  1. **You choose** one of the routes A–D. Claude Code recommends A (the brand's own Amazon SP-API access), with B (a licensed price-data provider) if LG cannot give access; C only as a cheap last test.
+  2. Then Claude Code builds that route's collector for the same slice (same terms, schedules, Mapping Center, evidence rules), and M7 runs: discovery once, two monitoring days, report.
   3. After two monitoring days: `cd server && npm run exit:p2b -- --check --scheduled --scope amazon-lg`. Tick P2b (for this scope) only if it passes.
-  4. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
+  4. Meanwhile the slice schedules stay in place and do nothing (no worker, no workflow fires them). Walmart works from every US egress we tried, if you want a working slice sooner.
+  5. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
 
 ## Decisions so far
 | # | Decision | Date | Where decided |
@@ -58,16 +59,23 @@
 ## Open questions
 - **US egress for collection.** Probes, HTTP only unless noted:
 
-  | Source | India (27 Sep) | Render Ohio (30 Sep, `74.220.50.240`) | India, browser (30 Sep) |
-  |---|---|---|---|
-  | Amazon | captcha / geo page | **captcha 3/3** (3.8 KB robot check) | product page: geo page; search page: 21 results read |
-  | Walmart | ok | ok, 3/3 priced | — |
-  | Best Buy | connection dropped | timeout 3/3 | — |
-  | eBay | 403 | 403 | — |
-  | Target | ok over HTTP, "Press & hold" in browser | captcha | — |
-  | Home Depot | 403 | 403 | — |
+  | Source | India (27 Sep) | Render Ohio (30 Sep, `74.220.50.240`) | GitHub Actions (30 Sep, `134.33.77.23`) | India, browser (30 Sep) |
+  |---|---|---|---|---|
+  | Amazon | captcha / geo page | **captcha 3/3** (3.8 KB robot check) | **HTTP captcha 3/3; browser captcha 3/3, search 503 "sorry"** | product page: geo page; search page: 21 results read |
+  | Walmart | ok | ok, 3/3 priced | ok, 3/3 priced | — |
+  | Best Buy | connection dropped | timeout 3/3 | not probed | — |
+  | eBay | 403 | 403 | not probed | — |
+  | Target | ok over HTTP, "Press & hold" in browser | captcha | not probed | — |
+  | Home Depot | 403 | 403 | not probed | — |
 
-  The Ohio probe's report says egress `local` because the Render API has no `COLLECT_EGRESS_LABEL`; the IP is Render's. **GitHub Actions probe with the browser is next.** Options:
+  The Ohio probe's report says egress `local` because the Render API has no `COLLECT_EGRESS_LABEL`; the IP is Render's. GitHub's run: `server/reports/egress-github-actions-2026-09-30.md`.
+- **Amazon from US datacentres is blocked (M6d, 30 Sep).** Both free US egresses (Render Ohio, GitHub Actions / Azure) get Amazon's robot check on every product page, over HTTP and in a plain headless browser, and a 503 on search. Under decision 34 we do not get past it and add no proxies. Routes, cheapest-to-reliable:
+  - **A. The brand's own Amazon access (recommended).** Amazon's Selling Partner API (Product Pricing: `getItemOffers` / competitive pricing per ASIN) gives the buy-box price and every offer's seller, officially, for any ASIN in the US marketplace. It needs an Amazon seller (or vendor) developer registration: LG's, or Mirethos acting for LG. Credentials go in the vault (P1). Evidence is the signed API response (hashed and locked like a page); a page screenshot is not available this way. Free with the account; needs LG's agreement and legal review.
+  - **B. A licensed price-data provider** (e.g. Keepa for Amazon buy-box price history; or a retail-data vendor with page captures). Paid, per ASIN or per request; terms allow commercial use. Some vendors supply screenshots, most supply data only. Pick after the legal review of collection methods (already an open question).
+  - **C. Render Starter background worker in Ohio** (about $0.25/day while running; suspend after). Cheap to try, but the Ohio IP already gets the captcha over HTTP, and GitHub's browser was blocked too, so success is unlikely. Useful for Walmart, which works from every US egress.
+  - **D. Keep Amazon out of the automated pilot:** collect Walmart (works now) and the API sources (Best Buy, eBay keys), and treat Amazon as manual evidence until A or B is in place.
+  - Not pursued (decision 34): proxies of any kind, stealth browsers, CAPTCHA solving.
+- **Earlier notes on US egress** (27 Sep) — options considered then:
   - run the worker on Render Ohio (already planned);
   - a US residential or ISP proxy;
   - licensed data.
@@ -146,7 +154,8 @@
 - **M6a** Ohio probe (you, 30 Sep): Amazon captcha 3/3 over HTTP; table under Open questions. **M6b** `.github/workflows/egress-probe.yml` (manual): probe on `ubuntu-latest`, Amazon also through Chromium, JSON artifact. Secrets: `DATABASE_URL`, `DATABASE_SSL`, `JWT_SECRET`. Local check from India with `--browser`: the Amazon search page was read (21 results).
 - `scheduler --fire <schedule> --account <slug> --due` fires the latest due slot as a scheduled run (once per slot) for cron outside the worker. `exit:p2b --check --scheduled --scope amazon-lg` checks LG × Amazon (runs from `render-ohio` or `github-actions`) plus the slice discovery's results-page evidence (hash + lock) and that nothing used was staged.
 - **Tests:** `npm test` 125/125 (new: schedule kinds, manual cadence, SKU pick, Amazon condition and Renewed badge, pace, scroll plan, stop-on-block streak, results evidence keys). DB: `collection-config` 8/8 (fixed the stale "7 sources" expectation: 25 since the demo catalogue), `collection-runs` + `data-health` 12/12 (new: results pages RLS / append-only, stop on block). Portal build OK, lint 0 errors (7 warnings, all older).
-- **Not done yet:** M6b run on GitHub, M6c/d, M7 (discovery run, two monitoring days, report), real Amazon fixtures, exit test.
+- **M6b result (you ran it, 30 Sep):** GitHub Actions `134.33.77.23`: Amazon 0/7 real pages (HTTP captcha 3/3, browser captcha 3/3, search 503); Walmart 3/3 priced. The job then hung on exit (the probe's Redis client kept reconnecting where no Redis exists; `closePoliteness` now drops a client that never connected, exits in 10 s locally) and GitHub cancelled it after its 20-minute limit; the results were complete. **M6c not built** (its condition, real Amazon pages from a US probe, was not met). **M6d:** routes A–D under Open questions.
+- **Not done yet:** your choice of Amazon route, M7 (discovery run, two monitoring days, report), real Amazon fixtures, exit test.
 
 ### 28 Sep 2026 — Brand logos (Claude Code)
 - **Files:** you added `docs/Apple Logo.png` and `docs/Samsung Logo.png`; the portal uses cropped copies `src/assets/apple.png` and `src/assets/samsung.png` (Samsung's grey card made transparent). `src/assets/lg.png` cropped the same way (it had wide white margins).
