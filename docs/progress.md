@@ -3,19 +3,18 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2b Collectors **in progress** (paused 27 Sep 2026: code complete, exit test not run yet; the code is on `main` since 28 Sep). Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
-- **Last updated:** 28 Sep 2026 (Claude Code: demo catalogue, brand logos)
+- **Phase:** P2b Collectors **in progress**, finishing through a first real slice: **Amazon.com on the LG Sandbox** (branch `amazon-lg-slice`, 30 Sep 2026; code M1–M5 done, US egress being probed). Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Last updated:** 30 Sep 2026 (Claude Code: Amazon LG slice M1–M6b)
 - **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here):**
-  1. **Ohio egress probe (free).** Run the PowerShell snippet in the 27 Sep log below ("How to run the Ohio probe"). It writes `server/reports/egress-render-ohio.json`; then ask Claude Code to read it and record the India vs Ohio table here.
-  2. **Choose how the collector runs from the US:** GitHub Actions (free, test only; Claude Code adds a workflow and you add repo secrets) **or** a Render Starter background worker (billed by running time, about $0.25/day; suspend after testing). Render settings are in the 27 Sep log. You were leaning to the free option.
-  3. When the first US run has finished: `cd server && npm run exit:p2b -- --check --scheduled` (or `--fire` first, then `--check --wait`). Tick P2b only if it passes; sources still blocked must show as failures in Data Health.
-  4. Browser check of Data Health on the live site (P2b is already on `main`; tick P2b only after step 3 passes).
-  5. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
+- **Next step (resume here): Amazon LG slice, M6b onwards** (details in the 30 Sep log).
+  1. **GitHub Actions egress probe (free).** Push `amazon-lg-slice`, and put `.github/workflows/egress-probe.yml` on `main` (GitHub only offers "Run workflow" for workflows on the default branch). Add repo secrets `DATABASE_URL` (owner URL), `DATABASE_SSL` (`true`), `JWT_SECRET`. Then Actions → Egress probe → Run workflow, branch `amazon-lg-slice`, defaults. Download the `egress-github-actions` artifact into `server/reports/` and ask Claude Code to read it.
+  2. **If Amazon gives real pages** (product price or results items) from the runner: Claude Code adds `.github/workflows/amazon-lg-slice.yml` (M6c); you add the S3 secrets; fire discovery once, work the 60–89 review queue in the Mapping Center, then let monitoring run on two consecutive days (M7). **If blocked:** Claude Code writes up the options (M6d); no proxies.
+  3. After two monitoring days: `cd server && npm run exit:p2b -- --check --scheduled --scope amazon-lg`. Tick P2b (for this scope) only if it passes.
+  4. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
 
 ## Decisions so far
 | # | Decision | Date | Where decided |
@@ -48,9 +47,27 @@
 | 26 | One BullMQ queue per source (own limiter), one headless page at a time per worker; retries only for timeout / network / blocked, the retry through the browser | 27 Sep 2026 | Phase 2b |
 | 27 | We do not try to get past bot challenges (e.g. Target's "Press & hold"): they are recorded as `blocked` and shown in Data Health | 27 Sep 2026 | Phase 2b |
 | 28 | Demo catalogue replaces the placeholder SKUs: `docs/MAP_Intel_Demo_Catalogue_LG_Apple_Samsung.xlsx` columns A–J (127 SKUs, MAP from 28 Sep 2026) and its merchant lists. Placeholders are retired, not deleted; the 13 whose model number is a sheet SKU are renamed to it (listings and prices carry over). Each brand subscribes to its Track = Y merchants; merchants without a collector are `planned`. "Check listing" loads as Paused | 28 Sep 2026 | Demo catalogue (your answers) |
+| 29 | P2b finishes through one real slice: Amazon.com, LG Sandbox, 10 active LG SKUs. The LG catalogue is all gram laptops, so the 10 are spread over its 5 lines and 10 model families (first SKU by code of each family, taking turns across lines) instead of the first 10 by code, which were all gram 14" (your answer). One group "Amazon LG slice": a model-number and a name term per SKU, Marketplace = Some → Amazon only. "Brand SKUs" no longer searches Amazon (your answer) | 30 Sep 2026 | Amazon LG slice |
+| 30 | Discovery reads 2 search pages per term. Used / renewed / refurbished / open-box results are never staged (search cards, Renewed badges and product pages) | 30 Sep 2026 | Amazon LG slice |
+| 31 | Auto-validation stays on: 90+ auto-include, 60–89 review in the Mapping Center, below 60 auto-exclude (LG settings 90 / 60) | 30 Sep 2026 | Amazon LG slice |
+| 32 | Monitoring once a day at 09:00 Asia/Kolkata, Included listings only, through a monitoring-only schedule; discovery through a discovery-only schedule fired by hand (`schedule.kind`, cadence `manual`). Every observation stores a fresh screenshot + HTML, also when nothing changed. Amazon is browser-first for product **and** results pages: one request per page and the screenshot is the live page | 30 Sep 2026 | Amazon LG slice |
+| 33 | Pace on amazon.com: 3 s + up to 1 s random jitter between pages (adapter pace, other sources keep the global delay), one tab, one page at a time | 30 Sep 2026 | Amazon LG slice |
+| 34 | Conduct: human-paced, not hidden. No stealth plugins, fingerprint spoofing, CAPTCHA solving or proxy rotation; `--disable-blink-features=AutomationControlled` removed; robots.txt respected. A robot-check / CAPTCHA / "sorry" / 503 page is recorded as blocked and never stores a price; a blocked Amazon page is not retried through the browser; 2 blocked results in a row on a source cancel its remaining queued jobs in the run | 30 Sep 2026 | Amazon LG slice |
+| 35 | Egress free first: Render Ohio HTTP probe, then a GitHub Actions probe (with the browser). If a US probe gets real Amazon pages, the slice runs on GitHub Actions for the test period; production monitoring moves to the Render worker. If both are blocked: write up Render Starter worker vs a licensed data provider; no proxies | 30 Sep 2026 | Amazon LG slice |
 
 ## Open questions
-- **US egress for collection.** Probe from India, 27 Sep: Amazon captcha / geo page, Best Buy connection dropped, eBay and Home Depot 403 at the edge; Walmart works over HTTP; Target works over HTTP but shows headless browsers a "Press & hold" challenge. **Ohio probe still to run** (next step 1). Options:
+- **US egress for collection.** Probes, HTTP only unless noted:
+
+  | Source | India (27 Sep) | Render Ohio (30 Sep, `74.220.50.240`) | India, browser (30 Sep) |
+  |---|---|---|---|
+  | Amazon | captcha / geo page | **captcha 3/3** (3.8 KB robot check) | product page: geo page; search page: 21 results read |
+  | Walmart | ok | ok, 3/3 priced | — |
+  | Best Buy | connection dropped | timeout 3/3 | — |
+  | eBay | 403 | 403 | — |
+  | Target | ok over HTTP, "Press & hold" in browser | captcha | — |
+  | Home Depot | 403 | 403 | — |
+
+  The Ohio probe's report says egress `local` because the Render API has no `COLLECT_EGRESS_LABEL`; the IP is Render's. **GitHub Actions probe with the browser is next.** Options:
   - run the worker on Render Ohio (already planned);
   - a US residential or ISP proxy;
   - licensed data.
@@ -68,12 +85,14 @@
 - [x] P0 Groundwork: backend skeleton, bug fixes, API client, collector proof of concept, enforcement-channel spike (verified 23 Sep 2026)
 - [x] P1 Foundation: accounts, roles, audit log, vault, sources, subscriptions, schedules, terms (exit test 30/30, 24 Sep 2026)
 - [x] P2a Catalogue: products, MAP history, promo windows, policy docs, sellers, Mapping Center (exit test 14/14, 25 Sep 2026)
-- [ ] P2b Collectors: scheduler, production collectors, evidence capture, observation store, source health (code complete on `phase-2b-collectors`; exit test waits for a US run)
+- [ ] P2b Collectors: scheduler, production collectors, evidence capture, observation store, source health (code complete; finishing through the Amazon LG slice; exit test `--scope amazon-lg` waits for a US run)
 - [ ] P3 Detection & reporting: rules, violations, dashboard, reports, evidence links, email alerts (pilot go-live)
 - [ ] P4 Enforcement & learning: cases, notices, marketplace channels, learning loop, alerts
 - [ ] P5 Scale & governance: onboarding, budget, tickets, SSO, API
 
 ## Known issues carried forward
+- **Amazon slice (30 Sep):** the request estimate counts a model-number (identifier) term as 1 search page, but discover jobs read the subscription's `search_pages` (2), so Amazon discovery costs about 40 pages, not 30. The "fresh screenshot + HTML on every observation, even unchanged" rule is how the collector already works (append-only, no de-duplication); M7's Day 1 vs Day 2 report is its proof on real pages. Amazon extractor fixtures are still hand-made (replace from the first US run).
+- **Data Health on the live site** does not know the slice changes until `amazon-lg-slice` is merged: the Render API on `main` ignores `schedule.kind` (migrations 025–027 are applied to Neon and are backward compatible).
 - **P2b extractors for eBay, Target and Home Depot are untested on real US pages** (India is blocked there). Unit tests use small pages in each site's shape; replace them with real fixtures from the first US run (`server/test/fixtures/README.md`). Watch Data Health for `layout_changed`.
 - **Evidence from before 27 Sep is not locked.** Object Lock was only enabled on the bucket on 27 Sep; P0 and smoke-test files have hashes but no retention.
 - **Other sellers on a listing are counted, not captured.** Walmart's other offers load in the browser (`otherOffers` is recorded in the observation's extract); Amazon's offer panel (AOD) is not built. Pilot subscriptions use buy box only.
@@ -116,6 +135,19 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 30 Sep 2026 — Amazon.com LG slice, M1–M6b (Claude Code)
+- **Branch** `amazon-lg-slice` from `main` (not pushed). Commits: M1+M2 `18f197f`, M3–M5 `b5ce93a` (one commit: `jobs.ts` carries all three), M6a/b `e9e5ba3`, docs: this commit. Prompt: `docs/amazon-lg-slice-prompt.md`. Decisions 29–35 above.
+- **Migrations 025–027** (applied to Neon): 025 `schedule.kind`; 026 `results_page` + `results_page_listing` (append-only, RLS); 027 `crawl_run.stopped`.
+- **M1** `npm run slice:amazon-lg [-- --commit]` (`src/scripts/slice-amazon-lg.ts`, choice in `src/lib/amazonSlice.ts`), through the API as the seed admin. **Committed to LG on 30 Sep:** group "Amazon LG slice" with 20 terms for `14Z90T-G.AAB2U1`, `14T90S-G.AAB4U1`, `15U50T-G.AAS3U1`, `16Z90SP-A.ADB9U1`, `16T90SP-G.AAB6U1`, `14Z90U-G.AS63U1`, `15U50U-H.AA56U1`, `16Z90TS-G.AUG4U1`, `16T95TP-K.AA77U1`, `14Z95U-G.AS67U1`; Marketplace = Amazon only; "Brand SKUs" Marketplace All → Some (Newegg, Walmart, eBay); schedules "Amazon LG discovery" (discovery, manual, priority 40, Amazon + slice group) and "Amazon LG daily monitoring" (monitoring, `0 9 * * *` Asia/Kolkata, Included only, priority 40, Amazon). The Amazon subscription already had 2 pages / new only / buy box only. A re-run changes nothing. Plan preview: discovery 20 search jobs; monitoring 1 collect (the one Included Amazon listing); the daily sweep no longer touches Amazon.
+- **M2** schedule kind: discovery work resolves among `both` / `discovery` schedules, listings among `both` / `monitoring` (`scheduler/expand.ts`); cadence `manual` never fires (`lib/schedules.ts`, `scheduler/due.ts`); API, Sources & Terms (Runs column and field, "Manual only"), mock.
+- **M3** Amazon adapter (`collector/sources.ts`): browser-first, pace 3 s + 1 s, scroll to the buy box in 2–3 steps and back before the full-page screenshot (4000 px cap), `noRetryOnBlock`. `browser.ts`: automation flag removed; one context per source (cookies carry over), one tab at a time. Condition: Amazon title / used buy box / Renewed badge; `keepCondition` on search and product-page discovery. `egress:probe --browser --sources --out`.
+- **M4** `collector/resultsEvidence.ts`: every results page a discover job reads (blocked ones too) → HTML + screenshot + SHA-256 under Object Lock, with the listings it showed and their positions. `GET /accounts/:id/results-pages/:pageId`; Data Health failures "Open page"; Mapping Center listing drawer "Found by discovery: search page N for term X".
+- **M5** `collector/stopOnBlock.ts`: 2 blocked results in a row on a source → its queued jobs in the run are cancelled (skipped / cancelled, class blocked), `crawl_run.stopped` records it, Data Health shows a red "Stopped" note and the cancelled jobs. A job cancelled while on the queue is not run.
+- **M6a** Ohio probe (you, 30 Sep): Amazon captcha 3/3 over HTTP; table under Open questions. **M6b** `.github/workflows/egress-probe.yml` (manual): probe on `ubuntu-latest`, Amazon also through Chromium, JSON artifact. Secrets: `DATABASE_URL`, `DATABASE_SSL`, `JWT_SECRET`. Local check from India with `--browser`: the Amazon search page was read (21 results).
+- `scheduler --fire <schedule> --account <slug> --due` fires the latest due slot as a scheduled run (once per slot) for cron outside the worker. `exit:p2b --check --scheduled --scope amazon-lg` checks LG × Amazon (runs from `render-ohio` or `github-actions`) plus the slice discovery's results-page evidence (hash + lock) and that nothing used was staged.
+- **Tests:** `npm test` 125/125 (new: schedule kinds, manual cadence, SKU pick, Amazon condition and Renewed badge, pace, scroll plan, stop-on-block streak, results evidence keys). DB: `collection-config` 8/8 (fixed the stale "7 sources" expectation: 25 since the demo catalogue), `collection-runs` + `data-health` 12/12 (new: results pages RLS / append-only, stop on block). Portal build OK, lint 0 errors (7 warnings, all older).
+- **Not done yet:** M6b run on GitHub, M6c/d, M7 (discovery run, two monitoring days, report), real Amazon fixtures, exit test.
+
 ### 28 Sep 2026 — Brand logos (Claude Code)
 - **Files:** you added `docs/Apple Logo.png` and `docs/Samsung Logo.png`; the portal uses cropped copies `src/assets/apple.png` and `src/assets/samsung.png` (Samsung's grey card made transparent). `src/assets/lg.png` cropped the same way (it had wide white margins).
 - **`ClientLogo` (`src/App.jsx`):** shows Apple and Samsung; the LG `scale(2.3)` workaround is removed; the logo tile is always white, in dark mode too (Apple's mark is black and vanished on the dark card).
