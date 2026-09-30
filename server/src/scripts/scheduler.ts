@@ -3,6 +3,9 @@
 //   npm run scheduler -- --fire "Daily sweep" --account lg       fire one schedule now (queue for the worker)
 //   npm run scheduler -- --fire "Daily sweep" --account lg --inline [--limit 5] [--source walmart_us]
 //                                                                ... and run its jobs in this process
+//   npm run scheduler -- --fire "Daily sweep" --account lg --due --inline
+//                                                                fire the schedule's latest due slot as a scheduled run
+//                                                                (once per slot; nothing when not due): cron outside the worker
 //   npm run scheduler -- --run <crawlRunId> --inline [--limit 5] run queued jobs of a run in this process
 //   npm run scheduler -- --cancel <crawlRunId>                   cancel what is still queued; the run finishes
 import { parseArgs } from 'node:util';
@@ -11,6 +14,7 @@ import { closePoliteness } from '../collector/http.js';
 import { RetryLater, finalizeRun, runCrawlJob } from '../collector/jobs.js';
 import { closeDb, withSystem } from '../lib/db.js';
 import { closeQueue } from '../lib/queue.js';
+import { dueSlot } from '../scheduler/due.js';
 import { fireSchedule, inlineRuns, schedulerTick } from '../scheduler/tick.js';
 
 const { values } = parseArgs({
@@ -21,6 +25,7 @@ const { values } = parseArgs({
     run: { type: 'string' },
     cancel: { type: 'string' },
     inline: { type: 'boolean', default: false },
+    due: { type: 'boolean', default: false },
     limit: { type: 'string' },
     source: { type: 'string' },
   },
@@ -87,17 +92,28 @@ async function main(): Promise<void> {
     for (const r of await schedulerTick()) console.log(`${r.schedule}: run ${r.crawlRunId} (${r.queued} queued, skipped ${JSON.stringify(r.skipped)})`);
   } else if (values.fire) {
     if (!values.account) throw new Error('--fire needs --account <slug>');
-    const scheduleId = await withSystem(
+    const s = await withSystem(
       async (db) =>
         (
-          await db.query<{ id: string }>('SELECT s.id FROM schedule s JOIN account a ON a.id = s.account_id WHERE a.slug = $1 AND lower(s.name) = lower($2)', [
-            values.account,
-            values.fire,
-          ])
-        ).rows[0]?.id,
+          await db.query<{ id: string; cadence: string; timezone: string; last_fired: Date | null }>(
+            `SELECT s.id, s.cadence, s.timezone,
+                    (SELECT max(fired_for) FROM crawl_run r WHERE r.schedule_id = s.id AND r.trigger = 'schedule') AS last_fired
+               FROM schedule s JOIN account a ON a.id = s.account_id WHERE a.slug = $1 AND lower(s.name) = lower($2)`,
+            [values.account, values.fire],
+          )
+        ).rows[0],
     );
-    if (!scheduleId) throw new Error(`no schedule "${values.fire}" for account ${values.account}`);
-    const r = await fireSchedule(scheduleId, new Date(), 'manual', { enqueue: !values.inline });
+    if (!s) throw new Error(`no schedule "${values.fire}" for account ${values.account}`);
+    let slot = new Date();
+    if (values.due) {
+      const due = dueSlot(s.cadence, s.timezone, slot, s.last_fired);
+      if (!due) {
+        console.log(`"${values.fire}" is not due (last scheduled slot ${s.last_fired?.toISOString() ?? 'never'}); nothing to do`);
+        return;
+      }
+      slot = due;
+    }
+    const r = await fireSchedule(s.id, slot, values.due ? 'schedule' : 'manual', { enqueue: !values.inline });
     if (!r) throw new Error('that slot already has a run');
     console.log(`run ${r.crawlRunId}: ${r.queued} jobs queued, skipped ${JSON.stringify(r.skipped)}`);
     if (values.inline) await runInline(r.crawlRunId, limit, values.source);
@@ -106,7 +122,7 @@ async function main(): Promise<void> {
   } else if (values.cancel) {
     await cancelRun(values.cancel);
   } else {
-    console.log('usage: --tick | --fire <schedule> --account <slug> [--inline] | --run <id> --inline | --cancel <id>');
+    console.log('usage: --tick | --fire <schedule> --account <slug> [--due] [--inline] | --run <id> --inline | --cancel <id>');
   }
 }
 

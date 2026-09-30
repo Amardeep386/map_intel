@@ -1,0 +1,50 @@
+# Egress probe from a GitHub-hosted runner (US, Azure): can it read Amazon and the other retailers
+# the way the collector does? Stores nothing; the JSON report is uploaded as an artifact.
+# Run by hand: Actions → Egress probe → Run workflow.
+# Secrets: DATABASE_URL (owner URL, for a few listing URLs), DATABASE_SSL, JWT_SECRET.
+name: Egress probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: Sources to probe (comma-separated, empty = all six)
+        default: amazon_us,walmart_us
+      browser:
+        description: Also read browser-first sources (Amazon) with headless Chromium
+        type: boolean
+        default: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_SSL: ${{ secrets.DATABASE_SSL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      COLLECT_EGRESS_LABEL: github-actions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - if: ${{ inputs.browser }}
+        run: npx playwright install --with-deps chromium
+      - run: >
+          npm run egress:probe -- --per 3
+          --sources "${{ inputs.sources }}"
+          ${{ inputs.browser && '--browser' || '' }}
+          --out reports/egress-github-actions.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: egress-github-actions
+          path: server/reports/egress-github-actions.json
+          if-no-files-found: warn

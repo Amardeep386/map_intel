@@ -1,0 +1,139 @@
+﻿{
+    "egressLabel":  "local",
+    "egressIp":  "74.220.50.240",
+    "at":  "2026-09-30T10:20:24.012Z",
+    "results":  [
+                    {
+                        "source":  "amazon_us",
+                        "url":  "https://www.amazon.com/dp/B0GS4231WF",
+                        "robots":  "allowed",
+                        "status":  200,
+                        "ms":  207,
+                        "bytes":  3781,
+                        "block":  "captcha",
+                        "price":  null,
+                        "error":  null
+                    },
+                    {
+                        "source":  "amazon_us",
+                        "url":  "https://www.amazon.com/dp/B0DGJ7HYG1",
+                        "robots":  "allowed",
+                        "status":  200,
+                        "ms":  125,
+                        "bytes":  3781,
+                        "block":  "captcha",
+                        "price":  null,
+                        "error":  null
+                    },
+                    {
+                        "source":  "amazon_us",
+                        "url":  "https://www.amazon.com/dp/B0GQVPX1PJ",
+                        "robots":  "allowed",
+                        "status":  200,
+                        "ms":  41,
+                        "bytes":  3781,
+                        "block":  "captcha",
+                        "price":  null,
+                        "error":  null
+                    },
+                    {
+                        "source":  "walmart_us",
+                        "url":  "https://www.walmart.com/ip/5318023297",
+                        "robots":  "allowed",
+                        "status":  200,
+                        "ms":  2611,
+                        "bytes":  621245,
+                        "block":  null,
+                        "price":  1777.86,
+                        "error":  null
+                    },
+                    {
+                        "source":  "walmart_us",
+                        "url":  "https://www.walmart.com/ip/20008614465",
+                        "robots":  "allowed",
+                        "status":  200,
+                        "ms":  1788,
+                        "bytes":  583753,
+                        "block":  null,
+                        "price":  1797.99,
+                        "error":  null
+                    },
+                    {
+                        "source":  "walmart_us",
+                        "url":  "https://www.walmart.com/ip/17620862962",
+                        "robots":  "allowed",
+                        "status":  200,
+                        "ms":  1875,
+                        "bytes":  542160,
+                        "block":  null,
+                        "price":  399,
+                        "error":  null
+                    },
+                    {
+                        "source":  "bestbuy_us",
+                        "url":  "https://www.bestbuy.com/product/apple-11-inch-ipad-air-m4-chip-wi-fi-128gb-space-gray/JJGCQYCTW2/sku/6586895",
+                        "robots":  "allowed",
+                        "status":  null,
+                        "ms":  30003,
+                        "bytes":  null,
+                        "block":  null,
+                        "price":  null,
+                        "error":  "The operation was aborted due to timeout"
+                    },
+                    {
+                        "source":  "bestbuy_us",
+                        "url":  "https://www.bestbuy.com/product/samsung-galaxy-tab-s11-11-128gb-wi-fi-with-s-pen-gray/JJGRF39WLC/sku/6641206",
+                        "robots":  "allowed",
+                        "status":  null,
+                        "ms":  30001,
+                        "bytes":  null,
+                        "block":  null,
+                        "price":  null,
+                        "error":  "The operation was aborted due to timeout"
+                    },
+                    {
+                        "source":  "bestbuy_us",
+                        "url":  "https://www.bestbuy.com/product/apple-watch-series-11-gps-42mm-jet-black-aluminum-case-with-black-sport-band-s-m-jet-black-2025/JJGCQLX4W6/sku/6572702",
+                        "robots":  "allowed",
+                        "status":  null,
+                        "ms":  30001,
+                        "bytes":  null,
+                        "block":  null,
+                        "price":  null,
+                        "error":  "The operation was aborted due to timeout"
+                    },
+                    {
+                        "source":  "ebay_us",
+                        "url":  "https://www.ebay.com/b/LG-TVs/11071/bn_1851207",
+                        "robots":  "allowed",
+                        "status":  403,
+                        "ms":  900,
+                        "bytes":  1830,
+                        "block":  "access_denied",
+                        "price":  null,
+                        "error":  null
+                    },
+                    {
+                        "source":  "target_us",
+                        "url":  "https://www.target.com/b/lg-electronics/-/N-4y41g",
+                        "robots":  "allowed",
+                        "status":  200,
+                        "ms":  1098,
+                        "bytes":  147470,
+                        "block":  "captcha",
+                        "price":  null,
+                        "error":  null
+                    },
+                    {
+                        "source":  "homedepot_us",
+                        "url":  "https://www.homedepot.com/b/Appliances/LG/N-5yc1vZbv1wZ8qk",
+                        "robots":  "allowed",
+                        "status":  403,
+                        "ms":  395,
+                        "bytes":  2259,
+                        "block":  "access_denied",
+                        "price":  null,
+                        "error":  null
+                    }
+                ]
+}
