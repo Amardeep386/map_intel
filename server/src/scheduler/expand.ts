@@ -8,7 +8,7 @@ import type { SourceCategory, TermType } from '../collector/catalogue.js';
 import { planTerm } from '../collector/discovery.js';
 import type { SourceAdapter } from '../collector/types.js';
 import { sourcesForCell, type CostGroup, type CostSource } from '../lib/cost.js';
-import { resolveSchedule, type ScheduleDef, type WorkTarget } from '../lib/schedules.js';
+import { resolveSchedule, runsDiscovery, runsMonitoring, type ScheduleDef, type WorkTarget } from '../lib/schedules.js';
 import { resolveOptions, termCost } from '../lib/sourceOptions.js';
 
 export interface FiringSchedule extends ScheduleDef {
@@ -85,9 +85,13 @@ export function expandFiring(input: ExpandInput): PlannedJob[] {
   // "Under notice" schedule re-checks listings under notice, nothing else. Listings compete among
   // the schedules whose takedown filter fits them; none is under notice before Phase 4 (cases).
   // (Phase 4 adds the listings under notice, which go to the "Under notice" schedules.)
+  // A monitoring-only schedule never takes discovery, and a discovery-only one never takes
+  // listings: each piece of work goes to the schedules that run that kind of work.
   const competing = input.schedules.filter((s) => s.takedownStatus !== 'Under notice');
-  const ownsTerm = (t: WorkTarget) => resolveSchedule(competing, t)?.id === firing.id;
-  const ownsListing = ownsTerm;
+  const discoverers = competing.filter(runsDiscovery);
+  const monitors = competing.filter(runsMonitoring);
+  const ownsTerm = (t: WorkTarget) => runsDiscovery(firing) && resolveSchedule(discoverers, t)?.id === firing.id;
+  const ownsListing = (t: WorkTarget) => runsMonitoring(firing) && resolveSchedule(monitors, t)?.id === firing.id;
   const target = (s: ExpandSource, termGroup: string | null, term: string | null): WorkTarget => ({
     source: s.code,
     category: s.category,

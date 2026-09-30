@@ -10,6 +10,14 @@ export interface ScheduleSelector {
   terms?: string[]; // term ids
 }
 
+/** What a schedule runs: listings and terms, only the re-collection of listings, or only terms. */
+export type ScheduleKind = 'both' | 'monitoring' | 'discovery';
+export const SCHEDULE_KINDS: ScheduleKind[] = ['both', 'monitoring', 'discovery'];
+
+/** A cadence that never fires by itself: the schedule runs only when fired by hand. */
+export const MANUAL_CADENCE = 'manual';
+export const isManual = (cadence: string) => cadence.trim().toLowerCase() === MANUAL_CADENCE;
+
 export interface ScheduleDef {
   id: string;
   name: string;
@@ -18,7 +26,13 @@ export interface ScheduleDef {
   active: boolean;
   cadence: string;
   timezone: string;
+  /** Missing means 'both'. */
+  kind?: ScheduleKind;
 }
+
+/** Does this schedule run discovery (terms) / re-collect listings? */
+export const runsDiscovery = (s: Pick<ScheduleDef, 'kind'>) => (s.kind ?? 'both') !== 'monitoring';
+export const runsMonitoring = (s: Pick<ScheduleDef, 'kind'>) => (s.kind ?? 'both') !== 'discovery';
 
 /** One unit of work: a term on a source. */
 export interface WorkTarget {
@@ -53,9 +67,20 @@ export function resolveSchedule<T extends ScheduleDef>(schedules: T[], target: W
   return hits[0] ?? null;
 }
 
-/** Validate a cron expression + IANA timezone; returns the next run or an error message. */
-export function nextRun(cadence: string, timezone: string, from: Date = new Date()): { next: Date } | { error: string } {
-  if (cadence.trim().split(/\s+/).length !== 5) return { error: 'cadence must be a 5-field cron expression, e.g. "0 6 * * *"' };
+/**
+ * Validate a cron expression + IANA timezone; returns the next run or an error message.
+ * A manual schedule has no next run (`next: null`).
+ */
+export function nextRun(cadence: string, timezone: string, from: Date = new Date()): { next: Date | null } | { error: string } {
+  if (isManual(cadence)) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    } catch {
+      return { error: `unknown timezone "${timezone}"` };
+    }
+    return { next: null };
+  }
+  if (cadence.trim().split(/\s+/).length !== 5) return { error: 'cadence must be a 5-field cron expression, e.g. "0 6 * * *", or "manual"' };
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: timezone });
   } catch {

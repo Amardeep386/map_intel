@@ -46,9 +46,11 @@ after(async () => {
   await closeDb();
 });
 
-test('catalogue lists all 7 sources with collector-declared options', async () => {
+test('catalogue lists every source with collector-declared options', async () => {
   const sources = (await call(app, u.brand, 'GET', '/sources')).json();
-  assert.equal(sources.length, 7);
+  // The 7 launch sources, plus the demo catalogue's planned merchants since 28 Sep.
+  const codes = sources.map((s: { code: string }) => s.code);
+  for (const c of ['amazon_us', 'walmart_us', 'bestbuy_us', 'ebay_us', 'target_us', 'homedepot_us', 'google_shopping_us']) assert.ok(codes.includes(c), c);
   const amazon = sources.find((s: { code: string }) => s.code === 'amazon_us');
   assert.equal(amazon.collectorStatus, 'live');
   assert.ok(amazon.options.some((o: { key: string }) => o.key === 'buy_box_only'));
@@ -165,6 +167,17 @@ test('schedules: cadence is validated; resolve picks the highest priority match'
   assert.equal(other.schedule.name, 'Daily');
   const patched = await call(app, u.manager, 'PATCH', `${base}/schedules/${fast.json().id}`, { active: false });
   assert.equal(patched.json().nextRun, null);
+  // Monitoring-only schedules never take discovery work; a manual schedule has no next run.
+  const mon = await call(app, u.manager, 'POST', `${base}/schedules`, { name: 'Amazon monitoring', cadence: '0 9 * * *', timezone: 'Asia/Kolkata', kind: 'monitoring', priority: 40, selector: { sources: ['amazon_us'] } });
+  assert.equal(mon.statusCode, 201);
+  assert.equal(mon.json().kind, 'monitoring');
+  const manual = await call(app, u.manager, 'POST', `${base}/schedules`, { name: 'Amazon discovery', cadence: 'manual', kind: 'discovery', priority: 5, selector: { sources: ['amazon_us'] } });
+  assert.equal(manual.statusCode, 201);
+  assert.equal(manual.json().nextRun, null);
+  assert.equal(manual.json().manual, true);
+  assert.equal((await call(app, u.analyst, 'GET', `${base}/schedules/resolve?source=amazon_us`)).json().schedule.name, 'Amazon monitoring');
+  assert.equal((await call(app, u.analyst, 'GET', `${base}/schedules/resolve?source=amazon_us&work=discovery`)).json().schedule.name, 'Daily');
+  for (const s of [mon, manual]) await call(app, u.manager, 'DELETE', `${base}/schedules/${s.json().id}`);
   assert.equal((await call(app, u.analyst, 'POST', `${base}/schedules`, { name: 'x', cadence: '0 6 * * *' })).statusCode, 403);
 });
 

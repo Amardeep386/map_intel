@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { CostGroup } from '../src/lib/cost.js';
 import { SOURCE_CATALOGUE, optionsSchema } from '../src/collector/catalogue.js';
 import { adapters } from '../src/collector/sources.js';
+import { nextRun } from '../src/lib/schedules.js';
 import { dueSlot } from '../src/scheduler/due.js';
 import { expandFiring, queuePriority, type ExpandInput, type ExpandSource, type FiringSchedule } from '../src/scheduler/expand.js';
 
@@ -90,6 +91,34 @@ test('expand: listing scope and under-notice schedules', () => {
   assert.deepEqual(inclOnly.filter((j) => j.kind === 'collect').map((j) => j.listingId), ['l-inc']);
   const notice = expandFiring(input({ firing: { ...daily, takedownStatus: 'Under notice' } }));
   assert.equal(notice.filter((j) => j.kind === 'collect').length, 0);
+});
+
+test('expand: monitoring-only and discovery-only schedules split one source between them', () => {
+  // The Amazon LG slice: daily monitoring of Amazon listings, discovery of one group by hand.
+  const monitor: FiringSchedule = { ...daily, id: 's-mon', name: 'Amazon monitoring', selector: { sources: ['amazon_us'] }, priority: 40, kind: 'monitoring', listingScope: 'Included only', cadence: '0 9 * * *', timezone: 'Asia/Kolkata' };
+  const discover: FiringSchedule = { ...daily, id: 's-disc', name: 'Amazon discovery', selector: { sources: ['amazon_us'], termGroups: ['g-names'] }, priority: 40, kind: 'discovery', cadence: 'manual' };
+  const schedules = [daily, monitor, discover];
+  assert.deepEqual(describe(expandFiring(input({ firing: monitor, schedules }))), ['collect:amazon_us:l-inc:-:1:run']);
+  // No collect job for the ASIN's page here, so the identifier is discovered through its product page.
+  assert.deepEqual(describe(expandFiring(input({ firing: discover, schedules }))), ['discover:amazon_us:t-kw:search:2:run', 'discover:amazon_us:t-asin:product:1:run']);
+  // The daily sweep keeps everything else and nothing on Amazon.
+  const rest = expandFiring(input({ schedules }));
+  assert.ok(rest.every((j) => j.sourceCode !== 'amazon_us'));
+  assert.ok(rest.some((j) => j.kind === 'collect' && j.sourceCode === 'walmart_us'));
+});
+
+test('expand: a monitoring-only schedule with nothing else competing still never discovers', () => {
+  const monitor: FiringSchedule = { ...daily, kind: 'monitoring' };
+  assert.ok(expandFiring(input({ firing: monitor, schedules: [monitor] })).every((j) => j.kind === 'collect'));
+  const discover: FiringSchedule = { ...daily, kind: 'discovery' };
+  assert.ok(expandFiring(input({ firing: discover, schedules: [discover] })).every((j) => j.kind === 'discover'));
+});
+
+test('manual schedules: never due, no next run, timezone still checked', () => {
+  assert.equal(dueSlot('manual', 'UTC', at('2026-09-27T06:00:00Z'), null), null);
+  assert.deepEqual(nextRun('manual', 'Asia/Kolkata'), { next: null });
+  assert.ok('error' in nextRun('manual', 'Mars/Base'));
+  assert.ok('error' in nextRun('every day', 'UTC'));
 });
 
 test('queue priority: rechecks first, higher schedule priority sooner, collect before discover', () => {
