@@ -103,8 +103,20 @@ export interface SourceAdapter {
   extractResults?(html: string, url: string): ResultsPage;
   /** Every seller's offer on a product page (beyond the main one). Must never throw. */
   extractOffers?(html: string, url: string): Offer[];
-  /** The page never shows a price without JavaScript: go straight to the browser. */
+  /**
+   * Go straight to the browser (product and results pages): the page never shows a price without
+   * JavaScript, or the screenshot must be the live page (Amazon, decision 32).
+   */
   browserFirst?: boolean;
+  /** Pace for this host, instead of COLLECT_MIN_DELAY_MS / COLLECT_JITTER_MS. */
+  pace?: { minDelayMs: number; jitterMs: number };
+  /**
+   * Before the screenshot, scroll down to the first of these elements in a few steps and back
+   * to the top, as a shopper would look at the offer (and lazy parts of the page load).
+   */
+  scrollTo?: string[];
+  /** A blocked page is final: never re-read through the browser (decision 34). */
+  noRetryOnBlock?: boolean;
   /** Parse the product page. Must never throw on unexpected HTML; return nulls instead. */
   extract(html: string, url: string): Extracted;
   /** Detect bot walls / interstitials so we do not record them as prices. */

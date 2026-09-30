@@ -147,7 +147,7 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
     notes.push(`api: ${errMessage(err)}`);
   }
 
-  // 3. HTTP first (unless the source only shows prices with JavaScript, or HTTP was just blocked)
+  // 3. HTTP first (unless the source is browser-first, or HTTP was just blocked)
   let fetched: FetchResult | null = null;
   let extracted: Extracted | null = null;
   let block: BlockReason = null;

@@ -52,6 +52,8 @@ export function extractAmazon(html: string): Extracted {
 
   out.title = cleanText($('#productTitle').first().text());
   if (out.title) out.hits.title = '#productTitle';
+  // "(Renewed)" / "Renewed Premium" listings say so in the title; a used offer in the buy box says so there.
+  out.condition = conditionFrom(out.title) ?? (/\b(?:used|renewed|refurbished)\s*-\s*(?:like new|very good|good|acceptable|excellent)\b/i.test($('#usedBuySection, #buyBoxAccordion, #desktop_buybox').first().text()) ? 'used' : null);
 
   const price = firstText($, PRICE_SELECTORS);
   if (price) {
@@ -113,6 +115,9 @@ export function detectAmazonBlock(html: string, status: number): BlockReason {
 
 export const amazonProductUrl = (asin: string) => `https://www.amazon.com/dp/${asin}`;
 
+// Amazon marks renewed products with a badge on the card as well as in the title.
+const RENEWED_BADGE = /\b(?:Amazon )?Renewed(?: Premium)?\b/i;
+
 /** Search results (/s?k=...): one card per ASIN; sponsored cards are kept and marked. */
 export function extractAmazonResults(html: string, url: string): ResultsPage {
   const $ = cheerio.load(html);
@@ -131,7 +136,7 @@ export function extractAmazonResults(html: string, url: string): ResultsPage {
       price: parsePrice(card.find('.a-price:not(.a-text-price) .a-offscreen').first().text()),
       sellerName: null,
       imageUrl: card.find('img.s-image').attr('src') ?? null,
-      condition: conditionFrom(cleanText(card.find('h2').first().text())),
+      condition: conditionFrom(cleanText(card.find('h2').first().text())) ?? (RENEWED_BADGE.test(card.find('.a-badge-text, .s-label-popover-default, [aria-label]').text()) ? 'refurbished' : null),
       format: /\bSponsored\b/.test(text) || card.find('.puis-sponsored-label-text').length ? 'sponsored' : null,
     });
   });

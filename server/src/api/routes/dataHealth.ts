@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { withTenant } from '../../lib/db.js';
 import { enqueueCrawlJobs } from '../../lib/queue.js';
+import { signedUrl } from '../../lib/storage.js';
 import { HttpError } from '../app.js';
-import { parse } from '../validate.js';
+import { parse, uuidOr404 } from '../validate.js';
 
 type Params = { accountId: string };
 
@@ -38,6 +39,7 @@ interface SnapshotRow {
   health: string | null;
   last_success_at: Date | null;
   failure_streak: number;
+  stopped: { reason: string; after: number; cancelled: number; at: string } | null;
 }
 
 const ratio = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
@@ -60,7 +62,8 @@ export async function dataHealthRoutes(app: FastifyInstance): Promise<void> {
                   coalesce(l.evidence_total, 0) AS evidence_total, coalesce(l.evidence_ok, 0) AS evidence_ok,
                   coalesce(l.expected_listings, 0) AS expected_listings, coalesce(l.observed_listings, 0) AS observed_listings,
                   coalesce(l.discovered, 0) AS discovered, coalesce(l.failure_counts, '{}') AS failure_counts, l.main_failure,
-                  l.health, l.last_success_at, coalesce(l.failure_streak, 0) AS failure_streak
+                  l.health, l.last_success_at, coalesce(l.failure_streak, 0) AS failure_streak,
+                  (SELECT cr.stopped -> s.code FROM crawl_run cr WHERE cr.id = l.crawl_run_id) AS stopped
              FROM source s
              LEFT JOIN account_source a ON a.source_id = s.id AND a.account_id = $1
              LEFT JOIN latest l ON l.source_id = s.id
@@ -115,6 +118,8 @@ export async function dataHealthRoutes(app: FastifyInstance): Promise<void> {
           jobs: { planned: r.jobs_planned, executed: r.jobs_executed, skipped: r.jobs_skipped },
           failures: r.failure_counts,
           mainFailure: r.main_failure,
+          // M5: the run stopped this source after consecutive blocked pages.
+          stopped: r.stopped ?? null,
         })),
       };
     }),
@@ -129,14 +134,18 @@ export async function dataHealthRoutes(app: FastifyInstance): Promise<void> {
         const { rows } = await db.query(
           `SELECT j.id, j.kind, j.failure_class, j.skip_reason, j.status, j.error, j.url, j.attempts, j.method,
                   coalesce(j.finished_at, j.queued_at) AS at, j.crawl_run_id, l.title AS listing_title, t.value AS term,
-                  e.id AS evidence_id
+                  e.id AS evidence_id, rp.results_page_id, rp.results_pages
              FROM crawl_job j
              JOIN source s ON s.id = j.source_id
              LEFT JOIN listing l ON l.id = j.listing_id
              LEFT JOIN term t ON t.id = j.term_id
              LEFT JOIN evidence e ON e.observation_id = j.observation_id
+             -- A discover job's results pages (M4): the last one read is the one that failed.
+             LEFT JOIN LATERAL (
+               SELECT (array_agg(p.id ORDER BY p.page_no DESC))[1] AS results_page_id, count(*)::int AS results_pages
+                 FROM results_page p WHERE p.crawl_job_id = j.id) rp ON true
             WHERE j.account_id = $1 AND s.code = $2
-              AND (j.status = 'failed' OR (j.status = 'skipped' AND j.skip_reason IN ('robots', 'not_executable', 'no_collector')))
+              AND (j.status = 'failed' OR (j.status = 'skipped' AND j.skip_reason IN ('robots', 'not_executable', 'no_collector', 'cancelled')))
             ORDER BY coalesce(j.finished_at, j.queued_at) DESC
             LIMIT $3`,
           [req.params.accountId, req.params.source, limit],
@@ -144,7 +153,7 @@ export async function dataHealthRoutes(app: FastifyInstance): Promise<void> {
         return rows.map((r) => ({
           id: r.id,
           kind: r.kind,
-          failureClass: r.failure_class ?? r.skip_reason,
+          failureClass: r.status === 'skipped' ? r.skip_reason : r.failure_class,
           skipped: r.status === 'skipped',
           error: r.error,
           url: r.url,
@@ -155,7 +164,44 @@ export async function dataHealthRoutes(app: FastifyInstance): Promise<void> {
           listingTitle: r.listing_title,
           term: r.term,
           evidenceId: r.evidence_id,
+          resultsPageId: r.results_page_id,
+          resultsPages: r.results_pages ?? 0,
         }));
+      }),
+  );
+
+  // One search / browse results page as it was read (M4): HTML + screenshot with their hashes.
+  app.get<{ Params: Params & { pageId: string } }>(
+    '/accounts/:accountId/results-pages/:pageId',
+    { config: { permission: 'observations.read' } },
+    async (req) =>
+      withTenant(req.params.accountId, async (db) => {
+        const r = (
+          await db.query(
+            `SELECT p.*, s.code AS source, (SELECT count(*)::int FROM results_page_listing x WHERE x.results_page_id = p.id) AS listings
+               FROM results_page p JOIN source s ON s.id = p.source_id WHERE p.id = $1`,
+            [uuidOr404(req.params.pageId, 'results page')],
+          )
+        ).rows[0];
+        if (!r) throw new HttpError(404, 'results page not found');
+        return {
+          id: r.id,
+          source: r.source,
+          term: r.term_value,
+          pageNo: r.page_no,
+          url: r.url,
+          finalUrl: r.final_url,
+          fetchedAt: r.fetched_at,
+          method: r.method,
+          httpStatus: r.http_status,
+          block: r.block,
+          failureClass: r.failure_class,
+          itemsFound: r.items_found,
+          listings: r.listings,
+          lock: r.lock_mode ? { mode: r.lock_mode, until: r.lock_until } : null,
+          html: r.html_uri ? { sha256: r.html_sha256, bytes: r.html_bytes, url: await signedUrl(r.html_uri) } : null,
+          screenshot: r.screenshot_uri ? { sha256: r.screenshot_sha256, bytes: r.screenshot_bytes, url: await signedUrl(r.screenshot_uri) } : null,
+        };
       }),
   );
 

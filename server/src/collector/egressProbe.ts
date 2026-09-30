@@ -1,8 +1,10 @@
 // Egress probe: can this machine's IP reach each retailer as a US shopper would?
-// HTTP only (no browser), stores nothing, respects robots.txt and the per-host delay.
+// HTTP by default; with `browser`, browser-first sources (Amazon) are also read the way the
+// collector reads them. Stores nothing, respects robots.txt and the per-host delay.
 // Used by `npm run egress:probe` (local) and POST /admin/egress-probe (on the Render API in Ohio).
 import { config } from '../lib/config.js';
 import type { Db } from '../lib/db.js';
+import { browserFetch } from './browser.js';
 import { genericBlock } from './extract/common.js';
 import { browserLikeHeaders, politeWait, proxyDispatcher } from './http.js';
 import { robotsCheck } from './robots.js';
@@ -25,9 +27,17 @@ export const PROBE_HOSTS: Record<string, string> = {
   homedepot_us: 'www.homedepot.com',
 };
 
+/** A search page per searchable source: discovery reads these, so they are probed too (browser mode). */
+export const PROBE_SEARCHES: Record<string, string> = {
+  amazon_us: 'LG gram laptop',
+};
+
 export interface ProbeResult {
   source: string;
   url: string;
+  method?: 'http' | 'browser';
+  /** Items read from a results page. */
+  items?: number | null;
   robots: 'allowed' | 'disallowed';
   status: number | null;
   ms: number | null;
@@ -62,7 +72,7 @@ async function probeOne(source: string, url: string): Promise<ProbeResult> {
   const base: ProbeResult = { source, url, robots: 'allowed', status: null, ms: null, bytes: null, block: null, price: null, error: null };
   const robots = await robotsCheck(url, config.COLLECT_USER_AGENT);
   if (!robots.allowed) return { ...base, robots: 'disallowed', error: robots.reason };
-  await politeWait(adapter.host);
+  await politeWait(adapter);
   const started = Date.now();
   try {
     const res = await fetch(url, { headers: browserLikeHeaders(adapter), redirect: 'follow', signal: AbortSignal.timeout(30_000), ...({ dispatcher: proxyDispatcher() } as object) });
@@ -77,21 +87,61 @@ async function probeOne(source: string, url: string): Promise<ProbeResult> {
   }
 }
 
+/** The collector's own browser read (browser-first sources). */
+async function probeBrowser(source: string, url: string): Promise<ProbeResult> {
+  const adapter = adapters[source];
+  const base: ProbeResult = { source, url, method: 'browser', robots: 'allowed', status: null, ms: null, bytes: null, block: null, price: null, items: null, error: null };
+  const robots = await robotsCheck(url, config.COLLECT_USER_AGENT);
+  if (!robots.allowed) return { ...base, robots: 'disallowed', error: robots.reason };
+  const started = Date.now();
+  try {
+    const f = await browserFetch(url, adapter);
+    const block = adapter.detectBlock(f.html, f.status);
+    const product = adapter.isProductUrl?.(url) ?? true;
+    return {
+      ...base,
+      status: f.status,
+      ms: Date.now() - started,
+      bytes: f.html.length,
+      block,
+      price: !block && product ? adapter.extract(f.html, f.finalUrl).price : null,
+      items: !block && !product ? (adapter.extractResults?.(f.html, f.finalUrl).items.length ?? null) : null,
+    };
+  } catch (err) {
+    return { ...base, ms: Date.now() - started, error: errMessage(err) };
+  }
+}
+
+export interface ProbeOptions {
+  /** Also read browser-first sources through the browser, plus one search page each. */
+  browser?: boolean;
+  /** Only these sources. */
+  sources?: string[];
+}
+
 /**
  * Probe each source: `perSource` known listing URLs (from the database) or the fixed brand pages.
  * Sources are probed in parallel; requests to one host stay one at a time with the polite delay.
  */
-export async function runEgressProbe(listingUrls: Record<string, string[]>, perSource = 3): Promise<ProbeReport> {
-  const plan = Object.keys(PROBE_HOSTS).map((source) => ({
-    source,
-    urls: (listingUrls[source]?.length ? listingUrls[source] : (PROBE_PAGES[source] ?? [])).slice(0, perSource),
-  }));
+export async function runEgressProbe(listingUrls: Record<string, string[]>, perSource = 3, opts: ProbeOptions = {}): Promise<ProbeReport> {
+  const plan = Object.keys(PROBE_HOSTS)
+    .filter((source) => !opts.sources?.length || opts.sources.includes(source))
+    .map((source) => ({
+      source,
+      urls: (listingUrls[source]?.length ? listingUrls[source] : (PROBE_PAGES[source] ?? [])).slice(0, perSource),
+    }));
   const [ip, perSourceResults] = await Promise.all([
     egressIp(),
     Promise.all(
       plan.map(async ({ source, urls }) => {
         const out: ProbeResult[] = [];
-        for (const url of urls) out.push(await probeOne(source, url));
+        for (const url of urls) out.push({ ...(await probeOne(source, url)), method: 'http' });
+        const adapter = adapters[source];
+        if (opts.browser && adapter?.browserFirst) {
+          for (const url of urls) out.push(await probeBrowser(source, url));
+          const q = PROBE_SEARCHES[source];
+          if (q && adapter.searchUrl) out.push(await probeBrowser(source, adapter.searchUrl(q, 1)));
+        }
         return out;
       }),
     ),
@@ -102,14 +152,18 @@ export async function runEgressProbe(listingUrls: Record<string, string[]>, perS
 /** One line per source: "amazon_us  2/3 ok  1 captcha". */
 export function summarizeProbe(report: ProbeReport): string[] {
   const bySource = new Map<string, ProbeResult[]>();
-  for (const r of report.results) bySource.set(r.source, [...(bySource.get(r.source) ?? []), r]);
+  for (const r of report.results) {
+    const key = r.method === 'browser' ? `${r.source} (browser)` : r.source;
+    bySource.set(key, [...(bySource.get(key) ?? []), r]);
+  }
   return [...bySource].map(([source, rs]) => {
     const ok = rs.filter((r) => r.status !== null && r.status < 400 && !r.block).length;
     const issues = rs
       .filter((r) => !(r.status !== null && r.status < 400 && !r.block))
       .map((r) => (r.robots === 'disallowed' ? 'robots' : (r.block ?? (r.error ? 'error' : `http ${r.status}`))));
     const priced = rs.filter((r) => r.price !== null).length;
-    return `${source.padEnd(13)} ${ok}/${rs.length} ok${priced ? `, ${priced} priced` : ''}${issues.length ? `  (${issues.join(', ')})` : ''}`;
+    const results = rs.filter((r) => (r.items ?? 0) > 0).length;
+    return `${source.padEnd(13)} ${ok}/${rs.length} ok${priced ? `, ${priced} priced` : ''}${results ? `, ${results} results page${results > 1 ? 's' : ''} read` : ''}${issues.length ? `  (${issues.join(', ')})` : ''}`;
   });
 }
 

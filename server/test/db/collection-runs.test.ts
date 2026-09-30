@@ -98,3 +98,59 @@ test('evidence is visible to the accounts that map the listing', () =>
     assert.ok(got.includes(rows[0].account_id));
     assert.deepEqual((await db.query<{ a: string[] }>('SELECT app_evidence_accounts($1) AS a', [randomUUID()])).rows[0].a, []);
   }));
+
+test('results pages (M4): tenant-isolated, append-only, linked to the listings they showed', () =>
+  rolledBack(async (db) => {
+    const src = await sourceId(db);
+    const page = async (account: string) => {
+      await inAccount(db, account);
+      const run = await newRun(db, account);
+      const job = (await db.query<{ id: string }>(`INSERT INTO crawl_job (crawl_run_id, account_id, source_id, kind) VALUES ($1, $2, $3, 'discover') RETURNING id`, [run, account, src])).rows[0].id;
+      return (
+        await db.query<{ id: string }>(
+          `INSERT INTO results_page (account_id, crawl_run_id, crawl_job_id, source_id, page_no, url, fetched_at, method, items_found, html_sha256)
+           VALUES ($1, $2, $3, $4, 1, 'https://www.amazon.com/s?k=x', now(), 'browser', 1, 'abc') RETURNING id`,
+          [account, run, job, src],
+        )
+      ).rows[0].id;
+    };
+    const lgPage = await page(accounts.lg);
+    const applePage = await page(accounts.apple);
+    const listingId = (await db.query<{ id: string }>(`SELECT id FROM listing WHERE source_id = $1 LIMIT 1`, [src])).rows[0].id;
+    await inAccount(db, accounts.lg);
+    await db.query(`INSERT INTO results_page_listing (results_page_id, account_id, listing_id, position) VALUES ($1, $2, $3, 1)`, [lgPage, accounts.lg, listingId]);
+    await asTenant(db, accounts.lg);
+    const seen = await db.query<{ id: string }>('SELECT id FROM results_page WHERE id = ANY($1)', [[lgPage, applePage]]);
+    assert.deepEqual(seen.rows.map((r) => r.id), [lgPage]);
+    await expectRefused(db, `UPDATE results_page SET items_found = 9 WHERE id = $1`, [lgPage]);
+    await expectRefused(db, `DELETE FROM results_page_listing WHERE results_page_id = $1`, [lgPage]);
+  }));
+
+test('stop on block (M5): two blocked results in a row cancel the source’s queued jobs in the run', () =>
+  rolledBack(async (db) => {
+    const { stopSourceIfBlocked } = await import('../../src/collector/stopOnBlock.js');
+    await inAccount(db, accounts.lg);
+    const amazon = await sourceId(db);
+    const walmart = await sourceId(db, 'walmart_us');
+    const run = await newRun(db, accounts.lg);
+    const job = (source: string, status: string, failure: string | null, minutesAgo = 0) =>
+      db.query(
+        `INSERT INTO crawl_job (crawl_run_id, account_id, source_id, kind, status, failure_class, finished_at)
+         VALUES ($1, $2, $3, 'collect', $4, $5, CASE WHEN $4 IN ('done', 'failed') THEN now() - make_interval(mins => $6) END)`,
+        [run, accounts.lg, source, status, failure, minutesAgo],
+      );
+    await job(amazon, 'done', null, 3);
+    await job(amazon, 'failed', 'blocked', 2);
+    for (let i = 0; i < 3; i++) await job(amazon, 'queued', null);
+    await job(walmart, 'queued', null);
+    await db.query('UPDATE crawl_run SET jobs_total = 6, jobs_done = 2 WHERE id = $1', [run]);
+    assert.equal(await stopSourceIfBlocked(db, run, amazon), 0, 'one blocked result is not a streak');
+    await job(amazon, 'failed', 'blocked', 1);
+    assert.equal(await stopSourceIfBlocked(db, run, amazon), 3);
+    const jobs = (await db.query<{ source_id: string; status: string; skip_reason: string | null }>('SELECT source_id, status, skip_reason FROM crawl_job WHERE crawl_run_id = $1', [run])).rows;
+    assert.equal(jobs.filter((j) => j.source_id === amazon && j.skip_reason === 'cancelled').length, 3);
+    assert.equal(jobs.find((j) => j.source_id === walmart)?.status, 'queued', 'other sources keep going');
+    const r = (await db.query<{ jobs_total: number; stopped: Record<string, { cancelled: number }> }>('SELECT jobs_total, stopped FROM crawl_run WHERE id = $1', [run])).rows[0];
+    assert.equal(r.jobs_total, 3);
+    assert.equal(r.stopped.amazon_us.cancelled, 3);
+  }));

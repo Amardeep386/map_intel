@@ -20,6 +20,13 @@ export const adapters: Record<string, SourceAdapter> = {
     productUrl: amazonProductUrl,
     isProductUrl: (u) => /\/(?:dp|gp\/product)\/[A-Z0-9]{10}/i.test(u),
     extractResults: extractAmazonResults,
+    // Decisions 32–34: the evidence is the live page (browser for product and results pages, one
+    // request each), 3 s + up to 1 s between pages, scroll to the buy box before the screenshot,
+    // and a robot check is final.
+    browserFirst: true,
+    pace: { minDelayMs: 3000, jitterMs: 1000 },
+    scrollTo: ['#desktop_buybox', '#buybox', '#rightCol', '.s-pagination-strip'],
+    noRetryOnBlock: true,
     // Ask for US English / USD. (Delivery location still follows the requester's IP.)
     cookies: [
       { name: 'i18n-prefs', value: 'USD', domain: '.amazon.com' },

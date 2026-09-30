@@ -9,7 +9,9 @@ import { collectListing, errMessage, type CollectOutcome } from './collect.js';
 import { classifyFailure, isRetryable } from './failure.js';
 import { httpFetch } from './http.js';
 import { robotsCheck } from './robots.js';
+import { linkResultsListings, storeResultsPage, type StoredResultsPage } from './resultsEvidence.js';
 import { recordRunProgress } from './runs.js';
+import { stopSourceIfBlocked } from './stopOnBlock.js';
 import { adapterFor, channelSkuFromUrl } from './sources.js';
 import type { BlockReason, DiscoveredItem, FailureClass, FetchResult, ResultsPage, SourceAdapter } from './types.js';
 
@@ -76,12 +78,15 @@ interface PageRead {
   method: 'http' | 'browser' | null;
   requests: number;
   error: string | null;
+  /** The page as read (kept as evidence), and its block reason. */
+  fetched: FetchResult | null;
+  block: BlockReason;
 }
 
 async function readResultsPage(url: string, adapter: SourceAdapter, forceBrowser: boolean): Promise<PageRead> {
   if (config.COLLECT_RESPECT_ROBOTS) {
     const r = await robotsCheck(url, config.COLLECT_USER_AGENT);
-    if (!r.allowed) return { page: null, failure: 'robots', method: null, requests: 0, error: r.reason };
+    if (!r.allowed) return { page: null, failure: 'robots', method: null, requests: 0, error: r.reason, fetched: null, block: null };
   }
   let requests = 0;
   let fetched: FetchResult | null = null;
@@ -102,7 +107,9 @@ async function readResultsPage(url: string, adapter: SourceAdapter, forceBrowser
     }
   }
   const usable = (p: ResultsPage | null) => p !== null && p.recognized && p.items.length > 0;
-  if (!usable(page) && config.COLLECT_BROWSER_FALLBACK) {
+  // A source whose block is final (Amazon) is not re-read through the browser after a block.
+  const finalBlock = adapter.noRetryOnBlock && block !== null;
+  if (!usable(page) && !finalBlock && config.COLLECT_BROWSER_FALLBACK) {
     try {
       read(await browserFetch(url, adapter));
       requests += 1;
@@ -121,12 +128,13 @@ async function readResultsPage(url: string, adapter: SourceAdapter, forceBrowser
     items: p?.items.length ?? 0,
     recognized: p?.recognized ?? false,
   });
-  return { page: p, failure, method: f?.method ?? null, requests, error: error ?? (block ? `blocked: ${block}` : null) };
+  return { page: p, failure, method: f?.method ?? null, requests, error: error ?? (block ? `blocked: ${block}` : null), fetched: f, block };
 }
 
 /** New listings found: shared listing row, the term that found it, the account's matcher. */
-async function stageDiscovered(job: JobRow, items: DiscoveredItem[]): Promise<{ toCollect: { id: string; url: string }[] }> {
-  if (!items.length) return { toCollect: [] };
+async function stageDiscovered(job: JobRow, items: DiscoveredItem[]): Promise<{ toCollect: { id: string; url: string }[]; listingIdByUrl: Map<string, string> }> {
+  const listingIdByUrl = new Map<string, string>();
+  if (!items.length) return { toCollect: [], listingIdByUrl };
   return withSystem(async (db) => {
     const ctx = await loadMatchContext(db, job.account_id);
     const toCollect: { id: string; url: string }[] = [];
@@ -136,6 +144,7 @@ async function stageDiscovered(job: JobRow, items: DiscoveredItem[]): Promise<{ 
         { sourceId: job.source_id, url: item.url, channelSku: item.channelSku, title: item.title, sellerName: item.sellerName, imageUrl: item.imageUrl, origin: 'collector' },
         ctx,
       );
+      listingIdByUrl.set(item.url, listingId);
       if (job.term_id) {
         await db.query(
           `INSERT INTO listing_discovery (account_id, term_id, listing_id) VALUES ($1, $2, $3)
@@ -157,8 +166,13 @@ async function stageDiscovered(job: JobRow, items: DiscoveredItem[]): Promise<{ 
       });
       if (!cur && (r.state === 'Included' || r.state === 'Staged')) toCollect.push({ id: listingId, url: item.url });
     }
-    return { toCollect };
+    return { toCollect, listingIdByUrl };
   });
+}
+
+/** With new_only (the default), a listing known to be used / renewed / refurbished / open box is not staged. */
+export function keepCondition(job: Pick<JobRow, 'options'>, condition: DiscoveredItem['condition']): boolean {
+  return job.options.new_only === false || !condition || condition === 'new';
 }
 
 async function runDiscover(job: JobRow, forceBrowser: boolean): Promise<JobResult> {
@@ -173,6 +187,8 @@ async function runDiscover(job: JobRow, forceBrowser: boolean): Promise<JobResul
     const outcome = await collectListing(listingId, { crawlRunId: job.crawl_run_id, jobId: job.id, accountId: job.account_id, options: job.options, forceBrowser });
     if (outcome.price !== null || outcome.status === 'held') {
       const obs = await withSystem(async (db) => (await db.query<{ title_raw: string | null; condition: string | null }>('SELECT title_raw, condition FROM observation WHERE id = $1', [outcome.observationId])).rows[0]);
+      // Decision 30: a used / renewed / refurbished / open-box listing is never staged.
+      if (!keepCondition(job, (obs?.condition as DiscoveredItem['condition']) ?? null)) return fromOutcome(outcome);
       await stageDiscovered(job, [
         { url: job.url, channelSku: channelSkuFromUrl(job.source_code, job.url), title: obs?.title_raw ?? null, price: outcome.price, sellerName: outcome.seller, imageUrl: null, condition: (obs?.condition as DiscoveredItem['condition']) ?? null, format: null },
       ]);
@@ -189,10 +205,30 @@ async function runDiscover(job: JobRow, forceBrowser: boolean): Promise<JobResul
   const items: DiscoveredItem[] = [];
   let failure: FailureClass | null = null;
   let error: string | null = null;
+  const pages: StoredResultsPage[] = [];
+  const notes: string[] = [];
   for (let p = 1; url && p <= maxPages; p++) {
     const read = await readResultsPage(url, adapter, forceBrowser);
     requests += read.requests;
     method = read.method ?? method;
+    // M4: every page read is evidence, a blocked one too.
+    if (read.fetched) {
+      const kept = (read.page?.items ?? []).filter((i) => keepCondition(job, i.condition));
+      try {
+        const stored = await storeResultsPage(job, adapter, {
+          pageNo: p,
+          url,
+          fetched: read.fetched,
+          block: read.block,
+          failure: read.failure,
+          items: kept.map((i) => ({ url: i.url, sponsored: i.format === 'sponsored' })),
+        });
+        pages.push(stored);
+        if (stored.error) notes.push(`page ${p}: ${stored.error}`);
+      } catch (err) {
+        notes.push(`page ${p} evidence: ${errMessage(err)}`);
+      }
+    }
     if (read.failure) {
       // An empty later page just ends the list; a failure on page 1 is the job's failure.
       if (p === 1 || read.failure !== 'empty') {
@@ -204,9 +240,9 @@ async function runDiscover(job: JobRow, forceBrowser: boolean): Promise<JobResul
     items.push(...read.page!.items);
     url = read.page!.nextUrl;
   }
-  const newOnly = job.options.new_only !== false;
-  const kept = items.filter((i) => !(newOnly && i.condition && i.condition !== 'new') && !(job.options.buy_it_now_only !== false && i.format === 'auction'));
-  const { toCollect } = await stageDiscovered(job, kept);
+  const kept = items.filter((i) => keepCondition(job, i.condition) && !(job.options.buy_it_now_only !== false && i.format === 'auction'));
+  const { toCollect, listingIdByUrl } = await stageDiscovered(job, kept);
+  await linkResultsListings(job.account_id, pages, listingIdByUrl);
   if (toCollect.length) {
     const { addJobs } = await import('../scheduler/tick.js');
     await addJobs(
@@ -226,7 +262,7 @@ async function runDiscover(job: JobRow, forceBrowser: boolean): Promise<JobResul
     found,
     observationId: null,
     method,
-    error,
+    error: [error, ...notes].filter(Boolean).join(' | ') || null,
   };
 }
 
@@ -289,10 +325,16 @@ async function runCollect(job: JobRow, forceBrowser: boolean): Promise<JobResult
 export async function runCrawlJob(crawlJobId: string, attempt: number, maxAttempts: number): Promise<JobResult> {
   const job = await withSystem(async (db) => {
     const j = await loadJob(db, crawlJobId);
-    if (j) await db.query(`UPDATE crawl_job SET status = 'running', attempts = $2, started_at = coalesce(started_at, now()) WHERE id = $1`, [crawlJobId, attempt]);
-    return j;
+    if (!j) return j;
+    // A job cancelled while it waited on the queue (stop on block, --cancel) is not run.
+    const { rowCount } = await db.query(
+      `UPDATE crawl_job SET status = 'running', attempts = $2, started_at = coalesce(started_at, now()) WHERE id = $1 AND status IN ('queued', 'running')`,
+      [crawlJobId, attempt],
+    );
+    return rowCount ? j : null;
   });
-  if (!job) throw new Error(`crawl job ${crawlJobId} not found`);
+  if (job === undefined) throw new Error(`crawl job ${crawlJobId} not found`);
+  if (job === null) return { status: 'done', failureClass: null, retryable: false, requests: 0, found: null, observationId: null, method: null, error: 'cancelled before it ran' };
 
   const forceBrowser = attempt > 1;
   let result: JobResult;
@@ -302,6 +344,8 @@ export async function runCrawlJob(crawlJobId: string, attempt: number, maxAttemp
     result = { status: 'failed', failureClass: 'network', retryable: true, requests: 0, found: null, observationId: null, method: null, error: errMessage(err) };
   }
 
+  // A source whose block is final (Amazon) is never retried through the browser (decision 34).
+  if (result.failureClass === 'blocked' && adapterFor(job.source_code).noRetryOnBlock) result.retryable = false;
   const willRetry = result.retryable && attempt < maxAttempts;
   const finished = await withSystem(async (db) => {
     await db.query(
@@ -311,7 +355,18 @@ export async function runCrawlJob(crawlJobId: string, attempt: number, maxAttemp
       [crawlJobId, willRetry ? 'queued' : result.status, result.failureClass, result.method, result.requests, result.found, result.observationId, result.error, willRetry],
     );
     if (willRetry) return false;
-    return recordRunProgress(db, job.crawl_run_id, result.failureClass ?? 'ok');
+    const done = await recordRunProgress(db, job.crawl_run_id, result.failureClass ?? 'ok');
+    if (done || result.failureClass !== 'blocked') return done;
+    // M5: two blocked results in a row stop the source for this run; the run may be finished now.
+    const cancelled = await stopSourceIfBlocked(db, job.crawl_run_id, job.source_id);
+    if (!cancelled) return false;
+    const { rows } = await db.query<{ finished: boolean }>(
+      `UPDATE crawl_run SET status = CASE WHEN jobs_done >= jobs_total THEN 'finished' ELSE status END,
+              finished_at = CASE WHEN jobs_done >= jobs_total THEN now() ELSE finished_at END
+        WHERE id = $1 RETURNING jobs_done >= jobs_total AS finished`,
+      [job.crawl_run_id],
+    );
+    return rows[0]?.finished ?? false;
   });
   if (finished) await finalizeRun(job.crawl_run_id);
   if (willRetry) throw new RetryLater(`${result.failureClass}: ${result.error ?? ''}`.slice(0, 300));

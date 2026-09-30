@@ -1,7 +1,8 @@
 // Extractor unit tests on small synthetic pages (no network).   npm test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { extractAmazon, detectAmazonBlock } from '../src/collector/extract/amazon.js';
+import { extractAmazon, extractAmazonResults, detectAmazonBlock } from '../src/collector/extract/amazon.js';
+import { keepCondition } from '../src/collector/jobs.js';
 import { extractBestBuy, detectBestBuyBlock } from '../src/collector/extract/bestbuy.js';
 import { modelMatches, normalizeAvailability, parsePrice } from '../src/collector/extract/common.js';
 import { extractWalmart, detectWalmartBlock } from '../src/collector/extract/walmart.js';
@@ -177,4 +178,25 @@ test('channel SKU from URL', () => {
   assert.equal(channelSkuFromUrl('bestbuy_us', 'https://www.bestbuy.com/site/x/6501714.p?skuId=6501714'), '6501714');
   assert.equal(channelSkuFromUrl('bestbuy_us', 'https://www.bestbuy.com/product/x/JJGCQLYK5F'), null);
   assert.equal(channelSkuFromUrl('walmart_us', 'https://www.walmart.com/ip/17835006350'), '17835006350');
+});
+
+test('amazon: renewed and used listings carry their condition (decision 30)', () => {
+  const renewed = extractAmazon('<span id="productTitle">LG gram 14 Laptop 16GB 512GB (Renewed)</span>');
+  assert.equal(renewed.condition, 'refurbished');
+  const usedBox = extractAmazon('<span id="productTitle">LG gram 14</span><div id="usedBuySection">Save with Used - Very Good $799.00</div>');
+  assert.equal(usedBox.condition, 'used');
+  assert.equal(extractAmazon('<span id="productTitle">LG gram 14 Laptop 16GB 512GB</span>').condition, null);
+});
+
+test('amazon results: a Renewed badge marks the card even when the title does not', () => {
+  const card = (asin: string, title: string, badge = '') =>
+    `<div data-component-type="s-search-result" data-asin="${asin}"><h2><span>${title}</span></h2>${badge}<span class="a-price"><span class="a-offscreen">$999.00</span></span><span>More Buying Choices $700 (3 used &amp; new offers)</span></div>`;
+  const page = extractAmazonResults(
+    `<html><body>${card('B0AAAAAAA1', 'LG gram 14Z90T')}${card('B0AAAAAAA2', 'LG gram 14Z90T', '<span class="a-badge-text">Amazon Renewed</span>')}${card('B0AAAAAAA3', 'LG gram 14Z90T (Renewed)')}</body></html>`,
+    'https://www.amazon.com/s?k=14Z90T',
+  );
+  assert.deepEqual(page.items.map((i) => i.condition), [null, 'refurbished', 'refurbished']);
+  // new_only keeps only the first
+  assert.deepEqual(page.items.filter((i) => keepCondition({ options: {} }, i.condition)).map((i) => i.channelSku), ['B0AAAAAAA1']);
+  assert.equal(keepCondition({ options: { new_only: false } }, 'used'), true);
 });
