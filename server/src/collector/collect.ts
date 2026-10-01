@@ -16,7 +16,7 @@ import { httpFetch } from './http.js';
 import { decideOutcome, type ObservationStatus } from './outcome.js';
 import { robotsCheck } from './robots.js';
 import { adapterFor } from './sources.js';
-import type { BlockReason, Extracted, FailureClass, FetchResult } from './types.js';
+import type { ApiRead, BlockReason, Extracted, FailureClass, FetchResult } from './types.js';
 
 export type { ObservationStatus } from './outcome.js';
 
@@ -47,7 +47,7 @@ export interface CollectOutcome {
   availability: string;
   method: 'http' | 'browser' | 'api' | null;
   requests: number;
-  evidence: { html?: string; screenshot?: string } | null;
+  evidence: { html?: string; screenshot?: string; api?: string } | null;
   error: string | null;
 }
 
@@ -110,7 +110,7 @@ async function priceHistory(db: Db, listingId: string): Promise<{ price: number;
   return rows.map((r) => ({ price: Number(r.price), at: r.at }));
 }
 
-async function apiLookup(listing: ListingRow, options: Record<string, unknown>): Promise<Extracted | null> {
+async function apiLookup(listing: ListingRow, options: Record<string, unknown>): Promise<(Extracted & { api?: ApiRead }) | null> {
   if (listing.source_code === 'bestbuy_us' && bestBuyApiEnabled() && options.use_api !== false)
     return bestBuyApiLookup({ sku: listing.channel_sku, model: listing.model_number });
   if (listing.source_code === 'ebay_us' && ebayApiEnabled() && listing.channel_sku) return ebayApiItem(listing.channel_sku);
@@ -136,8 +136,9 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
     }
   }
 
-  // 2. Official API when keyed. Its values win for price / stock / seller; the page is still the evidence.
-  let apiData: Extracted | null = null;
+  // 2. Official API when keyed. Its values win for price / stock / seller. The page is still the
+  // evidence, or the API response itself when the API returns it (eBay, decision 36).
+  let apiData: (Extracted & { api?: ApiRead }) | null = null;
   let authFailed = false;
   try {
     apiData = await apiLookup(listing, ctx.options ?? {});
@@ -168,7 +169,9 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
   // 4. Headless browser only when the plain request did not give a usable page.
   const httpGood = fetched && !block && extracted?.price != null && fetched.status < 400;
   const gone = fetched && (fetched.status === 404 || fetched.status === 410);
-  if (!httpGood && !gone && config.COLLECT_BROWSER_FALLBACK) {
+  // With an API response as evidence, a blocked page is not worth a browser.
+  const apiEvidence = Boolean(apiData?.api && apiData.price !== null);
+  if (!httpGood && !gone && !apiEvidence && config.COLLECT_BROWSER_FALLBACK) {
     if (fetched) notes.push(`http gave ${fetched.status}${block ? ` (${block})` : ''}${extracted?.price == null ? ', no price' : ''}; trying browser`);
     try {
       const b = await browserFetch(listing.url, adapter);
@@ -190,8 +193,10 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
   }
 
   let method: 'http' | 'browser' | 'api' | null = fetched?.method ?? null;
-  if (apiData && apiData.price !== null && !block) {
-    extracted = { ...apiData, title: apiData.title ?? extracted?.title ?? null, imageUrl: apiData.imageUrl ?? extracted?.imageUrl ?? null, hits: { ...apiData.hits, page: fetched?.method ?? 'none' } };
+  // A blocked page does not void the API's price when the API response is the evidence.
+  if (apiData && apiData.price !== null && (!block || apiEvidence)) {
+    const { api: _api, ...apiValues } = apiData;
+    extracted = { ...apiValues, title: apiData.title ?? extracted?.title ?? null, imageUrl: apiData.imageUrl ?? extracted?.imageUrl ?? null, hits: { ...apiData.hits, page: fetched?.method ?? 'none' } };
     method = 'api';
   }
 
@@ -212,7 +217,7 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
   const facts: AttemptFacts = {
     kind: 'product',
     authFailed: authFailed && !fetched,
-    fetchError: fetched ? null : fetchError,
+    fetchError: fetched || method === 'api' ? null : fetchError,
     httpStatus: method === 'api' ? 200 : (fetched?.status ?? null),
     block: method === 'api' ? null : block,
     price: extracted?.price ?? null,
@@ -223,14 +228,18 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
   if (block) notes.push(`blocked: ${block}`);
   if (validation?.verdict === 'hold') notes.push(`held: ${validation.held.join(', ')}`);
 
-  // 6. Evidence: exactly the HTML we parsed; a screenshot when the page carried a price.
+  // 6. Evidence: exactly the HTML we parsed; a screenshot when the page carried a price (never of a
+  // block page standing next to an API price); the API response when it is the evidence.
   let evidence: PersistArgs['evidence'] = null;
-  if (fetched) {
-    const base = `evidence/${listing.source_code}/${datePath(fetched.fetchedAt)}/${observationId}`;
+  const apiRead = method === 'api' ? (apiData?.api ?? null) : null;
+  if (fetched || apiRead) {
+    const at = fetched?.fetchedAt ?? apiRead!.fetchedAt;
+    const base = `evidence/${listing.source_code}/${datePath(at)}/${observationId}`;
     try {
-      const htmlObj = await putObject(`${base}.html`, Buffer.from(fetched.html, 'utf8'), 'text/html; charset=utf-8');
+      const apiObj = apiRead ? await putObject(`${base}.json`, Buffer.from(apiRead.body, 'utf8'), 'application/json; charset=utf-8') : null;
+      const htmlObj = fetched ? await putObject(`${base}.html`, Buffer.from(fetched.html, 'utf8'), 'text/html; charset=utf-8') : null;
       let shotObj: StoredObject | null = null;
-      if (decision.stored.price !== null || fetched.screenshot) {
+      if (fetched && ((decision.stored.price !== null && !block) || fetched.screenshot)) {
         let shot = fetched.screenshot ?? null;
         if (!shot) {
           try {
@@ -241,14 +250,15 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
         }
         if (shot) shotObj = await putObject(`${base}.png`, shot, 'image/png');
       }
-      const evidenceMethod = `${method === 'api' ? 'api+' : ''}${fetched.method === 'browser' ? 'browser' : 'http+render'}`;
-      evidence = { html: htmlObj, screenshot: shotObj, method: evidenceMethod, capturedAt: new Date() };
+      const page = !fetched ? null : fetched.method === 'browser' ? 'browser' : 'http+render';
+      const evidenceMethod = [method === 'api' ? 'api' : null, page].filter(Boolean).join('+');
+      evidence = { html: htmlObj, screenshot: shotObj, api: apiObj, method: evidenceMethod, capturedAt: new Date() };
     } catch (err) {
       notes.push(`evidence upload failed: ${errMessage(err)}`);
     }
   }
-  // A price without its evidence is not publishable: keep it, but as partial at best.
-  if (decision.status === 'ok' && (!evidence || !evidence.screenshot)) decision.status = 'partial';
+  // A price without its evidence (a screenshot, or the API response) is not publishable: keep it, but as partial at best.
+  if (decision.status === 'ok' && !evidence?.screenshot && !evidence?.api) decision.status = 'partial';
 
   return persist({
     listing,
@@ -262,6 +272,8 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
     requests,
     error: notes.length ? notes.join(' | ') : null,
     evidence,
+    // A block page says nothing about the model; the API response does.
+    matchText: block ? (apiRead?.body ?? null) : (fetched?.html ?? null),
   });
 }
 
@@ -276,14 +288,17 @@ interface PersistArgs {
   method: 'http' | 'browser' | 'api' | null;
   requests: number;
   error: string | null;
-  evidence: { html: StoredObject; screenshot: StoredObject | null; method: string; capturedAt: Date } | null;
+  evidence: { html: StoredObject | null; screenshot: StoredObject | null; api: StoredObject | null; method: string; capturedAt: Date } | null;
+  /** The text the model number is looked for in (the page, or the API response). */
+  matchText?: string | null;
 }
 
 async function persist(a: PersistArgs): Promise<CollectOutcome> {
   const priced = a.decision.stored.price !== null;
   // Descriptive fields are kept only from a real page; nothing is read from a block page.
   const x = a.decision.failureClass === 'blocked' || a.decision.failureClass === 'robots' ? null : a.extracted;
-  const modelMatch = a.fetch && !a.decision.failureClass ? modelMatches(a.fetch.html, a.listing.model_number) : null;
+  const matchText = a.matchText === undefined ? (a.fetch?.html ?? null) : a.matchText;
+  const modelMatch = matchText && !a.decision.failureClass ? modelMatches(matchText, a.listing.model_number) : null;
   const observedAt = a.fetch?.fetchedAt ?? new Date();
   const validation = a.validation
     ? { checks: a.validation.checks, held: a.validation.held, reference: a.validation.reference, promo: priced && x ? promoType(x) : null, recheckOf: a.ctx.recheckOf?.observationId ?? null }
@@ -329,24 +344,27 @@ async function persist(a: PersistArgs): Promise<CollectOutcome> {
     );
 
     if (a.evidence) {
-      const lock = a.evidence.html.lock;
+      const lock = (a.evidence.html ?? a.evidence.api)?.lock;
       await db.query(
         `INSERT INTO evidence (observation_id, observed_at, screenshot_uri, screenshot_sha256, screenshot_bytes,
-           html_uri, html_sha256, html_bytes, method, captured_at, lock_mode, lock_until)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+           html_uri, html_sha256, html_bytes, method, captured_at, lock_mode, lock_until, api_uri, api_sha256, api_bytes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           a.observationId,
           observedAt,
           a.evidence.screenshot?.uri ?? null,
           a.evidence.screenshot?.sha256 ?? null,
           a.evidence.screenshot?.bytes ?? null,
-          a.evidence.html.uri,
-          a.evidence.html.sha256,
-          a.evidence.html.bytes,
+          a.evidence.html?.uri ?? null,
+          a.evidence.html?.sha256 ?? null,
+          a.evidence.html?.bytes ?? null,
           a.evidence.method,
           a.evidence.capturedAt,
           lock?.mode ?? null,
           lock?.until ?? null,
+          a.evidence.api?.uri ?? null,
+          a.evidence.api?.sha256 ?? null,
+          a.evidence.api?.bytes ?? null,
         ],
       );
     }
@@ -375,7 +393,7 @@ async function persist(a: PersistArgs): Promise<CollectOutcome> {
     availability: x?.availability ?? 'unknown',
     method: a.method,
     requests: a.requests,
-    evidence: a.evidence ? { html: a.evidence.html.uri, screenshot: a.evidence.screenshot?.uri } : null,
+    evidence: a.evidence ? { html: a.evidence.html?.uri, screenshot: a.evidence.screenshot?.uri, api: a.evidence.api?.uri } : null,
     error: a.error,
   };
 }

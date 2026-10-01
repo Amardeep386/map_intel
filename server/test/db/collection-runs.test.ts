@@ -126,6 +126,33 @@ test('results pages (M4): tenant-isolated, append-only, linked to the listings t
     await expectRefused(db, `DELETE FROM results_page_listing WHERE results_page_id = $1`, [lgPage]);
   }));
 
+test('API evidence (decision 36): an eBay API response alone is evidence; results pages read through the API', () =>
+  rolledBack(async (db) => {
+    const src = await sourceId(db, 'ebay_us');
+    await inAccount(db, accounts.lg);
+    const run = await newRun(db, accounts.lg);
+    const job = (await db.query<{ id: string }>(`INSERT INTO crawl_job (crawl_run_id, account_id, source_id, kind) VALUES ($1, $2, $3, 'discover') RETURNING id`, [run, accounts.lg, src])).rows[0].id;
+    await db.query(
+      `INSERT INTO results_page (account_id, crawl_run_id, crawl_job_id, source_id, page_no, url, fetched_at, method, http_status, items_found, api_uri, api_sha256, api_bytes)
+       VALUES ($1, $2, $3, $4, 1, 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=x', now(), 'api', 200, 3, 's3://b/k.json', 'abc', 10)`,
+      [accounts.lg, run, job, src],
+    );
+    await expectRefused(
+      db,
+      `INSERT INTO results_page (account_id, crawl_run_id, crawl_job_id, source_id, page_no, url, fetched_at, method) VALUES ($1, $2, $3, $4, 1, 'x', now(), 'carrier pigeon')`,
+      [accounts.lg, run, job, src],
+    );
+    const listing = (await db.query<{ id: string }>(`INSERT INTO listing (source_id, url, channel_sku) VALUES ($1, $2, '998877665544') RETURNING id`, [src, `https://www.ebay.com/itm/${Date.now()}`])).rows[0].id;
+    const obs = (await db.query<{ id: string }>(`INSERT INTO observation (observed_at, listing_id, crawl_run_id, status, advertised_price, fetch_method) VALUES (now(), $1, $2, 'ok', 999.99, 'api') RETURNING id`, [listing, run])).rows[0];
+    await db.query(
+      `INSERT INTO evidence (observation_id, observed_at, method, captured_at, api_uri, api_sha256, api_bytes)
+       SELECT id, observed_at, 'api', now(), 's3://b/o.json', $2, 10 FROM observation WHERE id = $1`,
+      [obs.id, 'a'.repeat(64)],
+    );
+    const e = (await db.query<{ html_uri: string | null; api_uri: string }>('SELECT html_uri, api_uri FROM evidence WHERE observation_id = $1', [obs.id])).rows[0];
+    assert.deepEqual([e.html_uri, e.api_uri], [null, 's3://b/o.json']);
+  }));
+
 test('stop on block (M5): two blocked results in a row cancel the source’s queued jobs in the run', () =>
   rolledBack(async (db) => {
     const { stopSourceIfBlocked } = await import('../../src/collector/stopOnBlock.js');

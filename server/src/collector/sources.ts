@@ -1,5 +1,6 @@
 import { amazonProductUrl, detectAmazonBlock, extractAmazon, extractAmazonResults } from './extract/amazon.js';
 import { bestBuyProductUrl, bestBuySearchUrl, detectBestBuyBlock, extractBestBuy, extractBestBuyResults } from './extract/bestbuy.js';
+import { ebayApiEnabled, ebayApiReadResults, ebayApiSearchUrl, isEbayApiUrl } from './ebayApi.js';
 import { detectEbayBlock, ebayItemUrl, extractEbay, extractEbayResults } from './extract/ebay.js';
 import { detectHomeDepotBlock, extractHomeDepot, extractHomeDepotResults, homeDepotProductUrl } from './extract/homedepot.js';
 import { withPage } from './extract/results.js';
@@ -10,6 +11,7 @@ import type { SourceAdapter } from './types.js';
 // Search is declared only where robots.txt allows it (checked 27 Sep 2026): Amazon /s and Best Buy
 // searchpage.jsp. Walmart /search, eBay /sch, Target /s and Home Depot /s are disallowed, so those
 // sources discover through brand / browse pages (url terms). robots.txt is still checked per request.
+// eBay with Browse API keys searches through the API instead (decision 36).
 export const adapters: Record<string, SourceAdapter> = {
   amazon_us: {
     code: 'amazon_us',
@@ -62,6 +64,11 @@ export const adapters: Record<string, SourceAdapter> = {
     productUrl: ebayItemUrl,
     isProductUrl: (u) => /\/itm\/(?:[^/?#]+\/)?\d{9,14}/.test(u),
     extractResults: extractEbayResults,
+    // Keyword / model-number search only through the Browse API, when keyed.
+    get searchUrl() {
+      return ebayApiEnabled() ? (q: string, page: number) => ebayApiSearchUrl(q, page) : undefined;
+    },
+    readResultsApi: async (url) => (isEbayApiUrl(url) ? ebayApiReadResults(url) : null),
   },
   target_us: {
     code: 'target_us',

@@ -353,7 +353,7 @@ function ListingDrawer({ listingId, onClose }) {
   if (!l) return null;
   const openPage = async (id) => {
     const p = await attempt(showToast, () => api.getResultsPage(client, id));
-    const url = p?.screenshot?.url ?? p?.html?.url;
+    const url = p?.screenshot?.url ?? p?.api?.url ?? p?.html?.url;
     if (url) window.open(url, "_blank", "noopener");
     else showToast("The page opens when the portal is connected to the API.");
   };

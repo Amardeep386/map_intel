@@ -201,6 +201,7 @@ export async function dataHealthRoutes(app: FastifyInstance): Promise<void> {
           lock: r.lock_mode ? { mode: r.lock_mode, until: r.lock_until } : null,
           html: r.html_uri ? { sha256: r.html_sha256, bytes: r.html_bytes, url: await signedUrl(r.html_uri) } : null,
           screenshot: r.screenshot_uri ? { sha256: r.screenshot_sha256, bytes: r.screenshot_bytes, url: await signedUrl(r.screenshot_uri) } : null,
+          api: r.api_uri ? { sha256: r.api_sha256, bytes: r.api_bytes, url: await signedUrl(r.api_uri) } : null,
         };
       }),
   );

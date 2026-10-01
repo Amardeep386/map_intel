@@ -112,7 +112,7 @@ function SourceDrawer({ source, onClose, onRerun }) {
 
   const openEvidence = async (f) => {
     const e = await attempt(showToast, () => (f.evidenceId ? api.getEvidence(f.evidenceId) : api.getResultsPage(client, f.resultsPageId)));
-    const url = e?.screenshot?.url ?? e?.html?.url;
+    const url = e?.screenshot?.url ?? e?.api?.url ?? e?.html?.url;
     if (url) window.open(url, "_blank", "noopener");
     else showToast("Evidence opens when the portal is connected to the API.");
   };

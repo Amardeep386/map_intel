@@ -56,6 +56,14 @@ export interface FetchResult {
   fetchedAt: Date;
 }
 
+/** One official API response, kept verbatim as evidence (decision 36). */
+export interface ApiRead {
+  url: string;
+  status: number;
+  body: string;
+  fetchedAt: Date;
+}
+
 /** One listing seen on a search or browse results page (discovery). */
 export interface DiscoveredItem {
   url: string; // canonical product (or offer) URL
@@ -99,6 +107,8 @@ export interface SourceAdapter {
   productUrl?(channelSku: string): string;
   /** True for product pages; false for search / browse pages on the same host. */
   isProductUrl?(url: string): boolean;
+  /** Read a results page through the source's official API: null when `url` is not an API URL. */
+  readResultsApi?(url: string): Promise<(ApiRead & { page: ResultsPage }) | null>;
   /** Read a search or browse results page. Must never throw. */
   extractResults?(html: string, url: string): ResultsPage;
   /** Every seller's offer on a product page (beyond the main one). Must never throw. */

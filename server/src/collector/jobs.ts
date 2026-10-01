@@ -3,6 +3,7 @@
 // by BullMQ, the retry going through the browser; everything else finishes the job.
 import { config } from '../lib/config.js';
 import { withSystem, type Db } from '../lib/db.js';
+import { ApiAuthError } from './apiError.js';
 import { loadMatchContext, stageCandidate, upsertListing } from '../lib/mapping.js';
 import { browserFetch } from './browser.js';
 import { collectListing, errMessage, type CollectOutcome } from './collect.js';
@@ -13,7 +14,7 @@ import { linkResultsListings, storeResultsPage, type StoredResultsPage } from '.
 import { recordRunProgress } from './runs.js';
 import { stopSourceIfBlocked } from './stopOnBlock.js';
 import { adapterFor, channelSkuFromUrl } from './sources.js';
-import type { BlockReason, DiscoveredItem, FailureClass, FetchResult, ResultsPage, SourceAdapter } from './types.js';
+import type { ApiRead, BlockReason, DiscoveredItem, FailureClass, FetchResult, ResultsPage, SourceAdapter } from './types.js';
 
 export interface JobRow {
   id: string;
@@ -75,18 +76,35 @@ function pagesFor(job: JobRow, mode: 'search' | 'browse'): number {
 interface PageRead {
   page: ResultsPage | null;
   failure: FailureClass | null;
-  method: 'http' | 'browser' | null;
+  method: 'http' | 'browser' | 'api' | null;
   requests: number;
   error: string | null;
   /** The page as read (kept as evidence), and its block reason. */
   fetched: FetchResult | null;
   block: BlockReason;
+  /** Or the official API response (kept as evidence, decision 36). */
+  api: ApiRead | null;
+}
+
+/** A results page through the source's official API (eBay Browse search); null when `url` is a web page. */
+async function readResultsApi(url: string, adapter: SourceAdapter): Promise<PageRead | null> {
+  const none = { fetched: null, block: null } as const;
+  try {
+    const api = await adapter.readResultsApi?.(url);
+    if (!api) return null;
+    const failure = classifyFailure({ kind: 'results', fetchError: null, httpStatus: api.status, block: null, items: api.page.items.length, recognized: api.page.recognized });
+    return { ...none, page: api.page, failure, method: 'api', requests: 1, error: null, api };
+  } catch (err) {
+    return { ...none, page: null, failure: err instanceof ApiAuthError ? 'auth' : 'network', method: 'api', requests: 1, error: errMessage(err), api: null };
+  }
 }
 
 async function readResultsPage(url: string, adapter: SourceAdapter, forceBrowser: boolean): Promise<PageRead> {
+  const viaApi = await readResultsApi(url, adapter);
+  if (viaApi) return viaApi;
   if (config.COLLECT_RESPECT_ROBOTS) {
     const r = await robotsCheck(url, config.COLLECT_USER_AGENT);
-    if (!r.allowed) return { page: null, failure: 'robots', method: null, requests: 0, error: r.reason, fetched: null, block: null };
+    if (!r.allowed) return { page: null, failure: 'robots', method: null, requests: 0, error: r.reason, fetched: null, block: null, api: null };
   }
   let requests = 0;
   let fetched: FetchResult | null = null;
@@ -128,7 +146,7 @@ async function readResultsPage(url: string, adapter: SourceAdapter, forceBrowser
     items: p?.items.length ?? 0,
     recognized: p?.recognized ?? false,
   });
-  return { page: p, failure, method: f?.method ?? null, requests, error: error ?? (block ? `blocked: ${block}` : null), fetched: f, block };
+  return { page: p, failure, method: f?.method ?? null, requests, error: error ?? (block ? `blocked: ${block}` : null), fetched: f, block, api: null };
 }
 
 /** New listings found: shared listing row, the term that found it, the account's matcher. */
@@ -212,13 +230,14 @@ async function runDiscover(job: JobRow, forceBrowser: boolean): Promise<JobResul
     requests += read.requests;
     method = read.method ?? method;
     // M4: every page read is evidence, a blocked one too.
-    if (read.fetched) {
+    if (read.fetched || read.api) {
       const kept = (read.page?.items ?? []).filter((i) => keepCondition(job, i.condition));
       try {
         const stored = await storeResultsPage(job, adapter, {
           pageNo: p,
           url,
           fetched: read.fetched,
+          api: read.api,
           block: read.block,
           failure: read.failure,
           items: kept.map((i) => ({ url: i.url, sponsored: i.format === 'sponsored' })),
