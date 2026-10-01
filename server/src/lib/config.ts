@@ -62,6 +62,15 @@ const schema = z.object({
   // eBay Browse API (OAuth client credentials). Off until both are set.
   EBAY_CLIENT_ID: z.string().trim().optional(),
   EBAY_CLIENT_SECRET: z.string().trim().optional(),
+  // eBay Marketplace Account Deletion endpoint (decision 39): the token and the exact endpoint URL
+  // entered on developer.ebay.com → Alerts & Notifications. The endpoint answers 503 until both are set.
+  EBAY_VERIFICATION_TOKEN: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{32,80}$/, 'EBAY_VERIFICATION_TOKEN: 32–80 letters, digits, _ or -')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  EBAY_DELETION_ENDPOINT: z.string().trim().url().optional().or(z.literal('').transform(() => undefined)),
   // Optional US proxy for all collector traffic (http://user:pass@host:port). Off when empty.
   COLLECT_HTTPS_PROXY: z.string().optional(),
   // Worker: concurrent jobs per source queue (headless pages are heavy on a 512 MB instance).
