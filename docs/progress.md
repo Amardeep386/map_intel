@@ -3,19 +3,21 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2b Collectors **in progress**, finishing through a first real slice: **Amazon.com on the LG Sandbox** (branch `amazon-lg-slice`, 30 Sep 2026; code M1–M5 done; **both free US probes are blocked by Amazon**: stopped at M6d, waiting for your choice of route). Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
-- **Last updated:** 30 Sep 2026 (Claude Code: Amazon LG slice M1–M6b)
+- **Phase:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`; code done 1 Oct 2026, waiting for the first GitHub Actions run). Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Last updated:** 1 Oct 2026 (Claude Code: LG slice route D, D1–D5)
 - **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here): Amazon LG slice, choose the Amazon route** (M6d, options under Open questions → "Amazon from US datacentres is blocked").
-  1. **You choose** one of the routes A–D. Claude Code recommends A (the brand's own Amazon SP-API access), with B (a licensed price-data provider) if LG cannot give access; C only as a cheap last test.
-  2. Then Claude Code builds that route's collector for the same slice (same terms, schedules, Mapping Center, evidence rules), and M7 runs: discovery once, two monitoring days, report.
-  3. After two monitoring days: `cd server && npm run exit:p2b -- --check --scheduled --scope amazon-lg`. Tick P2b (for this scope) only if it passes.
-  4. Meanwhile the slice schedules stay in place and do nothing (no worker, no workflow fires them). Walmart works from every US egress we tried, if you want a working slice sooner.
-  5. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
+- **Next step (resume here): LG slice M7, the real run on GitHub Actions** (route D, decisions 36–38).
+  1. **You:** push `amazon-lg-slice` and put `.github/workflows/lg-slice.yml` on `main` (GitHub only lists and schedules workflows from the default branch; the workflow checks out `amazon-lg-slice` until it is merged).
+  2. **You:** add repository secrets `EBAY_CLIENT_ID` (eBay App ID, Production), `EBAY_CLIENT_SECRET` (Cert ID, Production), `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_OBJECT_LOCK_DAYS` (365), plus `S3_ENDPOINT` / `S3_FORCE_PATH_STYLE` only if `server/.env` has them. `DATABASE_URL`, `DATABASE_SSL`, `JWT_SECRET` are already there.
+  3. **You:** Actions → LG slice → Run workflow → mode `discover`. Then work the 60–89 review queue in the Mapping Center (LG Sandbox).
+  4. Monitoring then runs by itself at 09:00 IST (03:30 UTC) for two days (or Run workflow → `monitor`).
+  5. Claude Code: M7 report to `server/reports/` (pages read, staged / auto-included / review / excluded, evidence re-hash, Day 1 vs Day 2), real Walmart / eBay fixtures, then `cd server && npm run exit:p2b -- --check --scheduled --scope lg-slice`. Tick P2b (for this scope) only if it passes.
+  6. Amazon stays manual evidence until route A (LG's SP-API access) or B (licensed data) is in place.
+  7. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
 
 ## Decisions so far
 | # | Decision | Date | Where decided |
@@ -55,6 +57,9 @@
 | 33 | Pace on amazon.com: 3 s + up to 1 s random jitter between pages (adapter pace, other sources keep the global delay), one tab, one page at a time | 30 Sep 2026 | Amazon LG slice |
 | 34 | Conduct: human-paced, not hidden. No stealth plugins, fingerprint spoofing, CAPTCHA solving or proxy rotation; `--disable-blink-features=AutomationControlled` removed; robots.txt respected. A robot-check / CAPTCHA / "sorry" / 503 page is recorded as blocked and never stores a price; a blocked Amazon page is not retried through the browser; 2 blocked results in a row on a source cancel its remaining queued jobs in the run | 30 Sep 2026 | Amazon LG slice |
 | 35 | Egress free first: Render Ohio HTTP probe, then a GitHub Actions probe (with the browser). If a US probe gets real Amazon pages, the slice runs on GitHub Actions for the test period; production monitoring moves to the Render worker. If both are blocked: write up Render Starter worker vs a licensed data provider; no proxies | 30 Sep 2026 | Amazon LG slice |
+| 36 | An official API response is evidence: stored verbatim (JSON, SHA-256, Object Lock) like a page, and a price with it is publishable without a page screenshot. eBay prices and searches go through the Browse API (keyword search is disallowed on the website); the item page is still tried for a screenshot, and a blocked eBay page no longer voids the API price (no browser retry, no screenshot of the block page). Legal review to confirm | 1 Oct 2026 | LG slice, route D |
+| 37 | Route D for Amazon: Amazon.com is paused in the LG Sandbox (subscription off) and is manual evidence until route A (LG's SP-API access) or B (licensed data); no proxies (decision 34). A screen for manual Amazon evidence comes in P3 | 1 Oct 2026 | LG slice, route D |
+| 38 | The slice runs on Walmart (its LG computers browse page, 3 pages; Walmart /search is disallowed) and eBay (model-number and name terms through the API, 2 pages of 50, Buy It Now only, new only), same 10 SKUs, same schedules renamed "LG slice discovery" / "LG slice daily monitoring", on GitHub Actions for the test period (`lg-slice.yml`, inline, no Redis) | 1 Oct 2026 | LG slice, route D |
 
 ## Open questions
 - **US egress for collection.** Probes, HTTP only unless noted:
@@ -69,7 +74,7 @@
   | Home Depot | 403 | 403 | not probed | — |
 
   The Ohio probe's report says egress `local` because the Render API has no `COLLECT_EGRESS_LABEL`; the IP is Render's. GitHub's run: `server/reports/egress-github-actions-2026-09-30.md`.
-- **Amazon from US datacentres is blocked (M6d, 30 Sep).** Both free US egresses (Render Ohio, GitHub Actions / Azure) get Amazon's robot check on every product page, over HTTP and in a plain headless browser, and a 503 on search. Under decision 34 we do not get past it and add no proxies. Routes, cheapest-to-reliable:
+- **Amazon from US datacentres is blocked (M6d, 30 Sep). 1 Oct: route D chosen (decision 37); A or B still needed for automated Amazon.** Both free US egresses (Render Ohio, GitHub Actions / Azure) get Amazon's robot check on every product page, over HTTP and in a plain headless browser, and a 503 on search. Under decision 34 we do not get past it and add no proxies. Routes, cheapest-to-reliable:
   - **A. The brand's own Amazon access (recommended).** Amazon's Selling Partner API (Product Pricing: `getItemOffers` / competitive pricing per ASIN) gives the buy-box price and every offer's seller, officially, for any ASIN in the US marketplace. It needs an Amazon seller (or vendor) developer registration: LG's, or Mirethos acting for LG. Credentials go in the vault (P1). Evidence is the signed API response (hashed and locked like a page); a page screenshot is not available this way. Free with the account; needs LG's agreement and legal review.
   - **B. A licensed price-data provider** (e.g. Keepa for Amazon buy-box price history; or a retail-data vendor with page captures). Paid, per ASIN or per request; terms allow commercial use. Some vendors supply screenshots, most supply data only. Pick after the legal review of collection methods (already an open question).
   - **C. Render Starter background worker in Ohio** (about $0.25/day while running; suspend after). Cheap to try, but the Ohio IP already gets the captcha over HTTP, and GitHub's browser was blocked too, so success is unlikely. Useful for Walmart, which works from every US egress.
@@ -80,7 +85,7 @@
   - a US residential or ISP proxy;
   - licensed data.
   - Amazon may still block datacenter IPs, so test the Render option first.
-- **Best Buy API key and eBay Browse API keys.** Official, free and reliable; recommended. The code switches on with `BESTBUY_API_KEY` / `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET`. eBay keys also allow keyword search, which robots.txt does not allow on the website.
+- **Best Buy API key** (eBay Browse API keys: you have them, 1 Oct). Official, free and reliable; recommended. The code switches on with `BESTBUY_API_KEY` / `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET`. eBay keys also allow keyword search, which robots.txt does not allow on the website.
 - **Target prices come from its own API (`redsky.target.com`, robots.txt disallows all).** Our collector never calls it; Target's page JavaScript does when a headless browser renders an allowed page. Add to the legal review.
 - **Amazon source.** Official API or a data provider, versus fetching pages. Part of the legal review.
 - Brand users log in during the pilot, or reports only?
@@ -99,6 +104,7 @@
 - [ ] P5 Scale & governance: onboarding, budget, tickets, SSO, API
 
 ## Known issues carried forward
+- **LG slice, route D (1 Oct):** the Walmart LG computers page mixes monitors, drives and tablets with the gram laptops (no robots-allowed laptops-only page was found), so most of what it shows is auto-excluded by the matcher; listings found there have no proposed product, so they score on title / model only. The eBay API path is tested with recorded responses only; the first GitHub run is its live test (an `auth` failure in Data Health means the keys are wrong or not Production). The browse-page request estimate counts 1 page per url term; the job reads `search_pages` (3).
 - **Amazon slice (30 Sep):** the request estimate counts a model-number (identifier) term as 1 search page, but discover jobs read the subscription's `search_pages` (2), so Amazon discovery costs about 40 pages, not 30. The "fresh screenshot + HTML on every observation, even unchanged" rule is how the collector already works (append-only, no de-duplication); M7's Day 1 vs Day 2 report is its proof on real pages. Amazon extractor fixtures are still hand-made (replace from the first US run).
 - **Data Health on the live site** does not know the slice changes until `amazon-lg-slice` is merged: the Render API on `main` ignores `schedule.kind` (migrations 025–027 are applied to Neon and are backward compatible).
 - **P2b extractors for eBay, Target and Home Depot are untested on real US pages** (India is blocked there). Unit tests use small pages in each site's shape; replace them with real fixtures from the first US run (`server/test/fixtures/README.md`). Watch Data Health for `layout_changed`.
@@ -143,6 +149,17 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 1 Oct 2026 — LG slice, route D: Walmart + eBay API, Amazon paused (Claude Code)
+- **Your answers:** route D; eBay Production keys (App ID + Cert ID); the API response counts as eBay evidence; Amazon only paused (manual capture screen in P3). Decisions 36–38.
+- **D1 eBay search through the Browse API** (`collector/ebayApi.ts`: `ebayApiSearchUrl`, `parseEbaySearch`, `ebayApiReadResults`; eBay adapter `searchUrl` only when keyed, `readResultsApi`): keyword and model-number terms become API searches (50 per page, `next` link, Buy It Now only; new-only applied after). `jobs.ts` reads API results pages without robots.txt (not a website) or the browser; `resultsEvidence.ts` stores the JSON response as the page's evidence.
+- **D2 eBay prices:** `ebayApiItem` keeps the raw response; `collect.ts` stores it (`.json`, Object Lock) as evidence, keeps the API price when the item page is blocked, skips the browser retry, and screenshots only an unblocked page. Model match reads the API response when the page was blocked. `ok` needs a screenshot or an API response.
+- **Migration 028** (applied to Neon): `api_uri` / `api_sha256` / `api_bytes` on `evidence` and `results_page`; `results_page.method` allows `api`. Data Health health, evidence API responses (`api`), portal "Open page" / evidence links prefer screenshot, then API response, then HTML.
+- **D3** `npm run slice:lg [-- --commit]` (was `slice:amazon-lg`; `src/scripts/slice-lg.ts`, `src/lib/lgSlice.ts`). **Committed to LG on 1 Oct:** Walmart subscription active (3 pages, new only), eBay active (2 pages, new only, Buy It Now only), Amazon.com paused; group "Amazon LG slice" renamed "LG slice" (same 20 terms, Marketplace = eBay); new group "LG slice Walmart pages" (url term `walmart.com/browse/electronics/computers-laptops-and-tablets/3944_1089430?facet=brand:LG`, Marketplace = Walmart); schedules renamed "LG slice discovery" (manual, discovery) and "LG slice daily monitoring" (`0 9 * * *` Asia/Kolkata, monitoring, Included), both Walmart + eBay, priority 40. A re-run changes nothing. Projected 361 of 2,500 requests / cycle (whole LG account).
+- **D4** `.github/workflows/lg-slice.yml`: Run workflow `discover` / `monitor`, and daily 03:30 UTC monitoring (`scheduler --fire … --due --inline`, egress `github-actions`), Playwright Chromium, a secrets check, 150-minute limit. For the test period; production monitoring moves to the Render worker.
+- **D5** `exit:p2b --check --scheduled --scope lg-slice` (replaces `amazon-lg`): LG × Walmart + eBay, evidence = page + screenshot or API response, each re-hashed under a Governance lock (`verifyStored`).
+- **Tests:** `npm test` 129/129 (new: eBay API raw evidence, search URL / paging / parse, keyed planning; slice route D). DB `collection-runs` 8/8 (new: API-only evidence and `api` results pages). Portal build OK, lint 0 errors (7 older warnings).
+- **Not done yet:** push + secrets + first run (you), M7 report, real fixtures, exit test.
+
 ### 30 Sep 2026 — Amazon.com LG slice, M1–M6b (Claude Code)
 - **Branch** `amazon-lg-slice` from `main` (not pushed). Commits: M1+M2 `18f197f`, M3–M5 `b5ce93a` (one commit: `jobs.ts` carries all three), M6a/b `e9e5ba3`, docs: this commit. Prompt: `docs/amazon-lg-slice-prompt.md`. Decisions 29–35 above.
 - **Migrations 025–027** (applied to Neon): 025 `schedule.kind`; 026 `results_page` + `results_page_listing` (append-only, RLS); 027 `crawl_run.stopped`.
