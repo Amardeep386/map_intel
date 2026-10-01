@@ -92,7 +92,9 @@ async function readResultsApi(url: string, adapter: SourceAdapter): Promise<Page
   try {
     const api = await adapter.readResultsApi?.(url);
     if (!api) return null;
-    const failure = classifyFailure({ kind: 'results', fetchError: null, httpStatus: api.status, block: null, items: api.page.items.length, recognized: api.page.recognized });
+    // An API answer of "0 results" is definite (a web page without cards may be a layout change; this is not).
+    const noResults = api.page.recognized && api.page.items.length === 0;
+    const failure = noResults ? null : classifyFailure({ kind: 'results', fetchError: null, httpStatus: api.status, block: null, items: api.page.items.length, recognized: api.page.recognized });
     return { ...none, page: api.page, failure, method: 'api', requests: 1, error: null, api };
   } catch (err) {
     return { ...none, page: null, failure: err instanceof ApiAuthError ? 'auth' : 'network', method: 'api', requests: 1, error: errMessage(err), api: null };

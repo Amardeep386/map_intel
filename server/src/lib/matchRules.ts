@@ -115,8 +115,10 @@ export function decide(c: CandidateContext, r: MatchResult, rules: MatchRule[], 
   for (const rule of [...rules].filter((x) => x.active).sort((a, b) => a.priority - b.priority)) {
     if (!ruleHits(rule, c, r)) continue;
     if (rule.kind === 'exclude') return { state: 'Excluded', decidedBy: 'rule', reason: rule.reason ?? rule.name, ruleId: rule.id, suppressionId: null };
-    // An inclusion rule never overrides the hard limits of the score (condition, accessory, variant...).
-    if (r.productId && r.band !== 'exclude' && r.signals.find((s) => s.signal === 'attributes')?.passed !== false) {
+    // An inclusion rule never overrides the hard limits of the score (condition, accessory, variant...),
+    // nor a price implausible for the product (under 40% of MAP: a part, or a very deep cut a person checks).
+    const failed = (name: string) => r.signals.find((s) => s.signal === name)?.passed === false;
+    if (r.productId && r.band !== 'exclude' && !failed('attributes') && !failed('price')) {
       return { state: 'Included', decidedBy: 'rule', reason: rule.name, ruleId: rule.id, suppressionId: null };
     }
   }
