@@ -18,6 +18,7 @@ import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
 import { credentialRoutes } from './routes/credentials.js';
 import { dataHealthRoutes } from './routes/dataHealth.js';
+import { ebayRoutes } from './routes/ebay.js';
 import { healthRoutes } from './routes/health.js';
 import { matrixRoutes } from './routes/matrix.js';
 import { scheduleRoutes } from './routes/schedules.js';
@@ -143,6 +144,7 @@ export async function buildApp() {
   });
 
   await app.register(healthRoutes);
+  await app.register(ebayRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(accountRoutes);
   await app.register(auditRoutes);
