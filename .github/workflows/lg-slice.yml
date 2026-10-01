@@ -1,0 +1,76 @@
+# LG slice (P2b, route D): Walmart pages + eBay Browse API for the LG Sandbox, run on a GitHub-hosted
+# runner (US). The scheduler runs inline, so no Redis or worker is needed. For the test period only:
+# production monitoring moves to the Render worker.
+#   discover  - fires "LG slice discovery" now (by hand: Actions → LG slice → Run workflow)
+#   monitor   - fires the latest due slot of "LG slice daily monitoring" as a scheduled run;
+#               also every day at 03:30 UTC = 09:00 Asia/Kolkata
+# Secrets: DATABASE_URL, DATABASE_SSL, JWT_SECRET, EBAY_CLIENT_ID, EBAY_CLIENT_SECRET,
+#          S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_OBJECT_LOCK_DAYS
+#          (S3_ENDPOINT and S3_FORCE_PATH_STYLE only if server/.env sets them).
+# GitHub runs scheduled workflows from the default branch; this file checks out the slice branch
+# until it is merged.
+name: LG slice
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: discover (find listings) or monitor (re-collect Included listings)
+        type: choice
+        options: [discover, monitor]
+        default: discover
+      ref:
+        description: Branch to run
+        default: amazon-lg-slice
+  schedule:
+    - cron: '30 3 * * *'
+
+concurrency:
+  group: lg-slice
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_SSL: ${{ secrets.DATABASE_SSL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+      EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_REGION: ${{ secrets.S3_REGION }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      S3_FORCE_PATH_STYLE: ${{ secrets.S3_FORCE_PATH_STYLE }}
+      S3_OBJECT_LOCK_DAYS: ${{ secrets.S3_OBJECT_LOCK_DAYS }}
+      COLLECT_EGRESS_LABEL: github-actions
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'amazon-lg-slice' }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check the secrets
+        run: |
+          missing=""
+          for v in DATABASE_URL JWT_SECRET EBAY_CLIENT_ID EBAY_CLIENT_SECRET S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
+      - name: Discovery
+        if: ${{ inputs.mode == 'discover' }}
+        run: npm run scheduler -- --fire "LG slice discovery" --account lg --inline
+      - name: Daily monitoring
+        if: ${{ github.event_name == 'schedule' || inputs.mode == 'monitor' }}
+        run: npm run scheduler -- --fire "LG slice daily monitoring" --account lg --due --inline
