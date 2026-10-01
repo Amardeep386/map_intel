@@ -60,8 +60,8 @@ const schema = z.object({
     ),
   BESTBUY_API_KEY: z.string().optional(),
   // eBay Browse API (OAuth client credentials). Off until both are set.
-  EBAY_CLIENT_ID: z.string().optional(),
-  EBAY_CLIENT_SECRET: z.string().optional(),
+  EBAY_CLIENT_ID: z.string().trim().optional(),
+  EBAY_CLIENT_SECRET: z.string().trim().optional(),
   // Optional US proxy for all collector traffic (http://user:pass@host:port). Off when empty.
   COLLECT_HTTPS_PROXY: z.string().optional(),
   // Worker: concurrent jobs per source queue (headless pages are heavy on a 512 MB instance).
