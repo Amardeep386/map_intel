@@ -19,11 +19,12 @@
 //          Data Health (API, as an Analyst) shows the source with the same health
 //     per run: no failed / blocked observation carries a price; discovery staged listings for
 //     the matcher. Daily: a scheduled run from render-ohio in the last 26 hours per account.
-//   npm run exit:p2b -- --check --scheduled --scope amazon-lg
-//                                 the Amazon.com LG slice (decisions 29–35): LG × Amazon only, the
-//                                 "Amazon LG daily monitoring" runs, from render-ohio or github-actions;
+//   npm run exit:p2b -- --check --scheduled --scope lg-slice
+//                                 the LG slice (decisions 29–38, route D): LG × Walmart and eBay, the
+//                                 "LG slice daily monitoring" runs, from github-actions or render-ohio;
 //                                 plus the slice's discovery: results pages stored with evidence
-//                                 (hash re-checked) and no used / renewed listing staged.
+//                                 (hash re-checked) and no used / renewed listing staged. Evidence is
+//                                 HTML + screenshot, or the official API response (eBay, decision 36).
 // Writes reports/exit-p2b-<date>.md. Test users are removed at the end.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -37,7 +38,7 @@ import { config } from '../lib/config.js';
 import { closeDb, withSystem } from '../lib/db.js';
 import { closeQueue } from '../lib/queue.js';
 import { syncSourceCatalogue } from '../lib/sourceCatalogue.js';
-import { SLICE } from '../lib/amazonSlice.js';
+import { SLICE } from '../lib/lgSlice.js';
 import { verifyEvidence } from '../lib/storage.js';
 import { fireSchedule } from '../scheduler/tick.js';
 
@@ -62,11 +63,11 @@ const { values } = parseArgs({
   },
 });
 
-// What --check covers: the whole pilot, or the Amazon LG slice.
-const slice = values.scope === 'amazon-lg';
-if (values.scope && !slice) throw new Error(`unknown --scope ${values.scope} (use amazon-lg)`);
+// What --check covers: the whole pilot, or the LG slice (route D: Walmart + eBay).
+const slice = values.scope === 'lg-slice';
+if (values.scope && !slice) throw new Error(`unknown --scope ${values.scope} (use lg-slice; amazon-lg became lg-slice under route D)`);
 const SCOPE = slice
-  ? { accounts: [SLICE.account], sources: [SLICE.source], schedule: SLICE.monitoring.name, egress: ['render-ohio', 'github-actions'] }
+  ? { accounts: [SLICE.account], sources: SLICE.sources, schedule: SLICE.monitoring.name, egress: ['github-actions', 'render-ohio'] }
   : { accounts: ACCOUNTS, sources: LAUNCH, schedule: SWEEP, egress: ['render-ohio'] };
 const EGRESS = SCOPE.egress.join(' or ');
 
@@ -266,7 +267,7 @@ async function checkRuns(app: FastifyInstance, admin: string): Promise<SourceRes
             `SELECT m.listing_id,
                     bool_or(o.status IN ('ok', 'partial', 'held')) AS priced,
                     max(j.failure_class) AS failure,
-                    bool_and(o.status NOT IN ('ok', 'partial', 'held') OR (e.html_uri IS NOT NULL AND e.screenshot_uri IS NOT NULL)) AS evidence_complete
+                    bool_and(o.status NOT IN ('ok', 'partial', 'held') OR (e.html_uri IS NOT NULL AND e.screenshot_uri IS NOT NULL) OR e.api_uri IS NOT NULL) AS evidence_complete
                FROM listing_match m JOIN listing l ON l.id = m.listing_id
                LEFT JOIN crawl_job j ON j.listing_id = m.listing_id AND j.crawl_run_id = $3 AND j.status IN ('done', 'failed')
                LEFT JOIN observation o ON o.id = j.observation_id
@@ -277,8 +278,8 @@ async function checkRuns(app: FastifyInstance, admin: string): Promise<SourceRes
           )
         ).rows;
         const sample = (
-          await db.query<{ html_uri: string; html_sha256: string; screenshot_uri: string | null; screenshot_sha256: string | null }>(
-            `SELECT e.html_uri, e.html_sha256, e.screenshot_uri, e.screenshot_sha256
+          await db.query<EvidenceRow>(
+            `SELECT e.html_uri, e.html_sha256, e.screenshot_uri, e.screenshot_sha256, e.api_uri, e.api_sha256
                FROM crawl_job j JOIN observation o ON o.id = j.observation_id JOIN evidence e ON e.observation_id = o.id
               WHERE j.crawl_run_id = $1 AND j.source_id = $2 AND o.status IN ('ok', 'partial', 'held')
               ORDER BY md5(e.id::text) LIMIT 2`,
@@ -307,10 +308,9 @@ async function checkRuns(app: FastifyInstance, admin: string): Promise<SourceRes
       let verified = 0;
       let verifyNote = '';
       for (const s of stats.sample) {
-        const h = await verifyEvidence(s.html_uri, s.html_sha256);
-        const p = s.screenshot_uri && s.screenshot_sha256 ? await verifyEvidence(s.screenshot_uri, s.screenshot_sha256) : null;
-        if (h.ok && p?.ok && h.mode === 'GOVERNANCE' && p.mode === 'GOVERNANCE') verified++;
-        else verifyNote = `hash ${h.ok && p?.ok ? 'ok' : 'MISMATCH'}, lock ${h.mode ?? 'none'}`;
+        const v = await verifyStored(s);
+        if (v.ok) verified++;
+        else verifyNote = v.note;
       }
       const api = (health.sources as Json[]).find((s) => s.code === code);
       const visible = Boolean(stats.snapshot) && api?.health === stats.snapshot?.health;
@@ -325,7 +325,7 @@ async function checkRuns(app: FastifyInstance, admin: string): Promise<SourceRes
         unclassified && `${unclassified} failures without a class`,
         expected > 0 && priced === 0 && 'no priced observation',
         missing > 0 && `${missing} listings not attempted`,
-        evidenceGaps && `${evidenceGaps} priced without full evidence`,
+        evidenceGaps && `${evidenceGaps} priced without full evidence (page + screenshot, or API response)`,
         verifyNote,
         !visible && 'not visible in Data Health',
         expected === 0 && `no included listings${stats.staged ? ` (${stats.staged} discovered, staged)` : ' (not carried / none found)'}`,
@@ -364,15 +364,15 @@ async function checkSliceDiscovery(accountId: string): Promise<void> {
     const pages = (
       await db.query<{ n: number; blocked: number; with_evidence: number }>(
         `SELECT count(*)::int AS n, count(*) FILTER (WHERE block IS NOT NULL)::int AS blocked,
-                count(*) FILTER (WHERE html_sha256 IS NOT NULL AND screenshot_sha256 IS NOT NULL)::int AS with_evidence
+                count(*) FILTER (WHERE (html_sha256 IS NOT NULL AND screenshot_sha256 IS NOT NULL) OR api_sha256 IS NOT NULL)::int AS with_evidence
            FROM results_page WHERE crawl_run_id = $1`,
         [run.id],
       )
     ).rows[0];
     const sample = (
-      await db.query<{ html_uri: string; html_sha256: string; screenshot_uri: string; screenshot_sha256: string }>(
-        `SELECT html_uri, html_sha256, screenshot_uri, screenshot_sha256 FROM results_page
-          WHERE crawl_run_id = $1 AND html_uri IS NOT NULL AND screenshot_uri IS NOT NULL ORDER BY md5(id::text) LIMIT 2`,
+      await db.query<EvidenceRow>(
+        `SELECT html_uri, html_sha256, screenshot_uri, screenshot_sha256, api_uri, api_sha256 FROM results_page
+          WHERE crawl_run_id = $1 AND ((html_uri IS NOT NULL AND screenshot_uri IS NOT NULL) OR api_uri IS NOT NULL) ORDER BY md5(id::text) LIMIT 4`,
         [run.id],
       )
     ).rows;
@@ -386,31 +386,49 @@ async function checkSliceDiscovery(accountId: string): Promise<void> {
     ).rows[0].n;
     return { run, pages, sample, used };
   });
-  check('lg: Amazon LG discovery has run', Boolean(d), d ? `run ${d.run.id} ${d.run.status}` : 'never fired');
+  check(`lg: ${SLICE.discovery.name} has run`, Boolean(d), d ? `run ${d.run.id} ${d.run.status}` : 'never fired');
   if (!d) return;
   check('lg: discovery run finished', d.run.status === 'finished', d.run.status);
   const stopped = Object.keys(d.run.stopped ?? {}).length ? `; stopped ${JSON.stringify(d.run.stopped)}` : '';
   check(
-    'lg: every results page read has HTML + screenshot evidence',
+    'lg: every results page read has evidence (HTML + screenshot, or the API response)',
     d.pages.n > 0 && d.pages.with_evidence === d.pages.n,
     `${d.pages.with_evidence}/${d.pages.n} pages (${d.pages.blocked} blocked)${stopped}`,
   );
   let ok = 0;
-  for (const s of d.sample) {
-    const h = await verifyEvidence(s.html_uri, s.html_sha256);
-    const p = await verifyEvidence(s.screenshot_uri, s.screenshot_sha256);
-    if (h.ok && p.ok && h.mode === 'GOVERNANCE' && p.mode === 'GOVERNANCE') ok++;
-  }
+  for (const s of d.sample) if ((await verifyStored(s)).ok) ok++;
   check('lg: results page evidence re-hashes to its SHA-256 under a Governance lock', d.sample.length > 0 && ok === d.sample.length, `${ok}/${d.sample.length} sampled`);
   check('lg: no used / renewed / refurbished / open-box listing staged by discovery', d.used === 0, `${d.used} found`);
 }
 
+interface EvidenceRow {
+  html_uri: string | null;
+  html_sha256: string | null;
+  screenshot_uri: string | null;
+  screenshot_sha256: string | null;
+  api_uri: string | null;
+  api_sha256: string | null;
+}
+
+/** Re-read stored evidence from S3: page + screenshot, or the API response; each must hash to its SHA-256 under a Governance lock. */
+async function verifyStored(s: EvidenceRow): Promise<{ ok: boolean; note: string }> {
+  const parts: [string, string][] = [];
+  if (s.html_uri && s.html_sha256 && s.screenshot_uri && s.screenshot_sha256) parts.push([s.html_uri, s.html_sha256], [s.screenshot_uri, s.screenshot_sha256]);
+  else if (s.html_uri && s.html_sha256 && !s.api_uri) parts.push([s.html_uri, s.html_sha256]); // no screenshot: fails below
+  if (s.api_uri && s.api_sha256) parts.push([s.api_uri, s.api_sha256]);
+  const complete = Boolean((s.html_uri && s.screenshot_uri) || s.api_uri);
+  const checked = await Promise.all(parts.map(([uri, sha]) => verifyEvidence(uri, sha)));
+  const ok = complete && checked.length > 0 && checked.every((c) => c.ok && c.mode === 'GOVERNANCE');
+  const bad = checked.find((c) => !c.ok || c.mode !== 'GOVERNANCE');
+  return { ok, note: ok ? '' : !complete ? 'incomplete evidence' : `hash ${bad && !bad.ok ? 'MISMATCH' : 'ok'}, lock ${bad?.mode ?? 'none'}` };
+}
+
 async function writeReport(results: SourceResult[]): Promise<string> {
   const date = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-  const file = path.resolve(here, `../../reports/exit-p2b-${slice ? 'amazon-lg-' : ''}${date}.md`);
+  const file = path.resolve(here, `../../reports/exit-p2b-${slice ? 'lg-slice-' : ''}${date}.md`);
   const passed = checks.filter((c) => c.ok).length;
   const lines = [
-    `# Phase 2b exit test${slice ? ' (scope: Amazon.com LG slice)' : ''} — ${new Date().toISOString()}`,
+    `# Phase 2b exit test${slice ? ' (scope: LG slice, Walmart + eBay, route D)' : ''} — ${new Date().toISOString()}`,
     '',
     `**${passed}/${checks.length} checks passed.**`,
     '',

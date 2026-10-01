@@ -1,17 +1,35 @@
-// The Amazon.com LG Sandbox slice (decisions 29–35): which SKUs, which terms, which schedules.
-// Pure, so the choice is tested; `npm run slice:amazon-lg` applies it through the API.
+// The LG Sandbox slice that finishes P2b (decisions 29–38): which SKUs, terms, sources and schedules.
+// Route D (decision 37, 1 Oct 2026): Amazon.com blocks every free US egress, so Amazon is paused and
+// is manual evidence until the brand's SP-API access or a licensed provider is in place; the slice
+// runs on Walmart (pages, works from US datacentres) and eBay (Browse API, decision 36).
+// Pure, so the choice is tested; `npm run slice:lg` applies it through the API.
 
 export const SLICE = {
   account: 'lg',
-  source: 'amazon_us',
-  group: 'Amazon LG slice',
+  /** Collected automatically, in this order. */
+  sources: ['walmart_us', 'ebay_us'] as string[],
+  /** Not collected automatically (route D): subscription and schedules switched off. */
+  paused: ['amazon_us'] as string[],
   skus: 10,
-  options: { search_pages: 2, new_only: true, buy_box_only: true },
-  discovery: { name: 'Amazon LG discovery', cadence: 'manual', timezone: 'Asia/Kolkata', kind: 'discovery' as const },
-  monitoring: { name: 'Amazon LG daily monitoring', cadence: '0 9 * * *', timezone: 'Asia/Kolkata', kind: 'monitoring' as const },
+  /** Subscription options per source, stored as explicit overrides. */
+  options: {
+    walmart_us: { search_pages: 3, new_only: true },
+    ebay_us: { search_pages: 2, new_only: true, buy_it_now_only: true },
+  } as Record<string, Record<string, unknown>>,
+  /** Model-number and name terms (searched on eBay through the API). Was "Amazon LG slice". */
+  group: { name: 'LG slice', formerName: 'Amazon LG slice', sources: ['ebay_us'], description: 'LG slice: model number and name of 10 LG SKUs, searched on eBay through the Browse API (decisions 29, 36).' },
+  /** Walmart does not allow search (robots.txt): its LG computers browse page instead. */
+  pagesGroup: {
+    name: 'LG slice Walmart pages',
+    sources: ['walmart_us'],
+    description: 'LG slice: Walmart browse pages (Walmart /search is disallowed by robots.txt).',
+    urls: ['https://www.walmart.com/browse/electronics/computers-laptops-and-tablets/3944_1089430?facet=brand%3ALG'],
+  },
+  discovery: { name: 'LG slice discovery', formerName: 'Amazon LG discovery', cadence: 'manual', timezone: 'Asia/Kolkata', kind: 'discovery' as const },
+  monitoring: { name: 'LG slice daily monitoring', formerName: 'Amazon LG daily monitoring', cadence: '0 9 * * *', timezone: 'Asia/Kolkata', kind: 'monitoring' as const },
   /** Above the daily sweep (10) and the under-notice re-check (20). */
   priority: 40,
-} as const;
+};
 
 export interface SliceProduct {
   code: string;
@@ -52,7 +70,7 @@ export interface SliceTerm {
   productCode: string;
 }
 
-/** Two terms per SKU: its model number (searched as-is on Amazon) and its product name. */
+/** Two terms per SKU: its model number (searched as-is) and its product name. */
 export function sliceTerms(skus: SliceProduct[]): SliceTerm[] {
   return skus.flatMap((p) => [
     { type: 'identifier' as const, value: p.model ?? p.code, productCode: p.code },

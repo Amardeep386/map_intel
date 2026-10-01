@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { pickSliceSkus, sliceTerms, type SliceProduct } from '../src/lib/amazonSlice.js';
+import { pickSliceSkus, SLICE, sliceTerms, type SliceProduct } from '../src/lib/lgSlice.js';
 
 const p = (code: string, category: string, modelFamily: string, status = 'Active'): SliceProduct => ({ code, name: `LG ${code}`, model: code, category, modelFamily, status });
 
@@ -43,4 +43,12 @@ test('slice terms: a model-number and a name term per SKU', () => {
     { type: 'identifier', value: '14Z90T-G.AAB2U1', productCode: '14Z90T-G.AAB2U1' },
     { type: 'keyword', value: 'LG 14Z90T-G.AAB2U1', productCode: '14Z90T-G.AAB2U1' },
   ]);
+});
+
+test('route D: the slice collects Walmart and eBay, Amazon is paused, every group points at a slice source', () => {
+  assert.deepEqual(SLICE.sources, ['walmart_us', 'ebay_us']);
+  assert.deepEqual(SLICE.paused, ['amazon_us']);
+  assert.ok(SLICE.sources.every((s) => SLICE.options[s]));
+  for (const g of [SLICE.group, SLICE.pagesGroup]) assert.ok(g.sources.every((s) => SLICE.sources.includes(s)), g.name);
+  for (const u of SLICE.pagesGroup.urls) assert.equal(new URL(u).host, 'www.walmart.com');
 });
