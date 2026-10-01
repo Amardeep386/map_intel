@@ -224,7 +224,8 @@ function ListingTable({ state, writable, onOpen, onInclude, onExclude, onRestore
           {bulk && state === "Staged" && <><SecondaryButton onClick={() => onExclude(chosen)}><Ban className="w-3.5 h-3.5" /> Exclude {chosen.length}…</SecondaryButton>
             <PrimaryButton onClick={() => onInclude(chosen)}><Check className="w-4 h-4" /> Include {chosen.length} as proposed</PrimaryButton></>}
           {bulk && state === "Excluded" && <SecondaryButton onClick={() => onRestore(chosen)}><Undo2 className="w-3.5 h-3.5" /> Restore {chosen.length}</SecondaryButton>}
-          {bulk && state === "Included" && <SecondaryButton onClick={() => onRetire(chosen)}><Archive className="w-3.5 h-3.5" /> Retire {chosen.length}</SecondaryButton>}
+          {bulk && state === "Included" && <><SecondaryButton onClick={() => onExclude(chosen)}><Ban className="w-3.5 h-3.5" /> Exclude {chosen.length}…</SecondaryButton>
+            <SecondaryButton onClick={() => onRetire(chosen)}><Archive className="w-3.5 h-3.5" /> Retire {chosen.length}</SecondaryButton></>}
           {bulk && state === "Retired" && <SecondaryButton onClick={() => onRestore(chosen)}><Undo2 className="w-3.5 h-3.5" /> Back to review</SecondaryButton>}
           {writable && state === "Staged" && !chosen.length && <PrimaryButton onClick={onApplyRules}><Sparkles className="w-4 h-4" /> Apply rules now</PrimaryButton>}
         </div>
