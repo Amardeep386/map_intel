@@ -151,6 +151,10 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 5 Oct 2026 (night) — colour / contrast pass over the whole portal (Claude Code)
+- Audited every screen in light and dark with an in-browser WCAG contrast check: light had faint muted text (4.4:1); dark had 9 failing styles (status greens / reds / ambers, text on accent buttons). Also found by reading the code: toasts were white on cream (invisible in light), the invite page had the old white-on-cream login card, overlays turned the screen cream in dark, the violation evidence box used taupe on dark brown, and the "Violations by severity" donut drew at zero width.
+- Fixes: `--text-muted` #6B5A4F (5.9:1), borders a little stronger; dark-mode overrides of the Tailwind status shades (`mirethos-theme.css`); `text-on-accent` (`--accent-contrast`, white or espresso chosen from each brand's accent); toasts on the inverted surface; overlays `bg-black/40`; evidence box on the page colour; invite page in the sign-in style; 9 px text → 10 px; donut fixed. Re-audit: 0 failures in light and dark on all 13 screens.
+
 ### 5 Oct 2026 (evening) — portal fixes: text selection, URL column, new sign-in page (Claude Code)
 - Text can be selected and copied again (`select-none` removed from the app shell).
 - Mapping Center tables: **URL** column ("Open" in a new tab).
