@@ -91,7 +91,7 @@ function ClientLogo({ name, className }) {
     );
   }
   
-  return <div className={`flex items-center justify-center font-bold text-brand-white bg-brand-copper ${className || "w-5 h-5 rounded-sm"}`}>{name.charAt(0)}</div>;
+  return <div className={`flex items-center justify-center font-bold text-on-accent bg-brand-copper ${className || "w-5 h-5 rounded-sm"}`}>{name.charAt(0)}</div>;
 }
 
 // ---------- Views ----------
@@ -125,7 +125,7 @@ function OverviewView({ onOpenViolation, clientName }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
         <Card title="Violations by severity">
-          <div className="flex items-center justify-center">
+          <div className="w-full">
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
                 <Pie data={severityDist} dataKey="value" innerRadius={40} outerRadius={65} paddingAngle={2} stroke={chartColors.card}>
@@ -233,7 +233,7 @@ function ViolationDrawer({ violation, onClose, onSendWarning, onResolve, onEscal
   if (!violation) return null;
   const v = violation;
   return (
-    <div className="fixed inset-0 bg-brand-charcoal/40 flex justify-end z-50 transition-opacity" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 flex justify-end z-50 transition-opacity" onClick={onClose}>
       <div className="bg-brand-ivory w-[920px] max-w-[90vw] h-full overflow-y-auto p-6 flex flex-col justify-between shadow-2xl border-l border-brand-beige" onClick={(e) => e.stopPropagation()}>
         
         {/* Drawer Header */}
@@ -294,13 +294,13 @@ function ViolationDrawer({ violation, onClose, onSendWarning, onResolve, onEscal
                   Open Live Listing <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
-              <div className="bg-brand-charcoal rounded-lg h-44 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden border border-brand-beige">
-                <div className="absolute top-2 left-2 right-2 text-[9px] text-brand-taupe font-mono text-left truncate">
+              <div className="bg-brand-ivory rounded-lg h-44 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden border border-brand-beige">
+                <div className="absolute top-2 left-2 right-2 text-[10px] text-brand-taupe font-mono text-left truncate">
                   {v.evidence
                     ? `Captured ${new Date(v.evidence.capturedAt).toLocaleString()} · SHA-256 ${v.evidence.sha256.slice(0, 12)}…`
                     : "Sample data · no capture stored"}
                 </div>
-                <div className="text-brand-white font-bold text-xs truncate max-w-[200px]">{v.product}</div>
+                <div className="text-brand-charcoal font-bold text-xs truncate max-w-[200px]">{v.product}</div>
                 <div className="text-2xl font-black text-red-600 my-2">${v.advertised}</div>
                 <div className="text-[10px] text-brand-taupe uppercase tracking-wide">Sold By: <MerchantLogo name={v.merchant} /></div>
               </div>
@@ -448,45 +448,48 @@ function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
     return undefined;
   };
 
-  const inputCls = "w-full px-3 py-2 text-sm border border-brand-taupe rounded-lg bg-brand-charcoal text-white focus:outline-none focus:ring-2 focus:ring-brand-copper/30";
+  const inputCls = "w-full h-11 px-3.5 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal placeholder:text-brand-taupe/70 shadow-sm transition focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
+  const label = "block text-[13px] font-medium mb-1.5";
+  const button = "w-full h-11 rounded-xl bg-brand-copper text-white text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(166,94,68,0.7)] hover:brightness-110 transition cursor-pointer disabled:opacity-60";
   const open = invite && invite.state === "open";
   return (
-    <div className="min-vh-100 flex items-center justify-center bg-brand-charcoal font-sans" style={{ minHeight: '100vh' }}>
-      <div className="bg-brand-sidebar border border-white/10 rounded-xl p-8 w-96 shadow-2xl text-brand-white">
-        <div className="flex items-center gap-2.5 mb-6 justify-center">
-          <img src="/favicon.ico" alt="Mirethos Logo" className="w-7 h-7 bg-brand-white p-1 rounded-md" />
+    // Same look as the sign-in page: Mirethos copper, page colour of the theme.
+    <div className="min-h-screen flex items-center justify-center bg-brand-ivory font-sans text-brand-charcoal px-6 py-12" style={{ "--color-brand-copper": "#A65E44", "--accent-coral": "#A65E44" }}>
+      <div className="w-full max-w-[420px] bg-brand-white border border-brand-beige rounded-2xl p-8 shadow-[0_24px_60px_-24px_rgba(60,47,47,0.35)]">
+        <div className="flex items-center gap-3 mb-8">
+          <img src="/favicon.ico" alt="" className="w-9 h-9 rounded-xl bg-brand-ivory border border-brand-beige p-1.5" />
           <div>
-            <span className="text-white text-base font-bold tracking-wide">MIRETHOS</span>
-            <span className="text-[9px] text-brand-taupe uppercase tracking-wider block -mt-1">MAP Portal Invitation</span>
+            <div className="text-base font-semibold tracking-[0.18em]">MIRETHOS</div>
+            <div className="text-[11px] uppercase tracking-[0.2em] text-brand-taupe">MAP Intelligence · Invitation</div>
           </div>
         </div>
-        {!invite && !error && <p className="text-xs text-brand-taupe text-center">Checking your invite…</p>}
+        {!invite && !error && <p className="text-sm text-brand-taupe flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Checking your invite…</p>}
         {(error || (invite && !open)) && (
           <>
-            <h3 className="text-base font-semibold text-white mb-1">This link can't be used</h3>
-            <p className="text-xs text-brand-taupe mb-5">{error || `This invite has ${invite.state === "used" ? "already been used" : invite.state}. Ask the person who invited you for a new link.`}</p>
-            <button onClick={onCancel} className="w-full py-2.5 bg-brand-copper hover:bg-brand-copper/90 text-white rounded-lg text-sm font-semibold cursor-pointer">Go to sign in</button>
+            <h2 className="text-2xl font-semibold tracking-tight">This link can't be used</h2>
+            <p className="mt-1.5 mb-6 text-sm text-brand-taupe">{error || `This invite has ${invite.state === "used" ? "already been used" : invite.state}. Ask the person who invited you for a new link.`}</p>
+            <button onClick={onCancel} className={button}>Go to sign in</button>
           </>
         )}
         {open && (
           <>
-            <h3 className="text-base font-semibold text-white mb-1">Join {invite.account}</h3>
-            <p className="text-xs text-brand-taupe mb-5">You were invited as <b className="text-white">{invite.role}</b> ({invite.email}). Choose a password to finish.</p>
+            <h2 className="text-2xl font-semibold tracking-tight">Join {invite.account}</h2>
+            <p className="mt-1.5 mb-6 text-sm text-brand-taupe">You were invited as <b className="text-brand-charcoal">{invite.role}</b> ({invite.email}). Choose a password to finish.</p>
             <form onSubmit={submit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">Your name</label>
+                <label className={label}>Your name</label>
                 <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">Password (at least 12 characters)</label>
+                <label className={label}>Password <span className="text-brand-taupe font-normal">(at least 12 characters)</span></label>
                 <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-brand-taupe mb-1">Repeat password</label>
+                <label className={label}>Repeat password</label>
                 <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required className={inputCls} />
               </div>
-              <button type="submit" disabled={busy} className="w-full py-2.5 bg-brand-copper hover:bg-brand-copper/90 text-white rounded-lg text-sm font-semibold transition-colors cursor-pointer mt-2 disabled:opacity-50">
-                {busy ? "Setting up…" : "Accept invite"}
+              <button type="submit" disabled={busy} className={`${button} mt-2 flex items-center justify-center gap-2`}>
+                {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Setting up…</> : "Accept invite"}
               </button>
             </form>
           </>
@@ -640,6 +643,15 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
   );
 }
 
+/** White or dark text, whichever reads better on a hex colour (WCAG relative luminance). */
+function textOn(hex) {
+  const n = parseInt(String(hex).replace("#", ""), 16);
+  if (!Number.isFinite(n)) return "#FFFFFF";
+  const ch = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
+  return (L + 0.05) / 0.05 > 1.05 / (L + 0.05) ? "#17110F" : "#FFFFFF";
+}
+
 export default function App() {
   // Workspace data per client name, plus lists shared by several screens. Loaded through the API client.
   const [db, setDb] = useState({});
@@ -657,7 +669,9 @@ export default function App() {
   useEffect(() => {
     const accent = clients.find((c) => c.name === activeClient)?.accent;
     const colors = (accent?.light && accent) || BRAND_COLORS[activeClient] || { light: "#A65E44", dark: "#E38663" };
-    document.documentElement.style.setProperty('--accent-brand', isDark ? colors.dark : colors.light);
+    const accentHex = isDark ? colors.dark : colors.light;
+    document.documentElement.style.setProperty('--accent-brand', accentHex);
+    document.documentElement.style.setProperty('--accent-contrast', textOn(accentHex));
 
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -871,7 +885,7 @@ export default function App() {
                 <div key={c.name} className="bg-brand-white border border-brand-beige hover:border-brand-copper/50 rounded-xl p-4 transition-all cursor-pointer shadow-sm"
                   onClick={() => handleSelectClient(c.name)}>
                   <div className="flex justify-between items-start mb-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${c.status === 'Sandbox' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{c.status}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.status === 'Sandbox' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{c.status}</span>
                     <div className="flex items-center justify-end">
                       <ClientLogo name={c.name} className="w-10 h-10 rounded-lg border border-brand-beige shadow-sm bg-brand-white" />
                     </div>
@@ -956,7 +970,7 @@ export default function App() {
                 }`}>
                 <Icon className="w-4 h-4 shrink-0" />
                 {!navCollapsed && <span className="flex-1 text-left">{n.label}</span>}
-                {navBadges[n.id] ? <span className={`${navCollapsed ? "absolute top-0.5 right-1.5" : ""} text-[9px] font-bold bg-brand-copper text-brand-white rounded-full px-1.5 py-0.5`}>{navBadges[n.id]}</span> : null}
+                {navBadges[n.id] ? <span className={`${navCollapsed ? "absolute top-0.5 right-1.5" : ""} text-[10px] font-bold bg-brand-copper text-on-accent rounded-full px-1.5 py-0.5`}>{navBadges[n.id]}</span> : null}
               </button>
             );
           })}
@@ -965,7 +979,7 @@ export default function App() {
         {/* Bottom User Avatar */}
         <div className={`py-3 border-t border-brand-beige flex items-center justify-between ${navCollapsed ? "flex-col gap-2 px-1" : "px-4"}`}>
           <div className="flex items-center gap-2" title={navCollapsed ? currentUser?.name || "Fenil Dholaviya" : undefined}>
-            <div className="w-7 h-7 rounded-full bg-brand-copper flex items-center justify-center text-xs text-brand-white font-bold">{initials(currentUser?.name || "Fenil Dholaviya")}</div>
+            <div className="w-7 h-7 rounded-full bg-brand-copper flex items-center justify-center text-xs text-on-accent font-bold">{initials(currentUser?.name || "Fenil Dholaviya")}</div>
             <div className={`text-[11px] ${navCollapsed ? "hidden" : ""}`}>
               <div className="text-brand-charcoal font-bold">{currentUser?.name || "Fenil Dholaviya"}</div>
               <div className="text-brand-taupe">{accountRole ?? (currentUser?.role === "member" ? "Member" : "Admin")}</div>
@@ -992,7 +1006,7 @@ export default function App() {
       {/* TOAST alerts */}
       <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
         {toasts.map(t => (
-          <div key={t.id} className="bg-brand-sidebar border border-brand-beige text-brand-white px-4 py-3 rounded-lg shadow-xl text-xs flex items-center gap-2 animate-fade-in">
+          <div key={t.id} className="bg-brand-charcoal text-brand-ivory px-4 py-3 rounded-xl shadow-xl text-sm flex items-center gap-2 animate-fade-in">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
           </div>
