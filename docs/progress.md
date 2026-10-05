@@ -151,6 +151,11 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 5 Oct 2026 (evening) — portal fixes: text selection, URL column, new sign-in page (Claude Code)
+- Text can be selected and copied again (`select-none` removed from the app shell).
+- Mapping Center tables: **URL** column ("Open" in a new tab).
+- New sign-in page (`LoginScreen` in `src/App.jsx`): espresso brand panel + form, show-password toggle, Mirethos copper before a brand is chosen (the default client LG's crimson showed before). All pushed to `main` and live.
+
 ### 5 Oct 2026 (later still) — evidence cards for eBay; Price checks in the listing drawer (Claude Code)
 - **Evidence card** (`collector/apiCard.ts`, `collector/evidenceCard.ts`, `browser.ts renderCard`): where the page blocks us (eBay), a PNG drawn from the API response (photo, title, price, condition in red when not new, seller + rating, availability, shipping, location, item number, MPN, GTIN, read time, the response's SHA-256), labelled "drawn from the eBay Browse API response, not a screenshot". Stored as `<observation>.card.png` with Object Lock; **migration 030** `evidence_card` (append-only, one per evidence row, `source_sha256` = the response it was drawn from; applied to Neon). The API response stays the evidence.
 - `npm run evidence:cards [-- --commit]` draws cards for stored responses (re-hashed first): **6 drawn** for the eBay checks of 1–4 Oct.
