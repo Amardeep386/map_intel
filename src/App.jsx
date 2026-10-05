@@ -833,7 +833,7 @@ export default function App() {
   return (
     <DataContext.Provider value={{ db, setDb, shared, chartColors }}>
     <WorkspaceContext.Provider value={workspaceCtx}>
-      <div className="flex h-screen bg-brand-ivory font-sans text-brand-charcoal select-none">
+      <div className="flex h-screen bg-brand-ivory font-sans text-brand-charcoal">
       
       {/* Sidebar */}
       <div className={`${navCollapsed ? "w-14" : "w-60"} bg-brand-sidebar text-brand-charcoal flex flex-col shrink-0 border-r border-brand-beige shadow-lg transition-[width] duration-200`}>
