@@ -11,7 +11,7 @@
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
 - **Next step (resume here): act on the M7 findings** (`main` pushed 5 Oct 2026; Render + Vercel deploy it).
-  1. **You (Mapping Center, LG Sandbox):** exclude the eBay windwing521 gram Book 15 at $399.99 (eBay says "For parts or not working", 5 Oct); check Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
+  1. **Done 5 Oct:** eBay windwing521 and Walmart gram 17" excluded. Still check Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
   2. **You:** the Walmart "gram 17"" listing is mapped to 16Z90TL-H.AUB9U1, a 16" product: re-map or exclude it.
   3. **Done 5 Oct:** `amazon-lg-slice` merged into `main`; `lg-slice.yml` now checks out `main`. Pushed 5 Oct.
   4. Claude Code: capture real Walmart / eBay fixtures for the tests; add shorter eBay keyword terms (9 of 20 searches found nothing).
@@ -154,6 +154,7 @@
 ### 5 Oct 2026 (evening) — portal fixes: text selection, URL column, new sign-in page (Claude Code)
 - Text can be selected and copied again (`select-none` removed from the app shell).
 - Mapping Center tables: **URL** column ("Open" in a new tab).
+- Mapping (LG, by you): eBay windwing521 $399.99 (for parts) and Walmart "gram 17"" (mapped to a 16" product) **excluded**. A bulk Restore at 11:20 IST put 644 Excluded / Retired listings back in review; Apply rules re-excluded most (the 1 Oct hand exclusions are now matcher decisions). 6 new eBay listings included by you + 1 by the matcher: monitored from the next daily run.
 - New sign-in page (`LoginScreen` in `src/App.jsx`): espresso brand panel + form, show-password toggle, Mirethos copper before a brand is chosen (the default client LG's crimson showed before). All pushed to `main` and live.
 
 ### 5 Oct 2026 (later still) — evidence cards for eBay; Price checks in the listing drawer (Claude Code)
