@@ -232,7 +232,7 @@ function ListingTable({ state, writable, onOpen, onInclude, onExclude, onRestore
       </div>
       <Table columns={[
         writable ? <input key="all" type="checkbox" checked={all} onChange={() => setSel(all ? new Set() : new Set(data.items.map((i) => i.id)))} aria-label="Select all" /> : "",
-        state === "Staged" ? "Detected listing" : "Listing", "Seller", "Price", state === "Staged" ? "Proposed match" : "Product (client SKU)", "Confidence",
+        state === "Staged" ? "Detected listing" : "Listing", "URL", "Seller", "Price", state === "Staged" ? "Proposed match" : "Product (client SKU)", "Confidence",
         state === "Staged" ? "Seen" : state === "Excluded" ? "Reason" : "Decided by", state === "Staged" ? "" : "Since",
       ]}>
         {data.items.map((r) => (
@@ -241,6 +241,9 @@ function ListingTable({ state, writable, onOpen, onInclude, onExclude, onRestore
             <Td className="font-medium max-w-sm">
               <button onClick={() => onOpen(r.id)} className="text-left cursor-pointer hover:underline">{r.title || r.url}</button>
               <div className="text-[10px] text-brand-taupe flex gap-1.5 items-center">{r.source}{r.origin === "synthetic" && <Pill text="Synthetic" tone={TONE.Synthetic} />}</div>
+            </Td>
+            <Td className="whitespace-nowrap">
+              {r.url ? <a href={r.url} target="_blank" rel="noreferrer" title={r.url} className="text-brand-copper text-xs inline-flex items-center gap-1 hover:underline">Open <ExternalLink className="w-3 h-3" /></a> : <span className="text-brand-taupe">—</span>}
             </Td>
             <Td className="text-brand-taupe">{r.seller || "—"}</Td>
             <Td>{money(r.price)}</Td>
