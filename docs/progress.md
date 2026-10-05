@@ -3,17 +3,17 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`). **Exit test `--scope lg-slice` passed 10/10 on 5 Oct 2026** after three daily monitoring runs (2–4 Oct); M7 report in `server/reports/lg-slice-m7-2026-10-05.md`. Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Phase:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`, **merged into `main` on 5 Oct 2026**). **Exit test `--scope lg-slice` passed 10/10 on 5 Oct 2026** after three daily monitoring runs (2–4 Oct); M7 report in `server/reports/lg-slice-m7-2026-10-05.md`. Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
 - **Last updated:** 5 Oct 2026 (Claude Code: LG slice M7 report + exit test)
 - **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here): act on the M7 findings, then merge `amazon-lg-slice` into `main`.**
+- **Next step (resume here): push `main` (deploys Render + Vercel), then act on the M7 findings.**
   1. **You (Mapping Center, LG Sandbox):** open the evidence for the two candidate breaches: eBay windwing521 gram Book 15 at $399.99 (MAP $699; title ends "#37", may be a refurbished lot) and Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
   2. **You:** the Walmart "gram 17"" listing is mapped to 16Z90TL-H.AUB9U1, a 16" product: re-map or exclude it.
-  3. **Decide:** merge `amazon-lg-slice` into `main` (puts the eBay API collector, matcher fix and Exclude-on-Included live on Render / Vercel; the workflow then checks out `main`).
+  3. **Done 5 Oct:** `amazon-lg-slice` merged into `main`; `lg-slice.yml` now checks out `main`. Not pushed yet.
   4. Claude Code: capture real Walmart / eBay fixtures for the tests; add shorter eBay keyword terms (9 of 20 searches found nothing).
   5. Daily monitoring keeps running on GitHub Actions (starts ~6 h late, around 15:00 IST) until it moves to the Render worker.
   6. Amazon stays manual evidence until route A (LG's SP-API access) or B (licensed data) is in place.
@@ -151,6 +151,9 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 5 Oct 2026 (later) — amazon-lg-slice merged into main (Claude Code)
+- Merge commit on `main` (no conflicts); `.github/workflows/lg-slice.yml` default branch `amazon-lg-slice` → `main`. Server typecheck OK, tests 135/135; portal build OK, lint 0 errors.
+
 ### 5 Oct 2026 — LG slice M7 report; exit test passed (Claude Code)
 - You worked the review queue on 1 Oct: 3 Walmart gram laptops included; the LCD panel and 2 other listings excluded.
 - Daily monitoring ran on GitHub Actions 2, 3 and 4 Oct (`c17fdf07`, `f7f939a0`, `4c08e114`): 4/4 jobs ok each day, 4 listings priced with evidence (Walmart HTML + screenshot, eBay API JSON), prices unchanged. Scheduled 03:30 UTC, started ~09:30–10:00 UTC (GitHub delay).
