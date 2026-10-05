@@ -257,8 +257,22 @@ export async function mappingRoutes(app: FastifyInstance): Promise<void> {
           [listingId],
         )
       ).rows;
+      // Every price check of the listing, newest first, with what its evidence holds.
+      const checks = (
+        await db.query(
+          `SELECT o.id, o.observed_at, o.status, o.advertised_price AS price, o.currency, o.availability,
+                  o.seller_name_raw AS seller, o.fetch_method, o.error,
+                  e.id AS evidence_id, e.screenshot_uri IS NOT NULL AS has_screenshot, e.api_uri IS NOT NULL AS has_api,
+                  e.html_uri IS NOT NULL AS has_html, c.id IS NOT NULL AS has_card
+             FROM observation o
+             LEFT JOIN evidence e ON e.observation_id = o.id AND e.observed_at = o.observed_at
+             LEFT JOIN evidence_card c ON c.evidence_id = e.id
+            WHERE o.listing_id = $1 ORDER BY o.observed_at DESC LIMIT 60`,
+          [listingId],
+        )
+      ).rows;
       const signals = row.candidate_id ? (await signalsFor(db, [row.candidate_id])).get(row.candidate_id) ?? [] : [];
-      return { ...row, signals, history, foundOn };
+      return { ...row, signals, history, foundOn, checks };
     });
   });
 

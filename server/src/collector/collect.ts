@@ -10,6 +10,7 @@ import { ApiAuthError } from './apiError.js';
 import { bestBuyApiEnabled, bestBuyApiLookup } from './bestbuyApi.js';
 import { browserFetch, renderScreenshot } from './browser.js';
 import { ebayApiEnabled, ebayApiItem } from './ebayApi.js';
+import { cardSupported, insertCard, storeApiCard } from './evidenceCard.js';
 import { modelMatches } from './extract/common.js';
 import type { AttemptFacts } from './failure.js';
 import { httpFetch } from './http.js';
@@ -250,9 +251,18 @@ export async function collectListing(listingId: string, ctx: CollectContext): Pr
         }
         if (shot) shotObj = await putObject(`${base}.png`, shot, 'image/png');
       }
+      // No page picture beside an API response (eBay blocks its pages): draw the evidence card.
+      let cardObj: StoredObject | null = null;
+      if (apiObj && apiRead && !shotObj && cardSupported(listing.source_code)) {
+        try {
+          cardObj = await storeApiCard(listing.source_code, base, { body: apiRead.body, sha256: apiObj.sha256, readAt: apiRead.fetchedAt });
+        } catch (err) {
+          notes.push(`card: ${errMessage(err)}`);
+        }
+      }
       const page = !fetched ? null : fetched.method === 'browser' ? 'browser' : 'http+render';
       const evidenceMethod = [method === 'api' ? 'api' : null, page].filter(Boolean).join('+');
-      evidence = { html: htmlObj, screenshot: shotObj, api: apiObj, method: evidenceMethod, capturedAt: new Date() };
+      evidence = { html: htmlObj, screenshot: shotObj, api: apiObj, card: cardObj, method: evidenceMethod, capturedAt: new Date() };
     } catch (err) {
       notes.push(`evidence upload failed: ${errMessage(err)}`);
     }
@@ -288,7 +298,7 @@ interface PersistArgs {
   method: 'http' | 'browser' | 'api' | null;
   requests: number;
   error: string | null;
-  evidence: { html: StoredObject | null; screenshot: StoredObject | null; api: StoredObject | null; method: string; capturedAt: Date } | null;
+  evidence: { html: StoredObject | null; screenshot: StoredObject | null; api: StoredObject | null; card?: StoredObject | null; method: string; capturedAt: Date } | null;
   /** The text the model number is looked for in (the page, or the API response). */
   matchText?: string | null;
 }
@@ -345,10 +355,10 @@ async function persist(a: PersistArgs): Promise<CollectOutcome> {
 
     if (a.evidence) {
       const lock = (a.evidence.html ?? a.evidence.api)?.lock;
-      await db.query(
+      const ins = await db.query<{ id: string }>(
         `INSERT INTO evidence (observation_id, observed_at, screenshot_uri, screenshot_sha256, screenshot_bytes,
            html_uri, html_sha256, html_bytes, method, captured_at, lock_mode, lock_until, api_uri, api_sha256, api_bytes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
         [
           a.observationId,
           observedAt,
@@ -367,6 +377,7 @@ async function persist(a: PersistArgs): Promise<CollectOutcome> {
           a.evidence.api?.bytes ?? null,
         ],
       );
+      if (a.evidence.card && a.evidence.api) await insertCard(db, ins.rows[0].id, a.evidence.card, a.evidence.api.sha256);
     }
 
     if (priced) {

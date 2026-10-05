@@ -152,6 +152,21 @@ async function renderScreenshotNow(html: string, baseUrl: string, adapter: Sourc
   }
 }
 
+/** PNG of an evidence card (apiCard.ts): our own HTML, JavaScript off; the product image loads from its CDN. */
+export async function renderCard(html: string): Promise<Buffer> {
+  return withPageSlot(async () => {
+    const b = await getBrowser();
+    const ctx = await b.newContext({ viewport: { width: 1040, height: 800 }, javaScriptEnabled: false, locale: 'en-US' });
+    try {
+      const page = await ctx.newPage();
+      await page.setContent(html, { waitUntil: 'load', timeout: 20_000 }).catch(() => undefined);
+      return await page.locator('#card').screenshot({ type: 'png' });
+    } finally {
+      await ctx.close();
+    }
+  });
+}
+
 export async function closeBrowser(): Promise<void> {
   for (const ctx of liveContexts.values()) await ctx.then((c) => c.close()).catch(() => undefined);
   liveContexts.clear();
