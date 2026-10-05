@@ -431,4 +431,9 @@ export const api = {
     if (USE_MOCK) return null;
     return request(`/evidence/${evidenceId}`);
   },
+  // A search / browse results page as it was read by discovery (HTML + screenshot).
+  async getResultsPage(client, pageId) {
+    if (USE_MOCK) return null;
+    return request(`/accounts/${client.id}/results-pages/${pageId}`);
+  },
 };

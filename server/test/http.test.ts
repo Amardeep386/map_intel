@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { proxyFromUrl } from '../src/collector/browser.js';
-import { claimSlot } from '../src/collector/http.js';
+import { proxyFromUrl, scrollPlan } from '../src/collector/browser.js';
+import { claimSlot, paceGap } from '../src/collector/http.js';
+import { adapters } from '../src/collector/sources.js';
 
 test('claimSlot: requests to one host queue up one gap apart', () => {
   assert.deepEqual(claimSlot(null, 1000, 500), [1000, 1500]); // free host: go now
@@ -30,4 +31,16 @@ test('withPageSlot: never more pages open than allowed, all run', async () => {
   const done = await Promise.all(Array.from({ length: 7 }, task));
   assert.equal(done.length, 7);
   assert.equal(peak, 2);
+});
+
+test('pace: an adapter pace overrides the global delay (Amazon 3 s + up to 1 s)', () => {
+  assert.equal(paceGap({ minDelayMs: 3000, jitterMs: 1000 }, 0), 3000);
+  assert.equal(paceGap({ minDelayMs: 3000, jitterMs: 1000 }, 0.999), 3999);
+  assert.equal(adapters.amazon_us.pace?.minDelayMs, 3000);
+  assert.ok(adapters.amazon_us.browserFirst && adapters.amazon_us.noRetryOnBlock);
+});
+
+test('scroll plan: down in steps, then back to the top', () => {
+  assert.deepEqual(scrollPlan(900, 3), [300, 600, 900, 0]);
+  assert.deepEqual(scrollPlan(1000, 2), [500, 1000, 0]);
 });

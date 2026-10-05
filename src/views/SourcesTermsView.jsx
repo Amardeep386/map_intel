@@ -535,7 +535,14 @@ const CADENCES = [
   ["0 */6 * * *", "Every 6 hours"],
   ["0 */12 * * *", "Every 12 hours"],
   ["0 3 * * 1", "Weekly on Monday 03:00"],
+  ["manual", "Manual only"],
 ];
+const KINDS = [
+  ["both", "Listings and discovery"],
+  ["monitoring", "Monitoring only (listings)"],
+  ["discovery", "Discovery only (terms)"],
+];
+const kindLabel = (k) => KINDS.find(([v]) => v === (k ?? "both"))?.[1] ?? k;
 const cadenceLabel = (c) => CADENCES.find(([v]) => v === c)?.[1] ?? c;
 
 function scopeLabel(sel, groups) {
@@ -559,29 +566,30 @@ function SchedulesTab({ schedules, canEdit, onNew, onToggle }) {
           <PrimaryButton onClick={onNew}><Plus className="w-4 h-4" /> New schedule</PrimaryButton>
         </div>
       )}
-      <Table columns={["Schedule", "Applies to", "Listing scope", "Listing status", "Takedown status", "Cadence", "Next run", "Priority", "Active"]}>
+      <Table columns={["Schedule", "Applies to", "Runs", "Listing scope", "Listing status", "Takedown status", "Cadence", "Next run", "Priority", "Active"]}>
         {schedules.map((s) => (
           <tr key={s.id}>
             <Td className="font-semibold">{s.name}</Td>
             <Td className="text-brand-taupe">{scopeLabel(s.selector, groups)}</Td>
+            <Td className="text-brand-taupe">{kindLabel(s.kind)}</Td>
             <Td className="text-brand-taupe">{s.listingScope}</Td>
             <Td className="text-brand-taupe">{s.listingStatus}</Td>
             <Td className="text-brand-taupe">{s.takedownStatus}</Td>
             <Td>{cadenceLabel(s.cadence)} <span className="text-[10px] text-brand-taupe">{s.timezone}</span></Td>
-            <Td className="text-brand-taupe whitespace-nowrap">{s.active ? formatWhen(s.nextRun) : "—"}</Td>
+            <Td className="text-brand-taupe whitespace-nowrap">{!s.active ? "—" : s.manual ? "Fired by hand" : formatWhen(s.nextRun)}</Td>
             <Td>{s.priority}</Td>
             <Td><Toggle on={s.active} disabled={!canEdit} onChange={(v) => onToggle(s, v)} /></Td>
           </tr>
         ))}
       </Table>
-      <div className="mt-3"><Note>When several schedules match the same work, the highest priority wins, then the most specific. Schedules run from Phase 2b.</Note></div>
+      <div className="mt-3"><Note>When several schedules match the same work, the highest priority wins, then the most specific. A monitoring-only schedule never takes discovery work, and a discovery-only one never re-collects listings.</Note></div>
     </>
   );
 }
 
 function ScheduleModal({ groups, sources, onClose, onDone }) {
   const { client, showToast } = useWorkspace();
-  const [form, setForm] = useState({ name: "", cadence: "0 6 * * *", timezone: "UTC", priority: 10, category: "", source: "", group: "", listingScope: "Included and Staged", takedownStatus: "All" });
+  const [form, setForm] = useState({ name: "", cadence: "0 6 * * *", timezone: "UTC", priority: 10, category: "", source: "", group: "", listingScope: "Included and Staged", takedownStatus: "All", kind: "both" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const save = async (e) => {
     e.preventDefault();
@@ -597,6 +605,7 @@ function ScheduleModal({ groups, sources, onClose, onDone }) {
         priority: Number.parseInt(form.priority, 10) || 0,
         listingScope: form.listingScope,
         takedownStatus: form.takedownStatus,
+        kind: form.kind,
         selector,
       }),
     );
@@ -611,7 +620,7 @@ function ScheduleModal({ groups, sources, onClose, onDone }) {
       <form className="space-y-4" onSubmit={save}>
         <Field label="Name"><input className={inputCls} value={form.name} onChange={set("name")} required placeholder="e.g. Under-notice re-check" /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Cadence (cron)">
+          <Field label="Cadence (cron or manual)">
             <input className={inputCls} list="cadences" value={form.cadence} onChange={set("cadence")} required />
             <datalist id="cadences">{CADENCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</datalist>
           </Field>
@@ -637,6 +646,11 @@ function ScheduleModal({ groups, sources, onClose, onDone }) {
             </select>
           </Field>
         </div>
+        <Field label="Runs">
+          <select className={inputCls} value={form.kind} onChange={set("kind")}>
+            {KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Listing scope">
             <select className={inputCls} value={form.listingScope} onChange={set("listingScope")}>

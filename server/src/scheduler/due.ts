@@ -2,8 +2,10 @@
 // before now, if it is newer than the last slot fired and not older than `maxLagHours` (a worker
 // that was down for two days does not replay every missed slot; it runs the latest one).
 import cronParser from 'cron-parser';
+import { isManual } from '../lib/schedules.js';
 
 export function dueSlot(cadence: string, timezone: string, now: Date, lastFired: Date | null, maxLagHours = 24): Date | null {
+  if (isManual(cadence)) return null;
   let slot: Date;
   try {
     // cron-parser's prev() is strictly before currentDate: nudge by 1 ms so a slot exactly at `now` counts.

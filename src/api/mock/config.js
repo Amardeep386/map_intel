@@ -41,7 +41,7 @@ function account(name) {
     groups: [],
     terms: [],
     cells: {},
-    schedules: [{ id: id(), name: "Daily marketplace sweep", selector: {}, listingScope: "Included and Staged", listingStatus: "Active only", takedownStatus: "All", cadence: "0 6 * * *", timezone: "UTC", priority: 10, active: true, nextRun: null }],
+    schedules: [{ id: id(), name: "Daily marketplace sweep", selector: {}, listingScope: "Included and Staged", listingStatus: "Active only", takedownStatus: "All", kind: "both", cadence: "0 6 * * *", timezone: "UTC", priority: 10, active: true, nextRun: null }],
     settings: { name, regions: ["US"], currency: "USD", timezone: "America/New_York", contractFrom: null, contractTo: null, seats: 8,
       settings: { mapTolerancePct: 2, minDepth: 1, graceHours: 0, matchInclude: 90, matchReview: 60, qaSamplePct: 5, brandApprovalRequired: true, brandUsersSeeNeedsReview: false, requestBudget: 3000 } },
     audit: [],
@@ -193,7 +193,8 @@ export const mockConfig = {
   schedules(client) { return account(client.name).schedules; },
   createSchedule(client, body) {
     const a = account(client.name);
-    const s = { id: id(), selector: {}, listingScope: "Included and Staged", listingStatus: "Active only", takedownStatus: "All", timezone: "UTC", priority: 10, active: true, nextRun: null, ...body };
+    const s = { id: id(), selector: {}, listingScope: "Included and Staged", listingStatus: "Active only", takedownStatus: "All", kind: "both", timezone: "UTC", priority: 10, active: true, nextRun: null, ...body };
+    s.manual = s.cadence === "manual";
     a.schedules.push(s);
     log(a, "schedule.created", `Created schedule "${s.name}"`);
     return s;

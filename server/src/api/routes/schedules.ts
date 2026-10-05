@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { SOURCE_CATEGORIES } from '../../collector/catalogue.js';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { withTenant, type Db } from '../../lib/db.js';
-import { nextRun, resolveSchedule, type ScheduleDef } from '../../lib/schedules.js';
+import { nextRun, resolveSchedule, runsDiscovery, runsMonitoring, SCHEDULE_KINDS, type ScheduleDef, type ScheduleKind } from '../../lib/schedules.js';
 import { HttpError } from '../app.js';
 import { isUniqueViolation, parse, uuidOr404 } from '../validate.js';
 
@@ -27,7 +27,9 @@ const fields = {
   listingScope: z.enum(['Included only', 'Included and Staged', 'All']),
   listingStatus: z.enum(['Active only', 'Inactive only', 'All']),
   takedownStatus: z.enum(['All', 'Under notice', 'Not under notice']),
-  cadence: z.string().trim().min(9).max(100),
+  kind: z.enum(SCHEDULE_KINDS as [ScheduleKind, ...ScheduleKind[]]),
+  // A 5-field cron expression, or "manual" (fired by hand only).
+  cadence: z.string().trim().min(6).max(100),
   timezone: z.string().trim().min(1).max(64),
   priority: z.number().int().min(0).max(100),
   active: z.boolean(),
@@ -37,6 +39,7 @@ const scheduleBody = z.object({
   listingScope: fields.listingScope.default('Included and Staged'),
   listingStatus: fields.listingStatus.default('Active only'),
   takedownStatus: fields.takedownStatus.default('All'),
+  kind: fields.kind.default('both'),
   timezone: fields.timezone.default('UTC'),
   priority: fields.priority.default(10),
   active: fields.active.default(true),
@@ -45,6 +48,8 @@ const schedulePatch = z.object(fields).partial().refine((v) => Object.keys(v).le
 
 const resolveQuery = z.object({
   source: z.string().max(64),
+  // Discovery work (a term) or the re-collection of listings; defaults to discovery when a term or group is given.
+  work: z.enum(['discovery', 'monitoring']).optional(),
   termGroup: z.string().uuid().optional(),
   term: z.string().uuid().optional(),
 });
@@ -56,6 +61,7 @@ interface ScheduleRow {
   listing_scope: string;
   listing_status: string;
   takedown_status: string;
+  kind: ScheduleKind;
   cadence: string;
   timezone: string;
   priority: number;
@@ -72,11 +78,13 @@ const view = (r: ScheduleRow) => {
     listingScope: r.listing_scope,
     listingStatus: r.listing_status,
     takedownStatus: r.takedown_status,
+    kind: r.kind,
     cadence: r.cadence,
     timezone: r.timezone,
     priority: r.priority,
     active: r.active,
     nextRun: r.active && 'next' in n ? n.next : null,
+    manual: 'next' in n && n.next === null,
     updatedAt: r.updated_at,
   };
 };
@@ -110,9 +118,9 @@ export async function scheduleRoutes(app: FastifyInstance): Promise<void> {
     const created = await withTenant(req.params.accountId, async (db) => {
       try {
         const { rows } = await db.query<{ id: string }>(
-          `INSERT INTO schedule (account_id, name, selector, listing_scope, listing_status, takedown_status, cadence, timezone, priority, active, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-          [req.params.accountId, b.name, JSON.stringify(b.selector), b.listingScope, b.listingStatus, b.takedownStatus, b.cadence, b.timezone, b.priority, b.active, req.user!.sub],
+          `INSERT INTO schedule (account_id, name, selector, listing_scope, listing_status, takedown_status, cadence, timezone, priority, active, created_by, kind)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+          [req.params.accountId, b.name, JSON.stringify(b.selector), b.listingScope, b.listingStatus, b.takedownStatus, b.cadence, b.timezone, b.priority, b.active, req.user!.sub, b.kind],
         );
         await audit(db, req, { action: 'schedule.created', entityType: 'schedule', entityId: rows[0].id, summary: `Created schedule "${b.name}"`, after: b });
         return view(await loadOne(db, rows[0].id));
@@ -136,8 +144,8 @@ export async function scheduleRoutes(app: FastifyInstance): Promise<void> {
         try {
           await db.query(
             `UPDATE schedule SET name = $2, selector = $3, listing_scope = $4, listing_status = $5, takedown_status = $6,
-                    cadence = $7, timezone = $8, priority = $9, active = $10 WHERE id = $1`,
-            [before.id, next.name, JSON.stringify(next.selector), next.listingScope, next.listingStatus, next.takedownStatus, next.cadence, next.timezone, next.priority, next.active],
+                    cadence = $7, timezone = $8, priority = $9, active = $10, kind = $11 WHERE id = $1`,
+            [before.id, next.name, JSON.stringify(next.selector), next.listingScope, next.listingStatus, next.takedownStatus, next.cadence, next.timezone, next.priority, next.active, next.kind],
           );
         } catch (err) {
           if (isUniqueViolation(err)) throw new HttpError(409, `a schedule named "${next.name}" already exists`);
@@ -179,7 +187,8 @@ export async function scheduleRoutes(app: FastifyInstance): Promise<void> {
           )
         ).rows[0];
         if (!src) throw new HttpError(404, 'source not found');
-        const rows = await loadAll(db);
+        const work = q.work ?? (q.termGroup || q.term ? 'discovery' : 'monitoring');
+        const rows = (await loadAll(db)).filter((r) => r.takedown_status !== 'Under notice' && (work === 'discovery' ? runsDiscovery(r) : runsMonitoring(r)));
         const hit = resolveSchedule(
           rows.map((r) => ({ ...r, selector: r.selector ?? {} })),
           { source: q.source, category: src.category, family: src.family, termGroup: q.termGroup ?? null, term: q.term ?? null },

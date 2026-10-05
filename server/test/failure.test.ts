@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { classifyFailure, isRetryable } from '../src/collector/failure.js';
+import { resultsEvidenceKey } from '../src/collector/resultsEvidence.js';
+import { blockedStreak } from '../src/collector/stopOnBlock.js';
 
 test('classifyFailure: fetch-level classes come first', () => {
   assert.equal(classifyFailure({ kind: 'product', robotsDisallowed: true, price: 10 }), 'robots');
@@ -31,4 +33,15 @@ test('only transient classes are retried', () => {
     (['blocked', 'timeout', 'network', 'layout_changed', 'robots', 'not_found', 'auth', 'empty', null] as const).filter(isRetryable),
     ['blocked', 'timeout', 'network'],
   );
+});
+
+test('stop on block: the latest results, newest first, must all be blocked', () => {
+  assert.equal(blockedStreak(['blocked', 'blocked']), true);
+  assert.equal(blockedStreak(['blocked', null, 'blocked']), false);
+  assert.equal(blockedStreak(['blocked']), false);
+  assert.equal(blockedStreak(['blocked', 'timeout']), false);
+});
+
+test('results page evidence keys sit beside the product evidence, by day', () => {
+  assert.equal(resultsEvidenceKey('amazon_us', new Date('2026-10-01T03:30:00Z'), 'abc', 'png'), 'evidence/amazon_us/results/2026/10/01/abc.png');
 });

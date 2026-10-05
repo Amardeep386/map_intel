@@ -134,3 +134,25 @@ test('URL patterns ignore protocol, www and case', () => {
   assert.equal(urlPatternMatches('walmart.com/ip/1', 'https://www.walmart.com/ip/12'), false);
   assert.ok(urlPatternMatches('WALMART.COM/IP/(x)*', 'http://walmart.com/ip/(x)1'));
 });
+
+// From the first LG slice run on eBay (1 Oct 2026): a spare screen carried the laptop's model number.
+const gramPro: ProductRef = { id: 'pg', code: '16Z90TS-G.AUG4U1', name: 'LG gram Pro 16 - IPS 144Hz, Core Ultra 7 Series 2, 16GB, 1TB (Metal Gray)', brand: 'LG', model: '16Z90TS-G.AUG4U1', msrp: null, map: 1846.99, identifiers: [] };
+
+test('a spare part with the model number in its title is never included by the MPN rule', () => {
+  const part = cand({ url: 'https://www.ebay.com/itm/1', title: 'LG Gram Pro 16Z90TS-G.AUG4U1 144Hz 16" Non-Touch WQXGA LCD Screen Panel', price: 132.99 });
+  const r = scoreCandidate(part, gramPro, [], T);
+  assert.equal(r.found.accessory, 'LCD Screen Panel');
+  assert.notEqual(decide(ctx(part), r, RULES, []).state, 'Included');
+  for (const t of ['Display Assembly for LG gram 16Z90TS', 'LG gram 16Z90TS motherboard i7', 'LG gram 16Z90TS-G palmrest keyboard', 'LG gram 16Z90TS-G.AUG4U1 parts only'])
+    assert.ok(scoreCandidate(cand({ title: t, price: 100 }), gramPro, [], T).found.accessory, t);
+  // Real laptops are not parts (2-in-1s mention their hinge, screens their panel type).
+  for (const t of ['LG gram Pro 16Z90TS-G.AUG4U1 16" WQXGA 144Hz Core Ultra 7 16GB 1TB Laptop', 'LG gram Pro 2-in-1 16T90SP 360° hinge touch laptop'])
+    assert.equal(scoreCandidate(cand({ title: t, price: 1700 }), gramPro, [], T).found.accessory, null, t);
+});
+
+test('the MPN rule leaves a price far below MAP (under 40%) for a person; a deep but plausible cut is still included', () => {
+  const cheap = cand({ title: 'LG OLED65C6PUA 4K TV', price: 600 }); // 24% of MAP
+  assert.equal(decide(ctx(cheap), scoreCandidate(cheap, oled65, [], T), RULES, []).state, 'Staged');
+  const deep = cand({ title: 'LG OLED65C6PUA 4K TV', price: 1100 }); // 44% of MAP
+  assert.equal(decide(ctx(deep), scoreCandidate(deep, oled65, [], T), RULES, []).state, 'Included');
+});

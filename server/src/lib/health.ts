@@ -147,7 +147,7 @@ export async function recordRunHealth(crawlRunId: string, now: Date = new Date()
       const observations = (
         await db.query<{ status: string; priced: boolean; complete: boolean }>(
           `SELECT o.status, o.advertised_price IS NOT NULL AS priced,
-                  EXISTS (SELECT 1 FROM evidence e WHERE e.observation_id = o.id AND e.html_uri IS NOT NULL AND e.screenshot_uri IS NOT NULL) AS complete
+                  EXISTS (SELECT 1 FROM evidence e WHERE e.observation_id = o.id AND ((e.html_uri IS NOT NULL AND e.screenshot_uri IS NOT NULL) OR e.api_uri IS NOT NULL)) AS complete
              FROM observation o JOIN crawl_job j ON j.id = o.crawl_job_id
             WHERE j.crawl_run_id = $1 AND j.source_id = $2`,
           [crawlRunId, sourceId],

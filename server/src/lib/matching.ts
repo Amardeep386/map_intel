@@ -124,7 +124,8 @@ function values(re: RegExp, s: string): Set<string> {
 const CONDITION_RE = /\b(refurbished|renewed|open[\s-]?box|pre[\s-]?owned|used|for parts|reconditioned|like new|scratch(?:\s|-)and(?:\s|-)dent)\b/i;
 const BUNDLE_RE = /\bbundle\b|\bcombo\b|\bkit\b|\b\d+[\s-]?pack\b|\bpack of \d+\b|\bset of \d+\b|\bwith (?:free|bonus)\b|\s\+\s?\w+|\bw\/\s?\w+/i;
 const REGION_RE = /\b(international version|global version|import(?:ed)?|(?:uk|eu|euro|asia|asian|india|japan|hk|china|canadian|australian|mexico) (?:version|model)|non[\s-]?us|region[\s-]?free)\b/i;
-const ACCESSORY_RE = /\b(case for|cover for|screen protector|protector for|mount for|wall mount|compatible with|replacement|remote (?:control )?for|cable for|charger for|stand for|skin for|strap for|band for|adapter for|for (?:lg|samsung|apple|iphone|ipad|galaxy|macbook)\b)/i;
+// Parts too: a seller of a spare screen or board puts the laptop's model number in the title.
+const ACCESSORY_RE = /\b(case for|cover for|screen protector|protector for|mount for|wall mount|compatible with|replacement|remote (?:control )?for|cable for|charger for|stand for|skin for|strap for|band for|adapter for|for (?:lg|samsung|apple|iphone|ipad|galaxy|macbook)\b|(?:lcd|led|oled) (?:screen |display )?(?:panel|assembly)|(?:screen|display|touch) (?:panel|assembly|digitizer)|motherboard|logic board|palm ?rest|bottom (?:base |case )?cover|parts only|screen only|for parts)/i;
 
 // ---------------------------------------------------------------------------
 // Signals

@@ -352,6 +352,12 @@ function ListingDrawer({ listingId, onClose }) {
   const [l, setL] = useState(null);
   useEffect(() => { attempt(showToast, () => api.mappingListing(client, listingId)).then((x) => x && setL(x)); }, [client, listingId, showToast]);
   if (!l) return null;
+  const openPage = async (id) => {
+    const p = await attempt(showToast, () => api.getResultsPage(client, id));
+    const url = p?.screenshot?.url ?? p?.api?.url ?? p?.html?.url;
+    if (url) window.open(url, "_blank", "noopener");
+    else showToast("The page opens when the portal is connected to the API.");
+  };
   return (
     <Drawer open onClose={onClose} eyebrow={`Listing · ${l.source}`} title={l.title || l.url} width="w-[760px]">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -364,6 +370,18 @@ function ListingDrawer({ listingId, onClose }) {
         </Card>
         <Card title={`Confidence ${l.confidence != null ? Math.round(l.confidence) : "—"} / 100`}>{l.signals?.length ? <Signals signals={l.signals} /> : <span className="text-xs text-brand-taupe">Not scored.</span>}</Card>
       </div>
+      {l.foundOn?.length > 0 && (
+        <Card title="Found by discovery" className="mt-4">
+          <div className="space-y-2 text-xs">
+            {l.foundOn.map((f) => (
+              <div key={f.results_page_id} className="flex items-baseline justify-between gap-3">
+                <div>{/^https?:/.test(f.term ?? "") ? <>Found on browse page {f.page_no} of <span className="break-all">{f.term}</span></> : <>Found on search page {f.page_no}{f.term ? <> for term <b>“{f.term}”</b></> : ""}</>} · position {f.position}{f.sponsored ? " · sponsored" : ""}<div className="text-brand-taupe">{formatWhen(f.fetched_at)}</div></div>
+                <button className="text-brand-copper underline cursor-pointer whitespace-nowrap" onClick={() => openPage(f.results_page_id)}>Open page</button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       <Card title="Decision history" className="mt-4">
         <div className="space-y-3 text-xs relative pl-3.5 border-l border-brand-beige">
           {l.history.map((h, i) => (

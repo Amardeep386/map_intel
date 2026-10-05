@@ -56,6 +56,14 @@ export interface FetchResult {
   fetchedAt: Date;
 }
 
+/** One official API response, kept verbatim as evidence (decision 36). */
+export interface ApiRead {
+  url: string;
+  status: number;
+  body: string;
+  fetchedAt: Date;
+}
+
 /** One listing seen on a search or browse results page (discovery). */
 export interface DiscoveredItem {
   url: string; // canonical product (or offer) URL
@@ -99,12 +107,26 @@ export interface SourceAdapter {
   productUrl?(channelSku: string): string;
   /** True for product pages; false for search / browse pages on the same host. */
   isProductUrl?(url: string): boolean;
+  /** Read a results page through the source's official API: null when `url` is not an API URL. */
+  readResultsApi?(url: string): Promise<(ApiRead & { page: ResultsPage }) | null>;
   /** Read a search or browse results page. Must never throw. */
   extractResults?(html: string, url: string): ResultsPage;
   /** Every seller's offer on a product page (beyond the main one). Must never throw. */
   extractOffers?(html: string, url: string): Offer[];
-  /** The page never shows a price without JavaScript: go straight to the browser. */
+  /**
+   * Go straight to the browser (product and results pages): the page never shows a price without
+   * JavaScript, or the screenshot must be the live page (Amazon, decision 32).
+   */
   browserFirst?: boolean;
+  /** Pace for this host, instead of COLLECT_MIN_DELAY_MS / COLLECT_JITTER_MS. */
+  pace?: { minDelayMs: number; jitterMs: number };
+  /**
+   * Before the screenshot, scroll down to the first of these elements in a few steps and back
+   * to the top, as a shopper would look at the offer (and lazy parts of the page load).
+   */
+  scrollTo?: string[];
+  /** A blocked page is final: never re-read through the browser (decision 34). */
+  noRetryOnBlock?: boolean;
   /** Parse the product page. Must never throw on unexpected HTML; return nulls instead. */
   extract(html: string, url: string): Extracted;
   /** Detect bot walls / interstitials so we do not record them as prices. */

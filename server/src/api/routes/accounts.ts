@@ -33,7 +33,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
           `SELECT o.id, o.observed_at, o.status, o.advertised_price AS price, o.list_price, o.currency, o.availability, o.qty,
                   o.seller_name_raw AS seller, o.fetch_method, o.model_match, o.error,
                   p.product_code, p.name AS product_name, s.code AS source, s.display_name AS source_name, l.url,
-                  e.id AS evidence_id, e.html_sha256, e.screenshot_sha256
+                  e.id AS evidence_id, e.html_sha256, e.screenshot_sha256, e.api_sha256
              FROM product p
              JOIN listing l ON l.product_id = p.id
              JOIN source s ON s.id = l.source_id
@@ -95,6 +95,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       screenshot: row.screenshot_uri
         ? { sha256: row.screenshot_sha256, bytes: row.screenshot_bytes, url: await signedUrl(row.screenshot_uri) }
         : null,
+      api: row.api_uri ? { sha256: row.api_sha256, bytes: row.api_bytes, url: await signedUrl(row.api_uri) } : null,
     };
   });
 }

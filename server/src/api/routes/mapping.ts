@@ -248,8 +248,17 @@ export async function mappingRoutes(app: FastifyInstance): Promise<void> {
           [listingId],
         )
       ).rows;
+      // Where discovery found it (M4): "found on search page N for term X", newest first.
+      const foundOn = (
+        await db.query(
+          `SELECT p.id AS results_page_id, p.page_no, p.term_value AS term, p.fetched_at, p.url, x.position, x.sponsored, s.code AS source
+             FROM results_page_listing x JOIN results_page p ON p.id = x.results_page_id JOIN source s ON s.id = p.source_id
+            WHERE x.listing_id = $1 ORDER BY p.fetched_at DESC LIMIT 20`,
+          [listingId],
+        )
+      ).rows;
       const signals = row.candidate_id ? (await signalsFor(db, [row.candidate_id])).get(row.candidate_id) ?? [] : [];
-      return { ...row, signals, history };
+      return { ...row, signals, history, foundOn };
     });
   });
 

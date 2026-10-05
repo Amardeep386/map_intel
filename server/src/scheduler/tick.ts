@@ -21,6 +21,7 @@ interface ScheduleRow {
   active: boolean;
   cadence: string;
   timezone: string;
+  kind: FiringSchedule['kind'];
   listing_scope: FiringSchedule['listingScope'];
   listing_status: FiringSchedule['listingStatus'];
   takedown_status: FiringSchedule['takedownStatus'];
@@ -35,6 +36,7 @@ const toFiring = (r: ScheduleRow): FiringSchedule => ({
   active: r.active,
   cadence: r.cadence,
   timezone: r.timezone,
+  kind: r.kind,
   listingScope: r.listing_scope,
   listingStatus: r.listing_status,
   takedownStatus: r.takedown_status,
@@ -44,7 +46,7 @@ const toFiring = (r: ScheduleRow): FiringSchedule => ({
 export async function loadAccountWork(db: Db, accountId: string): Promise<Omit<ExpandInput, 'firing' | 'adapters'>> {
   const schedules = (
     await db.query<ScheduleRow>(
-      `SELECT id, account_id, name, selector, priority, active, cadence, timezone, listing_scope, listing_status, takedown_status, NULL AS last_fired
+      `SELECT id, account_id, name, selector, priority, active, cadence, timezone, kind, listing_scope, listing_status, takedown_status, NULL AS last_fired
          FROM schedule WHERE account_id = $1 AND active`,
       [accountId],
     )
@@ -161,7 +163,7 @@ export async function fireSchedule(
   const prepared = await withSystem(async (db) => {
     const s = (
       await db.query<ScheduleRow>(
-        `SELECT id, account_id, name, selector, priority, active, cadence, timezone, listing_scope, listing_status, takedown_status, NULL AS last_fired
+        `SELECT id, account_id, name, selector, priority, active, cadence, timezone, kind, listing_scope, listing_status, takedown_status, NULL AS last_fired
            FROM schedule WHERE id = $1`,
         [scheduleId],
       )
@@ -222,7 +224,7 @@ export async function schedulerTick(now: Date = new Date()): Promise<FiredRun[]>
     async (db) =>
       (
         await db.query<ScheduleRow>(
-          `SELECT s.id, s.account_id, s.name, s.selector, s.priority, s.active, s.cadence, s.timezone, s.listing_scope,
+          `SELECT s.id, s.account_id, s.name, s.selector, s.priority, s.active, s.cadence, s.timezone, s.kind, s.listing_scope,
                   s.listing_status, s.takedown_status, (SELECT max(fired_for) FROM crawl_run r WHERE r.schedule_id = s.id AND r.trigger = 'schedule') AS last_fired
              FROM schedule s JOIN account a ON a.id = s.account_id
             WHERE s.active AND a.status <> 'Suspended'`,

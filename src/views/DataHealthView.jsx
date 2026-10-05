@@ -110,9 +110,9 @@ function SourceDrawer({ source, onClose, onRerun }) {
   }, [source, client, showToast]);
   if (!source) return null;
 
-  const openEvidence = async (id) => {
-    const e = await attempt(showToast, () => api.getEvidence(id));
-    const url = e?.screenshot?.url ?? e?.html?.url;
+  const openEvidence = async (f) => {
+    const e = await attempt(showToast, () => (f.evidenceId ? api.getEvidence(f.evidenceId) : api.getResultsPage(client, f.resultsPageId)));
+    const url = e?.screenshot?.url ?? e?.api?.url ?? e?.html?.url;
     if (url) window.open(url, "_blank", "noopener");
     else showToast("Evidence opens when the portal is connected to the API.");
   };
@@ -124,6 +124,11 @@ function SourceDrawer({ source, onClose, onRerun }) {
         <Pill text={source.health} tone={HEALTH_TONE[source.health] ?? GREY} />
         <span className="text-xs text-brand-taupe">checked {when(source.checkedAt)} from {source.egress ?? "—"}</span>
       </div>
+      {source.stopped && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+          Stopped: {source.stopped.after} blocked results in a row, so the run cancelled the {source.stopped.cancelled} remaining {source.name} jobs ({when(source.stopped.at)}). The blocked pages are below as evidence.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-5">
         <KV k="Fetch success" v={rate(source.fetch)} />
         <KV k="Extraction success" v={rate(source.extraction)} />
@@ -149,7 +154,11 @@ function SourceDrawer({ source, onClose, onRerun }) {
                   {f.url && <a href={f.url} target="_blank" rel="noreferrer" className="text-xs text-brand-copper inline-flex items-center gap-1 break-all">{f.url.replace(/^https:\/\/(www\.)?/, "").slice(0, 70)}<ExternalLink className="w-3 h-3 shrink-0" /></a>}
                   {f.error && <div className="text-xs text-brand-taupe mt-1 break-words">{f.error.slice(0, 220)}</div>}
                 </Td>
-                <Td>{f.evidenceId ? <button className="text-xs text-brand-copper underline cursor-pointer" onClick={() => openEvidence(f.evidenceId)}>Open</button> : <span className="text-brand-taupe">—</span>}</Td>
+                <Td>
+                  {f.evidenceId || f.resultsPageId
+                    ? <button className="text-xs text-brand-copper underline cursor-pointer whitespace-nowrap" onClick={() => openEvidence(f)}>{f.evidenceId ? "Open" : `Open page${f.resultsPages > 1 ? ` ${f.resultsPages}` : ""}`}</button>
+                    : <span className="text-brand-taupe">—</span>}
+                </Td>
               </tr>
             ))}
           </Table>

@@ -28,7 +28,11 @@ const memorySlots = new Map<string, number>();
 let redis: Redis | null = null;
 
 function slotRedis(): Redis {
-  redis ??= new Redis(config.REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 3000, enableOfflineQueue: false, lazyConnect: true });
+  if (!redis) {
+    redis = new Redis(config.REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 3000, enableOfflineQueue: false, lazyConnect: true });
+    // No Redis (a GitHub Actions runner): claim() falls back to memory; keep the log quiet.
+    redis.on('error', () => undefined);
+  }
   return redis;
 }
 
@@ -44,17 +48,28 @@ async function claim(host: string, now: number, gap: number): Promise<number> {
   }
 }
 
-export async function politeWait(host: string): Promise<void> {
+/** The gap before a host's next request: the adapter's own pace, else the global one. */
+export function paceGap(pace: SourceAdapter['pace'], random: number = Math.random()): number {
+  const min = pace?.minDelayMs ?? config.COLLECT_MIN_DELAY_MS;
+  const jitter = pace?.jitterMs ?? config.COLLECT_JITTER_MS;
+  return min + Math.floor(random * jitter);
+}
+
+export async function politeWait(adapter: Pick<SourceAdapter, 'host' | 'pace'>): Promise<void> {
   const now = Date.now();
-  const gap = config.COLLECT_MIN_DELAY_MS + Math.floor(Math.random() * config.COLLECT_JITTER_MS);
-  const slot = await claim(host, now, gap);
+  const gap = paceGap(adapter.pace);
+  const slot = await claim(adapter.host, now, gap);
   if (slot > now) await new Promise((r) => setTimeout(r, slot - now));
 }
 
 export async function closePoliteness(): Promise<void> {
   const r = redis;
   redis = null;
-  if (r && r.status !== 'end' && r.status !== 'wait') await r.quit().catch(() => undefined);
+  if (!r || r.status === 'end' || r.status === 'wait') return;
+  // A client that never connected (no Redis, e.g. a GitHub runner) keeps reconnecting, and quit()
+  // waits for it forever: drop it instead.
+  if (r.status === 'ready') await r.quit().catch(() => undefined);
+  else r.disconnect(false);
 }
 
 // Optional US proxy for every collector request (and the browser, see browser.ts).
@@ -78,7 +93,7 @@ export function browserLikeHeaders(adapter: SourceAdapter): Record<string, strin
 }
 
 export async function httpFetch(url: string, adapter: SourceAdapter): Promise<FetchResult> {
-  await politeWait(adapter.host);
+  await politeWait(adapter);
   const fetchedAt = new Date();
   const res = await fetch(url, {
     headers: browserLikeHeaders(adapter),
