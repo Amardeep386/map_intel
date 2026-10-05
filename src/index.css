@@ -11,6 +11,7 @@
   --color-brand-sidebar: var(--card-bg);       /* Sidebar background */
   --color-brand-white: var(--card-bg);         /* Card Backgrounds */
   --color-brand-olive: var(--accent-sage);     /* Secondary accent */
+  --color-on-accent: var(--accent-contrast);   /* Text on the accent colour */
   
   --font-sans: 'Outfit', sans-serif;
 }

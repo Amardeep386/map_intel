@@ -8,7 +8,7 @@ import {
 import { attempt, formatWhen, useWorkspace } from "../workspace.js";
 
 const cellTone = {
-  All: "bg-brand-copper text-brand-white border-brand-copper",
+  All: "bg-brand-copper text-on-accent border-brand-copper",
   Some: "bg-brand-beige text-brand-charcoal border-brand-beige",
   None: "bg-brand-white text-brand-taupe border-brand-beige",
 };

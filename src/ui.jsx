@@ -49,7 +49,7 @@ export function PageHeader({ title, subtitle, action }) {
 
 export function PrimaryButton({ children, onClick, type, disabled }) {
   return (
-    <button type={type || "button"} onClick={onClick} disabled={disabled} className="inline-flex items-center gap-1.5 bg-brand-copper hover:bg-brand-copper/90 text-brand-white text-sm font-medium px-3.5 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+    <button type={type || "button"} onClick={onClick} disabled={disabled} className="inline-flex items-center gap-1.5 bg-brand-copper hover:bg-brand-copper/90 text-on-accent text-sm font-medium px-3.5 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
       {children}
     </button>
   );
@@ -116,7 +116,7 @@ export function Tabs({ tabs, value, onChange, right }) {
 export function Modal({ open, onClose, title, children, width = "w-[28rem]" }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-brand-charcoal/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className={`bg-brand-white border border-brand-beige rounded-xl p-6 ${width} max-w-full max-h-[90vh] overflow-y-auto shadow-2xl`} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center border-b border-brand-beige pb-3 mb-4">
           <h3 className="text-sm font-bold text-brand-charcoal">{title}</h3>
@@ -174,7 +174,7 @@ export function Bar({ value, max, tone = "bg-brand-copper" }) {
 export function Drawer({ open, onClose, eyebrow, title, children, footer, width = "w-[920px]" }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-brand-charcoal/40 flex justify-end z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={onClose}>
       <div className={`bg-brand-ivory ${width} max-w-[94vw] h-full overflow-y-auto p-6 flex flex-col shadow-2xl border-l border-brand-beige`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-brand-beige pb-3 mb-4">
           <div>

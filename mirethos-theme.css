@@ -11,14 +11,17 @@
   /* Creamy Sand Light Theme */
   --bg-primary: #FAF6EE;
   --text-primary: #3C2F2F;
-  --text-muted: #827064;
+  --text-muted: #6B5A4F;          /* 5.9:1 on the page colour (was #827064, 4.4:1) */
   --card-bg: #FFFFFF;
   --accent-coral: var(--accent-brand, #A65E44);
   --accent-sage: #F0E6D2;
   --accent-lavender: #EADEC9;
   --glow-color-rgb: 166, 94, 68;
-  --border-color: rgba(60, 47, 47, 0.08);
+  --border-color: rgba(60, 47, 47, 0.12);
   --shadow-soft: 0 4px 20px -2px rgba(60, 47, 47, 0.05), 0 2px 8px -1px rgba(60, 47, 47, 0.03);
+
+  /* Text on the accent colour (buttons, badges); App sets it from the brand's accent. */
+  --accent-contrast: #FFFFFF;
 
   /* Map to Tailwind Theme Variables */
   --color-brand-ivory: var(--bg-primary);
@@ -41,7 +44,7 @@
   --accent-sage: #53423B;        /* Earthy brown for secondary elements */
   --accent-lavender: #4A3A34;    /* Deeper earthy tone for variety */
   --glow-color-rgb: 227, 134, 99;
-  --border-color: rgba(250, 246, 238, 0.08); /* Subtle warm glass border */
+  --border-color: rgba(250, 246, 238, 0.11); /* Subtle warm glass border */
   --shadow-soft: 0 8px 32px -4px rgba(0, 0, 0, 0.6), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
 
   /* Map to Tailwind Theme Variables */
@@ -253,4 +256,40 @@ body.dark #grid-bg {
 .no-transition,
 .no-transition * {
   transition: none !important;
+}
+
+/*
+ * Dark mode: the status colours (green / red / amber / blue / slate ...) are written for a light page
+ * (text-*-600/700/800 on bg-*-50 with border-*-200). On the dark page those texts are too dark to
+ * read and the tints glow white, so dark mode swaps in light text shades and dark tints.
+ */
+:root.dark {
+  --color-red-600: oklch(70.4% 0.191 22.216);
+  --color-red-700: oklch(80.8% 0.114 19.571);
+  --color-red-800: oklch(88.5% 0.062 18.334);
+  --color-emerald-700: oklch(76.5% 0.177 163.223);
+  --color-amber-700: oklch(82.8% 0.189 84.429);
+  --color-amber-800: oklch(87.9% 0.169 91.605);
+  --color-orange-700: oklch(83.7% 0.128 66.29);
+  --color-blue-700: oklch(80.9% 0.105 251.813);
+  --color-purple-700: oklch(82.7% 0.119 306.383);
+  --color-slate-600: oklch(70.4% 0.04 256.788);
+  --color-slate-700: oklch(86.9% 0.022 252.894);
+
+  --color-red-50: color-mix(in oklch, oklch(63.7% 0.237 25.331) 16%, var(--card-bg));
+  --color-emerald-50: color-mix(in oklch, oklch(69.6% 0.17 162.48) 14%, var(--card-bg));
+  --color-amber-50: color-mix(in oklch, oklch(76.9% 0.188 70.08) 14%, var(--card-bg));
+  --color-orange-50: color-mix(in oklch, oklch(70.5% 0.213 47.604) 14%, var(--card-bg));
+  --color-blue-50: color-mix(in oklch, oklch(62.3% 0.214 259.815) 16%, var(--card-bg));
+  --color-purple-50: color-mix(in oklch, oklch(62.7% 0.265 303.9) 16%, var(--card-bg));
+  --color-slate-50: color-mix(in oklch, oklch(55.4% 0.046 257.417) 14%, var(--card-bg));
+  --color-slate-100: color-mix(in oklch, oklch(55.4% 0.046 257.417) 22%, var(--card-bg));
+
+  --color-red-200: color-mix(in oklch, oklch(63.7% 0.237 25.331) 40%, var(--card-bg));
+  --color-emerald-200: color-mix(in oklch, oklch(69.6% 0.17 162.48) 36%, var(--card-bg));
+  --color-amber-200: color-mix(in oklch, oklch(76.9% 0.188 70.08) 36%, var(--card-bg));
+  --color-orange-200: color-mix(in oklch, oklch(70.5% 0.213 47.604) 36%, var(--card-bg));
+  --color-blue-200: color-mix(in oklch, oklch(62.3% 0.214 259.815) 40%, var(--card-bg));
+  --color-purple-200: color-mix(in oklch, oklch(62.7% 0.265 303.9) 40%, var(--card-bg));
+  --color-slate-200: color-mix(in oklch, oklch(55.4% 0.046 257.417) 40%, var(--card-bg));
 }
