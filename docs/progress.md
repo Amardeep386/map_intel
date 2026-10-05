@@ -11,7 +11,7 @@
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
 - **Next step (resume here): act on the M7 findings** (`main` pushed 5 Oct 2026; Render + Vercel deploy it).
-  1. **You (Mapping Center, LG Sandbox):** open the evidence for the two candidate breaches: eBay windwing521 gram Book 15 at $399.99 (MAP $699; title ends "#37", may be a refurbished lot) and Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
+  1. **You (Mapping Center, LG Sandbox):** exclude the eBay windwing521 gram Book 15 at $399.99 (eBay says "For parts or not working", 5 Oct); check Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
   2. **You:** the Walmart "gram 17"" listing is mapped to 16Z90TL-H.AUB9U1, a 16" product: re-map or exclude it.
   3. **Done 5 Oct:** `amazon-lg-slice` merged into `main`; `lg-slice.yml` now checks out `main`. Pushed 5 Oct.
   4. Claude Code: capture real Walmart / eBay fixtures for the tests; add shorter eBay keyword terms (9 of 20 searches found nothing).
@@ -151,6 +151,13 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 5 Oct 2026 (later still) — evidence cards for eBay; Price checks in the listing drawer (Claude Code)
+- **Evidence card** (`collector/apiCard.ts`, `collector/evidenceCard.ts`, `browser.ts renderCard`): where the page blocks us (eBay), a PNG drawn from the API response (photo, title, price, condition in red when not new, seller + rating, availability, shipping, location, item number, MPN, GTIN, read time, the response's SHA-256), labelled "drawn from the eBay Browse API response, not a screenshot". Stored as `<observation>.card.png` with Object Lock; **migration 030** `evidence_card` (append-only, one per evidence row, `source_sha256` = the response it was drawn from; applied to Neon). The API response stays the evidence.
+- `npm run evidence:cards [-- --commit]` draws cards for stored responses (re-hashed first): **6 drawn** for the eBay checks of 1–4 Oct.
+- API: `GET …/mapping/listings/:id` returns `checks` (every observation, evidence parts); `GET /evidence/:id` returns `card`. Portal: Mapping Center listing drawer → **Price checks** (when, price, seller, status, Screenshot / Evidence card / API data); Data Health opens the card when there is no screenshot.
+- **Found while building it:** eBay's own reply says the $399.99 windwing521 gram Book 15 (the M7 "breach") is **"For parts or not working"**: not a MAP violation. `conditionFrom` did not recognise that wording (so new-only let it through); now "for parts / parts only / not working" = used. **Exclude that listing by hand** (decided listings keep their decision).
+- Tests 138/138 (new `api-card.test.ts`); portal build OK, lint 0 errors.
+
 ### 5 Oct 2026 (later) — amazon-lg-slice merged into main (Claude Code)
 - Merge commit on `main` (no conflicts); `.github/workflows/lg-slice.yml` default branch `amazon-lg-slice` → `main`. Server typecheck OK, tests 135/135; portal build OK, lint 0 errors.
 

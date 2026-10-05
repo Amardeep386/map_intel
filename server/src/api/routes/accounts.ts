@@ -73,8 +73,10 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     if (!accountId) throw denied;
     const row = await withTenant(accountId, async (db) => {
       const { rows } = await db.query(
-        `SELECT e.*, o.advertised_price, o.seller_name_raw, l.url
+        `SELECT e.*, o.advertised_price, o.seller_name_raw, l.url,
+                c.uri AS card_uri, c.sha256 AS card_sha256, c.bytes AS card_bytes
            FROM evidence e
+           LEFT JOIN evidence_card c ON c.evidence_id = e.id
            JOIN observation o ON o.id = e.observation_id AND o.observed_at = e.observed_at
            JOIN listing l ON l.id = o.listing_id
           WHERE e.id = $1`,
@@ -96,6 +98,8 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
         ? { sha256: row.screenshot_sha256, bytes: row.screenshot_bytes, url: await signedUrl(row.screenshot_uri) }
         : null,
       api: row.api_uri ? { sha256: row.api_sha256, bytes: row.api_bytes, url: await signedUrl(row.api_uri) } : null,
+      // A picture drawn from the API response (not a page screenshot): see collector/apiCard.ts.
+      card: row.card_uri ? { sha256: row.card_sha256, bytes: row.card_bytes, url: await signedUrl(row.card_uri) } : null,
     };
   });
 }

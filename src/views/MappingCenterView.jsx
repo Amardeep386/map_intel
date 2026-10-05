@@ -382,6 +382,7 @@ function ListingDrawer({ listingId, onClose }) {
           </div>
         </Card>
       )}
+      <PriceChecks checks={l.checks} />
       <Card title="Decision history" className="mt-4">
         <div className="space-y-3 text-xs relative pl-3.5 border-l border-brand-beige">
           {l.history.map((h, i) => (
@@ -394,6 +395,48 @@ function ListingDrawer({ listingId, onClose }) {
         </div>
       </Card>
     </Drawer>
+  );
+}
+
+const CHECK_TONE = { ok: "text-emerald-700", partial: "text-amber-700", held: "text-amber-700", failed: "text-red-700", blocked: "text-red-700" };
+
+// Every price check of a listing with its proof: the page screenshot (Walmart), or the evidence card
+// drawn from the API response where the page blocks us (eBay), plus the raw API response.
+function PriceChecks({ checks }) {
+  const { showToast } = useWorkspace();
+  const open = async (evidenceId, part) => {
+    const e = await attempt(showToast, () => api.getEvidence(evidenceId));
+    const url = part === "api" ? e?.api?.url : e?.screenshot?.url ?? e?.card?.url ?? e?.api?.url ?? e?.html?.url;
+    if (url) window.open(url, "_blank", "noopener");
+    else showToast("Evidence opens when the portal is connected to the API.");
+  };
+  return (
+    <Card title={`Price checks${checks?.length ? ` (${checks.length})` : ""}`} className="mt-4">
+      {!checks?.length ? <div className="text-xs text-brand-taupe">No price checks yet.</div> : (
+        <Table columns={["When", "Price", "Seller", "Status", "Proof"]}>
+          {checks.map((c) => (
+            <tr key={c.id} className="align-top">
+              <Td className="text-brand-taupe whitespace-nowrap">{formatWhen(c.observed_at)}</Td>
+              <Td className="whitespace-nowrap font-semibold">{c.price != null ? money(c.price) : "—"}</Td>
+              <Td>{c.seller || "—"}</Td>
+              <Td><span className={`${CHECK_TONE[c.status] ?? ""} font-semibold`}>{c.status}</span></Td>
+              <Td className="whitespace-nowrap">
+                {c.evidence_id ? (
+                  <span className="flex gap-3">
+                    {(c.has_screenshot || c.has_card || c.has_html) && (
+                      <button className="text-xs text-brand-copper underline cursor-pointer" onClick={() => open(c.evidence_id, "picture")}>
+                        {c.has_screenshot ? "Screenshot" : c.has_card ? "Evidence card" : "Page"}
+                      </button>
+                    )}
+                    {c.has_api && <button className="text-xs text-brand-copper underline cursor-pointer" onClick={() => open(c.evidence_id, "api")}>API data</button>}
+                  </span>
+                ) : <span className="text-brand-taupe">—</span>}
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </Card>
   );
 }
 

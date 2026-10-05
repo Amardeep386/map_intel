@@ -40,7 +40,8 @@ export function conditionFrom(text: string | null | undefined): Condition | null
   const t = text.toLowerCase();
   if (/open[ -]?box/.test(t)) return 'open_box';
   if (/refurb|renewed|restored|remanufactured/.test(t)) return 'refurbished';
-  if (/pre-?owned|used/.test(t)) return 'used';
+  // eBay's "For parts or not working" (and "parts only") is no new item: treat it as used.
+  if (/pre-?owned|used|for parts|parts only|not working/.test(t)) return 'used';
   if (/\bnew\b|brand new/.test(t)) return 'new';
   return null;
 }
