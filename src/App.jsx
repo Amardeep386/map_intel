@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   Plus, ChevronDown, ExternalLink, X, ChevronLeft, ChevronRight,
-  MapPin, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen
+  MapPin, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
+  Eye, EyeOff, ShieldCheck, ArrowRight
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -532,6 +533,113 @@ const initials = (name) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map
 
 // Local calendar date as YYYY-MM-DD (en-CA formats dates that way).
 
+// Sign-in: a brand panel (fixed espresso, the same in light and dark) beside the form on the theme's page colour.
+const LOGIN_POINTS = [
+  { icon: Radar, title: "Daily price checks", text: "Marketplace and retailer listings matched to your catalogue and re-checked every day." },
+  { icon: ShieldCheck, title: "Evidence you can stand on", text: "Every price is saved with its page or API record, fingerprinted and locked." },
+  { icon: Activity, title: "From detection to notice", text: "Spot below-MAP sellers, review the proof and act from one place." },
+];
+
+function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, slow, onForgot }) {
+  const [showPw, setShowPw] = useState(false);
+  const field = "w-full h-11 pl-10 pr-3 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal placeholder:text-brand-taupe/70 shadow-sm transition focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
+  return (
+    // Before sign-in no brand is chosen: use Mirethos copper, not the default client's accent.
+    <div className="min-h-screen flex bg-brand-ivory font-sans text-brand-charcoal" style={{ "--color-brand-copper": "#A65E44", "--accent-coral": "#A65E44" }}>
+      <aside className="hidden lg:flex relative w-[46%] max-w-[640px] flex-col justify-between overflow-hidden p-12 text-[#FAF6EE]"
+        style={{ background: "radial-gradient(120% 80% at 0% 0%, rgba(227,134,99,0.28) 0%, rgba(227,134,99,0) 55%), radial-gradient(90% 70% at 100% 100%, rgba(166,94,68,0.35) 0%, rgba(166,94,68,0) 60%), #17110F" }}>
+        <div className="absolute inset-0 opacity-[0.07] pointer-events-none"
+          style={{ backgroundImage: "linear-gradient(#FAF6EE 1px, transparent 1px), linear-gradient(90deg, #FAF6EE 1px, transparent 1px)", backgroundSize: "44px 44px" }} />
+        <div className="relative flex items-center gap-3">
+          <img src="/favicon.ico" alt="" className="w-10 h-10 rounded-xl bg-[#FAF6EE] p-1.5" />
+          <div>
+            <div className="text-lg font-semibold tracking-[0.18em]">MIRETHOS</div>
+            <div className="text-[11px] uppercase tracking-[0.2em] text-[#A9998E]">MAP Intelligence</div>
+          </div>
+        </div>
+        <div className="relative">
+          <h1 className="text-4xl xl:text-[44px] leading-[1.1] font-semibold tracking-tight">
+            Protect your price.<br /><span className="text-[#E38663]">Prove every breach.</span>
+          </h1>
+          <p className="mt-5 text-[15px] leading-relaxed text-[#CDBFB4] max-w-md">
+            Minimum Advertised Price monitoring and enforcement for brands that sell across marketplaces.
+          </p>
+          <div className="mt-10 space-y-5">
+            {LOGIN_POINTS.map(({ icon: Icon, title, text }) => (
+              <div key={title} className="flex gap-4">
+                <div className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-[#E38663]/15 ring-1 ring-[#E38663]/30">
+                  <Icon className="w-5 h-5 text-[#E38663]" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold">{title}</div>
+                  <div className="text-[13px] leading-snug text-[#A9998E] max-w-sm">{text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="relative text-xs text-[#A9998E]">© {new Date().getFullYear()} Mirethos</div>
+      </aside>
+
+      <main className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-[400px]">
+          <div className="lg:hidden flex items-center gap-3 mb-10">
+            <img src="/favicon.ico" alt="" className="w-9 h-9 rounded-xl bg-brand-white border border-brand-beige p-1.5" />
+            <div>
+              <div className="text-base font-semibold tracking-[0.18em]">MIRETHOS</div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-brand-taupe">MAP Intelligence</div>
+            </div>
+          </div>
+
+          <h2 className="text-[28px] font-semibold tracking-tight">Welcome back</h2>
+          <p className="mt-1.5 text-sm text-brand-taupe">Sign in to your MAP Intel workspace.</p>
+
+          <form onSubmit={onSubmit} className="mt-8 space-y-5">
+            <div>
+              <label htmlFor="login-email" className="block text-[13px] font-medium mb-1.5">Business email</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-taupe" />
+                <input id="login-email" type="email" autoComplete="email" placeholder="name@company.com" value={email} onChange={e => setEmail(e.target.value)} required className={field} />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label htmlFor="login-password" className="text-[13px] font-medium">Password</label>
+                <button type="button" onClick={onForgot} className="text-xs font-medium text-brand-copper hover:underline cursor-pointer">Forgot password?</button>
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-taupe" />
+                <input id="login-password" type={showPw ? "text" : "password"} autoComplete="current-password" placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} required className={`${field} pr-11`} />
+                <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-brand-taupe hover:text-brand-charcoal hover:bg-brand-beige/60 cursor-pointer">
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2.5 text-[13px] text-brand-taupe cursor-pointer select-none">
+              <input type="checkbox" defaultChecked className="w-4 h-4 rounded accent-[var(--accent-coral)] cursor-pointer" /> Keep me signed in
+            </label>
+
+            <button type="submit" disabled={busy}
+              className="group w-full h-11 rounded-xl bg-brand-copper text-white text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(166,94,68,0.7)] hover:brightness-110 active:brightness-95 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-wait">
+              {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</> : <>Sign in <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" /></>}
+            </button>
+            {slow && (
+              <p className="text-xs text-brand-taupe text-center leading-relaxed">Waking up the server. The first sign-in after a quiet spell can take up to a minute.</p>
+            )}
+          </form>
+
+          <div className="mt-10 pt-6 border-t border-brand-beige flex items-center gap-2 text-xs text-brand-taupe">
+            <ShieldCheck className="w-4 h-4 text-brand-copper" /> Encrypted connection · access is limited to invited users
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 export default function App() {
   // Workspace data per client name, plus lists shared by several screens. Loaded through the API client.
   const [db, setDb] = useState({});
@@ -730,51 +838,12 @@ export default function App() {
 
   if (screen === 'login') {
     return (
-      <div className="min-vh-100 flex items-center justify-center bg-brand-charcoal font-sans" style={{ minHeight: '100vh' }}>
-        <div className="bg-brand-sidebar border border-white/10 rounded-xl p-8 w-96 shadow-2xl text-brand-white">
-          <div className="flex items-center gap-2.5 mb-6 justify-center">
-            <img src="/favicon.ico" alt="Mirethos Logo" className="w-7 h-7 bg-brand-white p-1 rounded-md" />
-            <div>
-              <span className="text-white text-base font-bold tracking-wide">MIRETHOS</span>
-              <span className="text-[9px] text-brand-taupe uppercase tracking-wider block -mt-1">MAP Portal Login</span>
-            </div>
-          </div>
-
-          <h3 className="text-base font-semibold text-white mb-1">Welcome Back</h3>
-          <p className="text-xs text-brand-taupe mb-5">Enter credentials to access strategic market intelligence.</p>
-
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-brand-taupe mb-1">Business Email</label>
-              <input type="email" placeholder="name@company.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required className="w-full px-3 py-2 text-sm border border-brand-taupe rounded-lg bg-brand-charcoal text-white focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-semibold text-brand-taupe">Password</label>
-                <a href="#" className="text-[10px] text-brand-copper hover:underline" onClick={e => { e.preventDefault(); showToast("Recovery portal loaded.", "info"); }}>Forgot?</a>
-              </div>
-              <input type="password" placeholder="Enter your password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required className="w-full px-3 py-2 text-sm border border-brand-taupe rounded-lg bg-brand-charcoal text-white focus:outline-none focus:ring-2 focus:ring-brand-copper/30" />
-            </div>
-
-            <label className="text-xs text-brand-taupe flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" defaultChecked className="rounded border-brand-taupe bg-brand-charcoal text-brand-copper focus:ring-brand-copper/30" /> Remember me
-            </label>
-
-            <button type="submit" disabled={isLoggingIn} className="w-full py-2.5 bg-brand-copper hover:bg-brand-copper/90 text-white rounded-lg text-sm font-semibold transition-colors cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2">
-              {isLoggingIn && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isLoggingIn ? "Signing in…" : "Sign In"}
-            </button>
-            {slowLogin && (
-              <p className="text-[11px] text-brand-taupe text-center">Waking up the server. The first sign-in after a quiet spell can take up to a minute.</p>
-            )}
-          </form>
-
-          <div className="border-t border-white/5 mt-6 pt-4 text-center text-[10px] text-brand-taupe flex items-center justify-center gap-1.5">
-            <Lock className="w-3.5 h-3.5" /> Secured by enterprise-grade encryption
-          </div>
-        </div>
-      </div>
+      <LoginScreen
+        email={loginEmail} setEmail={setLoginEmail}
+        password={loginPassword} setPassword={setLoginPassword}
+        onSubmit={handleLoginSubmit} busy={isLoggingIn} slow={slowLogin}
+        onForgot={() => showToast("Recovery portal loaded.", "info")}
+      />
     );
   }
 
