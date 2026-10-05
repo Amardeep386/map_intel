@@ -3,19 +3,19 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`; code done 1 Oct 2026, waiting for the first GitHub Actions run). Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
-- **Last updated:** 1 Oct 2026 (Claude Code: LG slice route D, D1–D5)
+- **Phase:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`). **Exit test `--scope lg-slice` passed 10/10 on 5 Oct 2026** after three daily monitoring runs (2–4 Oct); M7 report in `server/reports/lg-slice-m7-2026-10-05.md`. Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Last updated:** 5 Oct 2026 (Claude Code: LG slice M7 report + exit test)
 - **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here): LG slice M7, the real run on GitHub Actions** (route D, decisions 36–38).
-  1. **You:** push `amazon-lg-slice` and put `.github/workflows/lg-slice.yml` on `main` (GitHub only lists and schedules workflows from the default branch; the workflow checks out `amazon-lg-slice` until it is merged).
-  2. **Done 1 Oct:** repository secrets added. **eBay Production keys were refused (OAuth 401) on the first run**: eBay keeps Production keys disabled until Marketplace Account Deletion is set up (decision 39). **You:** on Render add `EBAY_VERIFICATION_TOKEN`, `EBAY_DELETION_ENDPOINT` = `https://map-intel-api.onrender.com/ebay/account-deletion`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`; then on developer.ebay.com → Alerts & Notifications enter the same endpoint and token, Save, Send Test Notification; then re-run discovery. Earlier secrets: (eBay App ID, Production), `EBAY_CLIENT_SECRET` (Cert ID, Production), `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_OBJECT_LOCK_DAYS` (365), plus `S3_ENDPOINT` / `S3_FORCE_PATH_STYLE` only if `server/.env` has them. `DATABASE_URL`, `DATABASE_SSL`, `JWT_SECRET` are already there.
-  3. **You:** Actions → LG slice → Run workflow → mode `discover`. Then work the 60–89 review queue in the Mapping Center (LG Sandbox).
-  4. Monitoring then runs by itself at 09:00 IST (03:30 UTC) for two days (or Run workflow → `monitor`).
-  5. Claude Code: M7 report to `server/reports/` (pages read, staged / auto-included / review / excluded, evidence re-hash, Day 1 vs Day 2), real Walmart / eBay fixtures, then `cd server && npm run exit:p2b -- --check --scheduled --scope lg-slice`. Tick P2b (for this scope) only if it passes.
+- **Next step (resume here): act on the M7 findings, then merge `amazon-lg-slice` into `main`.**
+  1. **You (Mapping Center, LG Sandbox):** open the evidence for the two candidate breaches: eBay windwing521 gram Book 15 at $399.99 (MAP $699; title ends "#37", may be a refurbished lot) and Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
+  2. **You:** the Walmart "gram 17"" listing is mapped to 16Z90TL-H.AUB9U1, a 16" product: re-map or exclude it.
+  3. **Decide:** merge `amazon-lg-slice` into `main` (puts the eBay API collector, matcher fix and Exclude-on-Included live on Render / Vercel; the workflow then checks out `main`).
+  4. Claude Code: capture real Walmart / eBay fixtures for the tests; add shorter eBay keyword terms (9 of 20 searches found nothing).
+  5. Daily monitoring keeps running on GitHub Actions (starts ~6 h late, around 15:00 IST) until it moves to the Render worker.
   6. Amazon stays manual evidence until route A (LG's SP-API access) or B (licensed data) is in place.
   7. When the brands send their own SKU / MAP files, load them through Product Summary → Import catalogue and MAP Policies → Import MAP file (dry run first); `server/seeds/demo-catalogue.json` is the demo stand-in.
 
@@ -99,7 +99,7 @@
 - [x] P0 Groundwork: backend skeleton, bug fixes, API client, collector proof of concept, enforcement-channel spike (verified 23 Sep 2026)
 - [x] P1 Foundation: accounts, roles, audit log, vault, sources, subscriptions, schedules, terms (exit test 30/30, 24 Sep 2026)
 - [x] P2a Catalogue: products, MAP history, promo windows, policy docs, sellers, Mapping Center (exit test 14/14, 25 Sep 2026)
-- [ ] P2b Collectors: scheduler, production collectors, evidence capture, observation store, source health (code complete; finishing through the Amazon LG slice; exit test `--scope amazon-lg` waits for a US run)
+- [x] P2b Collectors (LG slice scope): scheduler, production collectors, evidence capture, observation store, source health (exit test `--scope lg-slice` 10/10, 5 Oct 2026; Walmart + eBay API; Amazon paused, manual evidence in P3)
 - [ ] P3 Detection & reporting: rules, violations, dashboard, reports, evidence links, email alerts (pilot go-live)
 - [ ] P4 Enforcement & learning: cases, notices, marketplace channels, learning loop, alerts
 - [ ] P5 Scale & governance: onboarding, budget, tickets, SSO, API
@@ -151,6 +151,11 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 5 Oct 2026 — LG slice M7 report; exit test passed (Claude Code)
+- You worked the review queue on 1 Oct: 3 Walmart gram laptops included; the LCD panel and 2 other listings excluded.
+- Daily monitoring ran on GitHub Actions 2, 3 and 4 Oct (`c17fdf07`, `f7f939a0`, `4c08e114`): 4/4 jobs ok each day, 4 listings priced with evidence (Walmart HTML + screenshot, eBay API JSON), prices unchanged. Scheduled 03:30 UTC, started ~09:30–10:00 UTC (GitHub delay).
+- **`exit:p2b --check --scheduled --scope lg-slice`: 10/10** (`server/reports/exit-p2b-lg-slice-2026-10-05-04-00.md`). P2b ticked for the LG slice scope.
+- **M7 report** `server/reports/lg-slice-m7-2026-10-05.md`: 2 candidate breaches (eBay −42.8%, Walmart gram Pro 16 −28.5%), 1 likely wrong mapping (gram 17" → 16" product), thin coverage (4 real listings).
 ### 1 Oct 2026 (later still) — second discovery: eBay works; matcher fix (Claude Code)
 - After the deletion endpoint was set up (Render env + eBay form), the eBay Production keys work. **Discovery run `db2fa281`** (github-actions, finished): eBay 26 API results pages (314 items, JSON evidence under a Governance lock), Walmart 3 pages again. eBay listings: 113 auto-excluded, **2 auto-included**, each collected through the API (page blocked `access_denied` from GitHub too, so API evidence only): gram Book 15 `15U50U-H.AA56U1` $399.99 from windwing521 (MAP $699, confidence 90): a real candidate breach, check it; and **a wrong include**: a $132.99 replacement LCD panel titled with `16Z90TS-G.AUG4U1` (MAP $1,846.99), included by rule INC-MPN (held on price bounds, then confirmed by the re-check). Walmart: 3 gram laptops in review (60). 9 of 20 eBay searches found nothing (several model numbers, and long product names that eBay must match word for word).
 - **Fix (`3b86677`):** parts (LCD / screen / display panels and assemblies, digitizers, motherboards, palm rests, bottom covers, "parts only") count as accessories; an inclusion rule no longer fires when the price is implausible for the product (under 40% or over 160% of MAP): the listing goes to review; an eBay API search with 0 results is a finished job, not a failure. Tests 135/135. Decided listings keep their decision: **exclude the LCD panel listing by hand in the Mapping Center.**
