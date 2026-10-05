@@ -10,10 +10,10 @@
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here): push `main` (deploys Render + Vercel), then act on the M7 findings.**
+- **Next step (resume here): act on the M7 findings** (`main` pushed 5 Oct 2026; Render + Vercel deploy it).
   1. **You (Mapping Center, LG Sandbox):** open the evidence for the two candidate breaches: eBay windwing521 gram Book 15 at $399.99 (MAP $699; title ends "#37", may be a refurbished lot) and Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
   2. **You:** the Walmart "gram 17"" listing is mapped to 16Z90TL-H.AUB9U1, a 16" product: re-map or exclude it.
-  3. **Done 5 Oct:** `amazon-lg-slice` merged into `main`; `lg-slice.yml` now checks out `main`. Not pushed yet.
+  3. **Done 5 Oct:** `amazon-lg-slice` merged into `main`; `lg-slice.yml` now checks out `main`. Pushed 5 Oct.
   4. Claude Code: capture real Walmart / eBay fixtures for the tests; add shorter eBay keyword terms (9 of 20 searches found nothing).
   5. Daily monitoring keeps running on GitHub Actions (starts ~6 h late, around 15:00 IST) until it moves to the Render worker.
   6. Amazon stays manual evidence until route A (LG's SP-API access) or B (licensed data) is in place.
