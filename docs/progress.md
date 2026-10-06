@@ -3,14 +3,20 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`, **merged into `main` on 5 Oct 2026**). **Exit test `--scope lg-slice` passed 10/10 on 5 Oct 2026** after three daily monitoring runs (2–4 Oct); M7 report in `server/reports/lg-slice-m7-2026-10-05.md`. Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
-- **Last updated:** 5 Oct 2026 (Claude Code: LG slice M7 report + exit test)
+- **Phase:** **P3 Detection & reporting started 6 Oct 2026** on branch `phase-3-detection`, built on the LG slice data (decision 40). The full P2b collection push (all launch sources, Apple + Samsung, Amazon) comes **before pilot go-live**, not after P5.
+- **P2b:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`, **merged into `main` on 5 Oct 2026**). **Exit test `--scope lg-slice` passed 10/10 on 5 Oct 2026** after three daily monitoring runs (2–4 Oct); M7 report in `server/reports/lg-slice-m7-2026-10-05.md`. Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
+- **Last updated:** 6 Oct 2026 (Claude Code: phase order changed, P3 started)
 - **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here): act on the M7 findings** (`main` pushed 5 Oct 2026; Render + Vercel deploy it).
+- **Next step (resume here): P3 plan** on `phase-3-detection`: answer the P3 questions, approve the plan, then build (kickoff prompt in `docs/prompts.md`).
+- **Phase order from 6 Oct 2026 (decision 40):**
+  1. **Now:** P3 built and tested on the LG slice (Walmart + eBay, daily on GitHub Actions). Small collection jobs run alongside: real fixtures, shorter eBay terms, keep the daily run healthy.
+  2. **Before pilot go-live (P3 gate):** collection push: Apple and Samsung slices, Best Buy, Target, Home Depot, Amazon (route A or B), daily run moved to the Render worker; full P2b exit test (all launch sources).
+  3. **Then:** P4, then P5.
+- **Carried from the M7 findings (5 Oct):**
   1. **Done 5 Oct:** eBay windwing521 and Walmart gram 17" excluded. Still check Walmart / Beach Camera gram Pro 16 at $1,499.99 (MAP $2,099; page shows no model number).
   2. **You:** the Walmart "gram 17"" listing is mapped to 16Z90TL-H.AUB9U1, a 16" product: re-map or exclude it.
   3. **Done 5 Oct:** `amazon-lg-slice` merged into `main`; `lg-slice.yml` now checks out `main`. Pushed 5 Oct.
@@ -61,6 +67,7 @@
 | 37 | Route D for Amazon: Amazon.com is paused in the LG Sandbox (subscription off) and is manual evidence until route A (LG's SP-API access) or B (licensed data); no proxies (decision 34). A screen for manual Amazon evidence comes in P3 | 1 Oct 2026 | LG slice, route D |
 | 38 | The slice runs on Walmart (its LG computers browse page, 3 pages; Walmart /search is disallowed) and eBay (model-number and name terms through the API, 2 pages of 50, Buy It Now only, new only), same 10 SKUs, same schedules renamed "LG slice discovery" / "LG slice daily monitoring", on GitHub Actions for the test period (`lg-slice.yml`, inline, no Redis) | 1 Oct 2026 | LG slice, route D |
 | 39 | eBay Marketplace Account Deletion: we comply with an endpoint instead of claiming an exemption (MAP Intel keeps eBay seller usernames). `/ebay/account-deletion` on the API answers eBay's challenge and, for a notification whose ECDSA signature verifies, anonymises the eBay seller (name, key, storefront), deletes its aliases and every account's contacts, and logs the request with hashes only. Append-only observations / candidates and locked evidence keep the raw name as enforcement evidence (legal review to confirm) | 1 Oct 2026 | LG slice, route D |
+| 40 | Phase order: build P3 now on the LG slice data instead of waiting for full collection; P3–P5 only read observations, evidence and source health, so more sources and brands add rows, not rework. Full collection (all launch sources, Apple + Samsung, Amazon route A/B, Render worker) is the gate before pilot go-live, not after P5. The daily LG run is kept healthy meanwhile | 6 Oct 2026 | Claude Code session |
 
 ## Open questions
 - **US egress for collection.** Probes, HTTP only unless noted:
@@ -100,7 +107,8 @@
 - [x] P1 Foundation: accounts, roles, audit log, vault, sources, subscriptions, schedules, terms (exit test 30/30, 24 Sep 2026)
 - [x] P2a Catalogue: products, MAP history, promo windows, policy docs, sellers, Mapping Center (exit test 14/14, 25 Sep 2026)
 - [x] P2b Collectors (LG slice scope): scheduler, production collectors, evidence capture, observation store, source health (exit test `--scope lg-slice` 10/10, 5 Oct 2026; Walmart + eBay API; Amazon paused, manual evidence in P3)
-- [ ] P3 Detection & reporting: rules, violations, dashboard, reports, evidence links, email alerts (pilot go-live)
+- [ ] P2b full scope: all launch sources, Apple + Samsung, Amazon (gate before P3 pilot go-live, decision 40)
+- [ ] P3 Detection & reporting: rules, violations, dashboard, reports, evidence links, email alerts (pilot go-live; started 6 Oct 2026)
 - [ ] P4 Enforcement & learning: cases, notices, marketplace channels, learning loop, alerts
 - [ ] P5 Scale & governance: onboarding, budget, tickets, SSO, API
 
@@ -151,6 +159,9 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 6 Oct 2026 — phase order changed; P3 started (Claude Code)
+- Decision 40: P3 is built now on the LG slice data; the full collection push is the gate before pilot go-live. Branch `phase-3-detection` created from `main`.
+
 ### 5 Oct 2026 (night) — colour / contrast pass over the whole portal (Claude Code)
 - Audited every screen in light and dark with an in-browser WCAG contrast check: light had faint muted text (4.4:1); dark had 9 failing styles (status greens / reds / ambers, text on accent buttons). Also found by reading the code: toasts were white on cream (invisible in light), the invite page had the old white-on-cream login card, overlays turned the screen cream in dark, the violation evidence box used taupe on dark brown, and the "Violations by severity" donut drew at zero width.
 - Fixes: `--text-muted` #6B5A4F (5.9:1), borders a little stronger; dark-mode overrides of the Tailwind status shades (`mirethos-theme.css`); `text-on-accent` (`--accent-contrast`, white or espresso chosen from each brand's accent); toasts on the inverted surface; overlays `bg-black/40`; evidence box on the page colour; invite page in the sign-in style; 9 px text → 10 px; donut fixed. Re-audit: 0 failures in light and dark on all 13 screens.
