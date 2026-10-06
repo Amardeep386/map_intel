@@ -40,6 +40,7 @@ const ALL_ACTIONS = [
   "sources.read", "sources.write", "terms.read", "terms.write", "schedules.read", "schedules.write",
   "users.read", "users.manage", "audit.read", "credentials.read", "credentials.write",
   "mapping.read", "mapping.write", "sellers.read", "sellers.write", "health.read", "collection.run",
+  "violations.read", "violations.write", "rules.read", "rules.write", "reports.read", "reports.write", "alerts.read", "alerts.write",
 ];
 
 const qs = (params) => {

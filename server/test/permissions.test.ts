@@ -20,7 +20,7 @@ test('Analyst edits terms and catalogue, reads the rest, changes no configuratio
 });
 
 test('Brand user is read-only and sees no configuration or audit', () => {
-  assert.deepEqual(actionsFor('Brand user'), ['account.read', 'catalogue.read', 'observations.read']);
+  assert.deepEqual(actionsFor('Brand user'), ['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read']);
   assert.equal(can('Brand user', 'audit.read'), false);
   assert.equal(can('Brand user', 'terms.read'), false);
 });
@@ -42,4 +42,13 @@ test('only Administrators can grant Administrator', () => {
   assert.ok(grantableRoles('Administrator').includes('Administrator'));
   assert.deepEqual(grantableRoles('Account manager'), ['Account manager', 'Analyst', 'Brand user']);
   assert.deepEqual(grantableRoles('Analyst'), []);
+});
+
+test('P3: Analyst works violations but does not publish rules or schedule reports; Brand user reads violations and reports', () => {
+  assert.ok(can('Analyst', 'violations.write'));
+  for (const a of ['rules.write', 'reports.write', 'alerts.write'] as const) assert.equal(can('Analyst', a), false, a);
+  for (const a of ['violations.read', 'rules.read', 'reports.read', 'alerts.read'] as const) assert.ok(can('Analyst', a), a);
+  assert.ok(can('Brand user', 'violations.read'));
+  assert.ok(can('Brand user', 'reports.read'));
+  for (const a of ['violations.write', 'rules.read', 'alerts.read', 'reports.write'] as const) assert.equal(can('Brand user', a), false, a);
 });
