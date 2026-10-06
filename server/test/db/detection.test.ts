@@ -348,8 +348,14 @@ test('evidence links: token hashed, scoped, counted; the record lists the judged
 test('routes: /e/:token refuses unknown, expired and wrong-scope links; creating a link needs violations.write', async () => {
   assert.equal((await call(app, null, 'GET', '/e/not-a-real-token-but-long-enough')).statusCode, 404);
   const tokens = await withSystem(async (db) => {
-    const report = await createLink(db, { accountId: acct, scope: 'report:view', reportRunId: '00000000-0000-4000-8000-000000000001', via: 'test' });
-    const old = await createLink(db, { accountId: acct, scope: 'report:view', reportRunId: '00000000-0000-4000-8000-000000000002', via: 'test', days: 1, now: new Date(Date.now() - 3 * 86_400_000) });
+    // A report run in the test account for the report-scoped links (removed with the account).
+    const tpl = (await db.query<{ id: string }>("SELECT id FROM report_template WHERE code = 'listing_map'")).rows[0].id;
+    const run = (await db.query<{ id: string }>(
+      `INSERT INTO report_run (account_id, seq, template_id, template_version, name, params, trigger, period_from, period_to)
+       VALUES ($1, 900, $2, 1, 'link test', '{}', 'test', now() - interval '7 days', now()) ON CONFLICT (account_id, seq) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+      [acct, tpl])).rows[0].id;
+    const report = await createLink(db, { accountId: acct, scope: 'report:view', reportRunId: run, via: 'test' });
+    const old = await createLink(db, { accountId: acct, scope: 'report:view', reportRunId: run, via: 'test', days: 1, now: new Date(Date.now() - 3 * 86_400_000) });
     return { report: report.token, old: old.token };
   });
   const wrong = await call(app, null, 'GET', `/e/${tokens.report}`);
