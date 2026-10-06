@@ -462,6 +462,16 @@ export const api = {
       return { status: 0, data: { error: "The evidence service cannot be reached. Try again in a minute." } };
     }
   },
+  /** The hosted report behind a link (no sign-in). Returns { status, data }. */
+  async reportByToken(linkToken) {
+    if (USE_MOCK) return { status: 404, data: { error: "Hosted reports open when the portal is connected to the API." } };
+    try {
+      const res = await fetch(`${API_URL}/r/${encodeURIComponent(linkToken)}`);
+      return { status: res.status, data: await res.json().catch(() => ({})) };
+    } catch {
+      return { status: 0, data: { error: "The report service cannot be reached. Try again in a minute." } };
+    }
+  },
   /** Download the filtered list as CSV (signed in, so fetched with the token). */
   async downloadViolationsCsv(client, filters = {}) {
     if (USE_MOCK) throw new Error("CSV export works when the portal is connected to the API.");

@@ -167,6 +167,21 @@ export async function renderCard(html: string): Promise<Buffer> {
   });
 }
 
+/** Print a self-contained HTML document (a report) to PDF. Scripts off; page size comes from its @page CSS. */
+export async function renderPdf(html: string): Promise<Buffer> {
+  return withPageSlot(async () => {
+    const b = await getBrowser();
+    const ctx = await b.newContext({ javaScriptEnabled: false, locale: 'en-US' });
+    try {
+      const page = await ctx.newPage();
+      await page.setContent(html, { waitUntil: 'load', timeout: 30_000 });
+      return await page.pdf({ preferCSSPageSize: true, printBackground: true });
+    } finally {
+      await ctx.close();
+    }
+  });
+}
+
 export async function closeBrowser(): Promise<void> {
   for (const ctx of liveContexts.values()) await ctx.then((c) => c.close()).catch(() => undefined);
   liveContexts.clear();

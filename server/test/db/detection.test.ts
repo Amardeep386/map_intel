@@ -400,3 +400,69 @@ test('overview: compliance, open violations, time to compliance, trend split by 
     assert.equal(o.topSellers[0].violations, 2);
   });
 });
+
+test('reports: a Listing MAP snapshot has a working evidence link on every violation row; the rule set and quality note are frozen in', async () => {
+  const { buildSnapshot, snapshotCsv } = await import('../../src/lib/reports.js');
+  const { queueRun } = await import('../../src/lib/reportRunner.js');
+  await scratch(async (db) => {
+    const w = await world(db, 'report');
+    const now = new Date();
+    const at = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000);
+    await db.query("INSERT INTO map_price (account_id, product_id, amount, effective_from) VALUES ($1, $2, 1000, $3)", [w.account, w.product, at(60)]);
+    await observe(db, w, at(3), 800);
+    await observe(db, w, at(2), 1000); // resolved
+    await observe(db, w, at(1), 900);  // open again
+    await judgeAccount(db, w.account, { trigger: 'test' });
+
+    const q = await queueRun(db, { accountId: w.account, templateCode: 'listing_map', params: { timeframe: 'last_7_days' }, trigger: 'test', now });
+    assert.equal(q.code, 'RPT-0001');
+    await assert.rejects(queueRun(db, { accountId: w.account, templateCode: 'listing_map', params: { timeframe: 'never' }, trigger: 'test' }), /parameters/);
+    const run = await one<{ period_from: Date; period_to: Date }>(db, 'SELECT period_from, period_to FROM report_run WHERE id = $1', [q.id]);
+    const s = await buildSnapshot(db, {
+      runId: q.id, runCode: q.code, name: 'Weekly', accountId: w.account, template: { code: 'listing_map', name: 'Listing MAP Report', version: 1 },
+      params: { timeframe: 'last_7_days', statuses: ['Open', 'Needs review', 'Under notice', 'Resolved'], rowCap: 1000 },
+      period: { from: run.period_from, to: run.period_to, label: 'x' }, now,
+    });
+    assert.equal(s.rows.length, 2);
+    assert.deepEqual(s.rows.map((r) => r.status).sort(), ['Open', 'Resolved']);
+    assert.deepEqual(s.ruleSet.map((r) => `${r.code} v${r.version}`), ['R-00 v1', 'R-01 v1']);
+    assert.equal(s.summary.compliance, 33.3);
+    // Every row's link opens that row's violation, scoped and tied to the run.
+    for (const r of s.rows) {
+      const token = r.evidenceUrl.split('/evidence/')[1];
+      const l = await openLink(db, token);
+      assert.equal(l?.state, 'open');
+      assert.equal(l?.scope, 'violation:view');
+      const v = await one<{ seq: number }>(db, 'SELECT seq FROM violation WHERE id = $1', [l!.violation_id]);
+      assert.equal(`V-${String(v.seq).padStart(5, '0')}`, r.code);
+    }
+    assert.equal((await one<{ n: number }>(db, 'SELECT count(*)::int AS n FROM evidence_link WHERE report_run_id = $1', [q.id])).n, 2);
+    assert.equal(snapshotCsv(s).trim().split('\r\n').length, 3);
+
+    await db.query('UPDATE report_run SET snapshot = $2 WHERE id = $1', [q.id, JSON.stringify(s)]);
+    await expectRefused(db, "UPDATE report_run SET snapshot = '{}' WHERE id = $1", [q.id]); // frozen
+  });
+});
+
+test('routes: report templates with adoption counts; definitions validated; Brand users see only shared reports', async () => {
+  const base = `/accounts/${acct}/reports`;
+  const t = await call(app, u.analyst, 'GET', `${base}/templates`);
+  assert.equal(t.statusCode, 200, t.body);
+  assert.deepEqual(t.json().map((x: { code: string }) => x.code).sort(), ['listing_map', 'monthly_trend', 'seller_detail']);
+  const good = { name: 'Weekly MAP report', templateCode: 'listing_map', params: { timeframe: 'previous_week' }, cadence: '0 8 * * 1', recipients: ['map-room@example.com'] };
+  assert.equal((await call(app, u.analyst, 'POST', `${base}/definitions`, good)).statusCode, 403);
+  assert.equal((await call(app, u.manager, 'POST', `${base}/definitions`, { ...good, cadence: 'every monday' })).statusCode, 400);
+  assert.equal((await call(app, u.manager, 'POST', `${base}/definitions`, { ...good, params: { timeframe: 'someday' } })).statusCode, 400);
+  assert.equal((await call(app, u.manager, 'POST', `${base}/definitions`, { ...good, destinations: { sftp: { credentialId: '00000000-0000-4000-8000-000000000000' } } })).statusCode, 400);
+  const created = await call(app, u.manager, 'POST', `${base}/definitions`, good);
+  assert.equal(created.statusCode, 200, created.body);
+  assert.ok(created.json().last_fired_slot, 'the latest past slot is marked fired, so it waits for the next one');
+  await call(app, u.manager, 'POST', `${base}/definitions`, { ...good, name: 'Brand copy', visibility: 'Brand users' });
+  const mine = (await call(app, u.analyst, 'GET', `${base}/definitions`)).json();
+  assert.equal(mine.length, 2);
+  assert.ok(mine[0].next_run);
+  assert.deepEqual((await call(app, u.brand, 'GET', `${base}/definitions`)).json().map((d: { name: string }) => d.name), ['Brand copy']);
+  const off = await call(app, u.manager, 'PATCH', `${base}/definitions/${created.json().id}`, { active: false });
+  assert.equal(off.json().active, false);
+  assert.equal((await call(app, null, 'GET', '/r/not-a-real-token-but-long-enough')).statusCode, 404);
+});
