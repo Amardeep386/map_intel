@@ -10,7 +10,9 @@ export const WorkspaceContext = React.createContext({
 
 export function useWorkspace() {
   const ctx = React.useContext(WorkspaceContext);
-  return { ...ctx, can: (action) => ctx.actions.includes(action) };
+  // Stable between renders: screens list `can` in effect / callback dependencies.
+  const can = React.useCallback((action) => ctx.actions.includes(action), [ctx.actions]);
+  return { ...ctx, can };
 }
 
 /** Run an async action and show its error as a toast; returns the result or undefined. */
