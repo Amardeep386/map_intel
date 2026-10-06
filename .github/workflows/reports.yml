@@ -1,0 +1,67 @@
+# Reports runner (P3): every hour, queue the report schedules that are due, then finish every pending
+# run (snapshot + CSV if not done yet, PDF printed by Chromium, delivery: hosted link, email log, SFTP).
+# Runs here because the Render free API has no browser; it moves to the Render worker with collection.
+# Secrets: the same as lg-slice.yml (DATABASE_URL, DATABASE_SSL, JWT_SECRET, VAULT_KEYS +
+# VAULT_ACTIVE_KEY for SFTP credentials, S3_*). PORTAL_URL is the live portal, so report and evidence
+# links open there.
+name: Reports
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to run
+        default: main
+  schedule:
+    - cron: '7 * * * *'
+
+concurrency:
+  group: reports
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_SSL: ${{ secrets.DATABASE_SSL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      VAULT_KEYS: ${{ secrets.VAULT_KEYS }}
+      VAULT_ACTIVE_KEY: ${{ secrets.VAULT_ACTIVE_KEY }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_REGION: ${{ secrets.S3_REGION }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      S3_FORCE_PATH_STYLE: ${{ secrets.S3_FORCE_PATH_STYLE }}
+      S3_OBJECT_LOCK_DAYS: ${{ secrets.S3_OBJECT_LOCK_DAYS }}
+      PORTAL_URL: https://map-intel-iota.vercel.app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Anything to do?
+        id: work
+        run: |
+          n=$(node --input-type=module -e "
+            import pg from 'pg';
+            const c = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
+            await c.connect();
+            await c.query(\"SELECT set_config('app.role', 'system', false)\");
+            const r = await c.query(\"SELECT (SELECT count(*) FROM report_run WHERE status IN ('queued','awaiting_pdf')) + (SELECT count(*) FROM report_definition WHERE active AND cadence <> 'manual') AS n\");
+            console.log(r.rows[0].n); await c.end();")
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+      - if: ${{ steps.work.outputs.n != '0' }}
+        run: npx playwright install --with-deps chromium
+      - if: ${{ steps.work.outputs.n != '0' }}
+        run: npm run reports -- --due --pending

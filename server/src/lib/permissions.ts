@@ -29,6 +29,14 @@ export const ACCOUNT_ACTIONS = [
   'credentials.write',
   'health.read', // Data Health: source health, failures
   'collection.run', // re-run failed jobs
+  'violations.read', // violations, verdicts, Overview, evidence links
+  'violations.write', // status changes (dismiss, under notice, ...), evidence links
+  'rules.read',
+  'rules.write', // drafts, dry runs, publish, replay
+  'reports.read', // report definitions, repository, hosted reports
+  'reports.write', // define, schedule, run now
+  'alerts.read',
+  'alerts.write',
 ] as const;
 export type AccountAction = (typeof ACCOUNT_ACTIONS)[number];
 
@@ -55,6 +63,10 @@ const READ_ALL: AccountAction[] = [
   'audit.read',
   'credentials.read',
   'health.read',
+  'violations.read',
+  'rules.read',
+  'reports.read',
+  'alerts.read',
 ];
 
 const GRANTS: Record<AccountRole, ReadonlySet<AccountAction>> = {
@@ -62,9 +74,9 @@ const GRANTS: Record<AccountRole, ReadonlySet<AccountAction>> = {
   // Configures the account: settings, subscriptions, schedules, terms, users, credentials.
   'Account manager': new Set(ACCOUNT_ACTIONS),
   // Cleanses and classifies: edits terms and the catalogue, reads everything else.
-  Analyst: new Set<AccountAction>([...READ_ALL, 'terms.write', 'catalogue.write', 'mapping.write', 'sellers.write']),
-  // The brand's own people: read-only catalogue and prices, no configuration or audit screens.
-  'Brand user': new Set<AccountAction>(['account.read', 'catalogue.read', 'observations.read']),
+  Analyst: new Set<AccountAction>([...READ_ALL, 'terms.write', 'catalogue.write', 'mapping.write', 'sellers.write', 'violations.write']),
+  // The brand's own people: read-only catalogue, prices, violations and reports; no configuration or audit screens.
+  'Brand user': new Set<AccountAction>(['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read']),
 };
 
 export function can(role: string | null | undefined, action: AccountAction): boolean {

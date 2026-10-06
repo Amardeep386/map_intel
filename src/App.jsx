@@ -2,39 +2,29 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
-  Plus, ChevronDown, ExternalLink, X, ChevronLeft, ChevronRight,
-  MapPin, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
+  ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
   Eye, EyeOff, ShieldCheck, ArrowRight
 } from "lucide-react";
-import {
-  PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
-} from "recharts";
 import lgLogo from "./assets/lg.png";
 import appleLogo from "./assets/apple.png";
 import samsungLogo from "./assets/samsung.png";
 import philipsLogo from "./assets/philips.png";
 import kawasakiLogo from "./assets/kawasaki.png";
 import { api } from "./api/client.js";
-import { Card, KPI, PageHeader, Pill, PrimaryButton, SearchBox, Table } from "./ui.jsx";
+import { Card, PageHeader, Pill, PrimaryButton, Table } from "./ui.jsx";
 import { WorkspaceContext } from "./workspace.js";
 import { SourcesTermsView } from "./views/SourcesTermsView.jsx";
 import { MapPoliciesView, ProductSummaryView } from "./views/CatalogViews.jsx";
 import { MappingCenterView } from "./views/MappingCenterView.jsx";
 import { SellersView } from "./views/SellersView.jsx";
 import { DataHealthView } from "./views/DataHealthView.jsx";
+import { ViolationsView } from "./views/ViolationsView.jsx";
+import { OverviewView } from "./views/OverviewView.jsx";
+import { RulesView } from "./views/RulesView.jsx";
+import { ReportsView } from "./views/ReportsView.jsx";
+import { AlertsView } from "./views/AlertsView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 
-// ---------- Format Currency Utility (USD) ----------
-const formatUSD = (number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2
-  }).format(number);
-};
-
-const SEVERITY_COLORS = { Critical: "#dc2626", High: "#ea580c", Medium: "#f59e0b", Low: "#64748B" };
-const SEVERITY_BG = { Critical: "bg-red-50 text-red-700 border-red-200", High: "bg-orange-50 text-orange-700 border-orange-200", Medium: "bg-amber-50 text-amber-700 border-amber-200", Low: "bg-slate-50 text-slate-700 border-slate-200" };
 const STATUS_BG = {
   Active: "bg-emerald-50 text-emerald-700 border-emerald-200",
   Paused: "bg-slate-50 text-slate-700 border-slate-200",
@@ -47,25 +37,6 @@ const STATUS_BG = {
 };
 
 // ---------- Small building blocks ----------
-// Logos come from the source record (source.logo_url), never from third-party logo lookups.
-function MerchantLogo({ name, logoUrl }) {
-  const [error, setError] = useState(false);
-  if (logoUrl && !error) {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <img src={logoUrl} alt={name} className="w-4 h-4 rounded-full object-contain bg-brand-white border border-brand-beige" onError={() => setError(true)} />
-        <span>{name}</span>
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <Store className="w-3.5 h-3.5 text-brand-taupe opacity-50" />
-      <span>{name}</span>
-    </span>
-  );
-}
-
 function ClientLogo({ name, className }) {
   const [error, setError] = useState(false);
   let src = null;
@@ -95,262 +66,6 @@ function ClientLogo({ name, className }) {
 }
 
 // ---------- Views ----------
-function OverviewView({ onOpenViolation, clientName }) {
-  const { db, shared, chartColors } = React.useContext(DataContext);
-  const clientData = db[clientName] || EMPTY_WORKSPACE;
-  const { skus, violations, merchants } = clientData;
-  const severityDist = shared.severityDist.map((d) => ({ ...d, color: SEVERITY_COLORS[d.name] }));
-  const tooltipStyle = { background: chartColors.card, border: `1px solid ${chartColors.grid}`, borderRadius: 8, color: chartColors.text, fontSize: 12 };
-
-  const topMerchants = [...merchants].sort((a, b) => b.violations - a.violations);
-  const maxV = Math.max(1, ...topMerchants.map((m) => m.violations));
-  
-  const activeViolationsCount = violations.filter(v => v.status === "Open" || v.status === "Notified").length;
-
-  return (
-    <div>
-      <PageHeader title={
-        <div className="flex items-center gap-3">
-          <ClientLogo name={clientName} className="w-8 h-8 rounded-lg shadow-sm border border-brand-beige p-1" />
-          <span>Dashboard — {clientName} (Sandbox)</span>
-        </div>
-      } subtitle="Aug 16 – Aug 23, 2026" />
-      <div className="flex gap-4 flex-wrap mb-5">
-        <KPI label="MAP Compliance" value="94.2%" sub="↑ 2.4% vs last 7 days" subTone="text-emerald-700 font-semibold" />
-        <KPI label="Active Violations" value={activeViolationsCount} sub="+4 since yesterday" subTone="text-red-600 font-semibold" />
-        <KPI label="SKUs Monitored" value={skus.length} sub="0 vs yesterday" />
-        <KPI label="Merchants Monitored" value={merchants.length} sub="0 vs yesterday" />
-        <KPI label="Total Observations" value="1,248" sub="↑ 18% vs last week" subTone="text-emerald-700 font-semibold" />
-        <KPI label="Repeat Violators" value="2" sub="↑ 1 vs yesterday" subTone="text-red-600 font-semibold" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-        <Card title="Violations by severity">
-          <div className="w-full">
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie data={severityDist} dataKey="value" innerRadius={40} outerRadius={65} paddingAngle={2} stroke={chartColors.card}>
-                  {severityDist.map((d, i) => <Cell key={i} fill={d.color} />)}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: chartColors.text }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex flex-wrap gap-3 justify-center mt-1">
-            {severityDist.map((d) => (
-              <div key={d.name} className="flex items-center gap-1.5 text-xs text-brand-taupe">
-                <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                {d.name} ({d.value})
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card title="Violations over time" className="md:col-span-2">
-          <ResponsiveContainer width="100%" height={190}>
-            <LineChart data={shared.trend} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: chartColors.muted }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 'dataMax + 2']} tick={{ fontSize: 11, fill: chartColors.muted }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: chartColors.text }} labelStyle={{ color: chartColors.muted }} />
-              <Line type="monotone" dataKey="count" stroke={chartColors.accent} strokeWidth={2} dot={{ r: 3, fill: chartColors.accent, stroke: chartColors.accent }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card title="Recent critical violations" className="md:col-span-2" action={<button className="text-xs text-brand-copper hover:underline font-semibold cursor-pointer">View all violations</button>}>
-          <Table columns={["SKU / Product", "Merchant", "MAP", "Advertised", "Gap", "Severity"]}>
-            {violations.filter((v) => v.severity === "Critical").slice(0, 4).map((v) => (
-              <tr key={v.id} onClick={() => onOpenViolation(v)} className="border-b border-brand-beige hover:bg-brand-beige/20 cursor-pointer">
-                <td className="py-2 px-3">
-                  <div className="text-brand-charcoal font-semibold">{v.product}</div>
-                  <div className="text-xs text-brand-taupe">{v.sku}</div>
-                </td>
-                <td className="py-2 px-3 text-brand-charcoal"><MerchantLogo name={v.merchant} /></td>
-                <td className="py-2 px-3 text-brand-charcoal">${v.map}</td>
-                <td className="py-2 px-3 text-brand-charcoal">${v.advertised}</td>
-                <td className="py-2 px-3 text-red-600 font-bold">{v.gap}%</td>
-                <td className="py-2 px-3"><Pill text={v.severity} tone={SEVERITY_BG[v.severity]} /></td>
-              </tr>
-            ))}
-          </Table>
-        </Card>
-        <Card title="Top violating merchants">
-          <div className="space-y-3">
-            {topMerchants.map((m) => (
-              <div key={m.name}>
-                <div className="flex justify-between text-xs text-brand-charcoal mb-1 font-medium">
-                  <span><MerchantLogo name={m.name} /></span><span>{m.violations}</span>
-                </div>
-                <div className="h-1.5 bg-brand-beige rounded-full overflow-hidden">
-                  <div className="h-full bg-brand-copper rounded-full" style={{ width: `${(m.violations / maxV) * 100}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function ViolationsView({ onOpenViolation, clientName }) {
-  const { db } = React.useContext(DataContext);
-  const violations = (db[clientName] || EMPTY_WORKSPACE).violations;
-  const [q, setQ] = useState("");
-  const filtered = violations.filter((v) => (v.product + v.merchant + v.id).toLowerCase().includes(q.toLowerCase()));
-  return (
-    <div>
-      <PageHeader title={`Violations — ${clientName} (Sandbox)`} />
-      <Card>
-        <div className="flex justify-between mb-4">
-          <SearchBox value={q} onChange={setQ} placeholder="Search SKU, merchant..." />
-        </div>
-        <Table columns={["Violation ID", "SKU / Product", "Merchant / Seller", "MAP", "Advertised", "Gap", "Duration", "Severity", "Status"]}>
-          {filtered.map((v) => (
-            <tr key={v.id} onClick={() => onOpenViolation(v)} className="border-b border-brand-beige hover:bg-brand-beige/20 cursor-pointer">
-              <td className="py-2 px-3 font-semibold text-brand-copper">{v.id}</td>
-              <td className="py-2 px-3">
-                <div className="text-brand-charcoal font-semibold">{v.product}</div>
-                <div className="text-xs text-brand-taupe">{v.sku}</div>
-              </td>
-              <td className="py-2 px-3 text-brand-charcoal"><MerchantLogo name={v.merchant} /></td>
-              <td className="py-2 px-3 text-brand-charcoal">${v.map}</td>
-              <td className="py-2 px-3 text-brand-charcoal">${v.advertised}</td>
-              <td className="py-2 px-3 text-red-600 font-bold">{v.gap}%</td>
-              <td className="py-2 px-3 text-brand-taupe">{v.duration}</td>
-              <td className="py-2 px-3"><Pill text={v.severity} tone={SEVERITY_BG[v.severity]} /></td>
-              <td className="py-2 px-3"><Pill text={v.status} tone={STATUS_BG[v.status] || STATUS_BG.Open} /></td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
-// ------------------- Detailed Three Column Violation Drawer (Matches Screen 11 Detail) -------------------
-function ViolationDrawer({ violation, onClose, onSendWarning, onResolve, onEscalate }) {
-  if (!violation) return null;
-  const v = violation;
-  return (
-    <div className="fixed inset-0 bg-black/40 flex justify-end z-50 transition-opacity" onClick={onClose}>
-      <div className="bg-brand-ivory w-[920px] max-w-[90vw] h-full overflow-y-auto p-6 flex flex-col justify-between shadow-2xl border-l border-brand-beige" onClick={(e) => e.stopPropagation()}>
-        
-        {/* Drawer Header */}
-        <div>
-          <div className="flex items-center justify-between border-b border-brand-beige pb-3 mb-4">
-            <div>
-              <span className="text-xs font-semibold text-brand-taupe uppercase tracking-wider">VIOLATION PROFILE</span>
-              <h2 className="text-lg font-bold text-brand-charcoal mt-1">Violation Detail — {v.id}</h2>
-            </div>
-            <button onClick={onClose} className="text-brand-taupe hover:text-brand-charcoal cursor-pointer p-1 rounded-lg border border-brand-beige bg-brand-white">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Three Column Content Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
-            
-            {/* Column 1: Violation Information */}
-            <div className="bg-brand-white border border-brand-beige rounded-xl p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-brand-charcoal border-b border-brand-beige pb-1.5 mb-2">Violation Information</h4>
-              <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">SKU / Product</span>
-                  <span className="text-brand-charcoal font-semibold text-right max-w-[140px] truncate">{v.sku} - {v.product}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">Merchant</span>
-                  <span className="text-brand-charcoal font-semibold text-right"><MerchantLogo name={v.merchant} /></span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">Applicable MAP</span>
-                  <span className="text-brand-charcoal font-semibold">${v.map}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">Advertised Price</span>
-                  <span className="text-red-600 font-bold">${v.advertised}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">Gap</span>
-                  <span className="text-red-600 font-bold">{v.gap}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">Duration</span>
-                  <span className="text-brand-charcoal font-medium">{v.duration}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">Severity</span>
-                  <Pill text={v.severity} tone={SEVERITY_BG[v.severity]} />
-                </div>
-              </div>
-            </div>
-
-            {/* Column 2: Captured Evidence Locker */}
-            <div className="bg-brand-white border border-brand-beige rounded-xl p-4">
-              <div className="flex justify-between items-center border-b border-brand-beige pb-1.5 mb-3">
-                <h4 className="text-sm font-semibold text-brand-charcoal">Evidence</h4>
-                <a href={v.listingUrl || "#"} target="_blank" rel="noreferrer" className="text-xs text-brand-copper hover:underline inline-flex items-center gap-0.5">
-                  Open Live Listing <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              <div className="bg-brand-ivory rounded-lg h-44 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden border border-brand-beige">
-                <div className="absolute top-2 left-2 right-2 text-[10px] text-brand-taupe font-mono text-left truncate">
-                  {v.evidence
-                    ? `Captured ${new Date(v.evidence.capturedAt).toLocaleString()} · SHA-256 ${v.evidence.sha256.slice(0, 12)}…`
-                    : "Sample data · no capture stored"}
-                </div>
-                <div className="text-brand-charcoal font-bold text-xs truncate max-w-[200px]">{v.product}</div>
-                <div className="text-2xl font-black text-red-600 my-2">${v.advertised}</div>
-                <div className="text-[10px] text-brand-taupe uppercase tracking-wide">Sold By: <MerchantLogo name={v.merchant} /></div>
-              </div>
-            </div>
-
-            {/* Column 3: Chronological Timeline */}
-            <div className="bg-brand-white border border-brand-beige rounded-xl p-4">
-              <h4 className="text-sm font-semibold text-brand-charcoal border-b border-brand-beige pb-1.5 mb-3">Timeline</h4>
-              <div className="space-y-3.5 text-xs relative pl-3.5 border-l border-brand-beige">
-                <div className="relative">
-                  <span className="absolute -left-[19px] top-1 w-2.5 h-2.5 rounded-full bg-brand-copper" />
-                  <div className="font-bold text-brand-charcoal">Detected</div>
-                  <div className="text-brand-taupe">Pricing discrepancy logged by crawler.</div>
-                  <div className="text-[10px] text-brand-copper mt-0.5 font-medium">Aug 23, 2026 10:15 AM</div>
-                </div>
-                <div className="relative">
-                  <span className="absolute -left-[19px] top-1 w-2.5 h-2.5 rounded-full bg-brand-copper" />
-                  <div className="font-bold text-brand-charcoal">Validated</div>
-                  <div className="text-brand-taupe">Assigned to compliance queue.</div>
-                  <div className="text-[10px] text-brand-copper mt-0.5 font-medium">Aug 23, 2026 10:20 AM</div>
-                </div>
-                <div className="relative">
-                  <span className={`absolute -left-[19px] top-1 w-2.5 h-2.5 rounded-full ${v.status === 'Resolved' || v.status === 'Notified' ? 'bg-brand-copper' : 'bg-brand-beige'}`} />
-                  <div className="font-bold text-brand-charcoal">Seller Warned</div>
-                  <div className="text-brand-taupe">{v.status === 'Resolved' || v.status === 'Notified' ? 'Warning email sent to merchant.' : 'Pending draft compilation.'}</div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex justify-end gap-3 border-t border-brand-beige pt-4 mt-6">
-          <button onClick={() => onResolve(v.id)} className="text-sm font-semibold border border-brand-taupe rounded-lg px-4 py-2 text-brand-charcoal hover:bg-brand-beige cursor-pointer">
-            Mark Resolved
-          </button>
-          <button onClick={() => onEscalate(v.id)} className="text-sm font-semibold border border-brand-beige rounded-lg px-4 py-2 text-brand-charcoal hover:bg-brand-beige cursor-pointer">
-            Escalate
-          </button>
-          <PrimaryButton onClick={() => onSendWarning(v.id)}>
-            Send Warning Notice
-          </PrimaryButton>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
 function EmailCenterView({ clientName }) {
   const { shared } = React.useContext(DataContext);
   return (
@@ -375,48 +90,6 @@ function EmailCenterView({ clientName }) {
   );
 }
 
-function ReportsView({ clientName }) {
-  const { shared } = React.useContext(DataContext);
-  return (
-    <div>
-      <PageHeader title={`Reports — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Schedule report</PrimaryButton>} />
-      <Card>
-        <Table columns={["Report name", "Frequency", "Recipients", "Last run", "Format"]}>
-          {shared.reports.map((r, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{r.name}</td>
-              <td className="py-2 px-3 text-brand-taupe">{r.freq}</td>
-              <td className="py-2 px-3 text-brand-taupe">{r.recipients}</td>
-              <td className="py-2 px-3 text-brand-taupe">{r.lastRun}</td>
-              <td className="py-2 px-3"><Pill text={r.format} tone="bg-slate-100 text-slate-600 border-slate-200" /></td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
-function AlertsView({ clientName }) {
-  const { shared } = React.useContext(DataContext);
-  return (
-    <div>
-      <PageHeader title={`Alerts — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Add rule</PrimaryButton>} />
-      <Card>
-        <Table columns={["Alert name", "Condition", "Channel", "Recipients"]}>
-          {shared.alertRules.map((a, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{a.name}</td>
-              <td className="py-2 px-3 text-brand-taupe">{a.condition}</td>
-              <td className="py-2 px-3 text-brand-taupe">{a.channel}</td>
-              <td className="py-2 px-3 text-brand-taupe">{a.recipients}</td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
 
 // ---------- Accept an invite (opened from an invite link) ----------
 function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
@@ -508,10 +181,11 @@ const NAV = [
   { id: "health", label: "Data Health", icon: Activity, needs: "health.read" },
   { id: "pricing", label: "MAP Policies", icon: DollarSign },
   { id: "merchants", label: "Sellers", icon: Store, needs: "sellers.read" },
-  { id: "violations", label: "Violations", icon: AlertTriangle },
+  { id: "violations", label: "Violations", icon: AlertTriangle, needs: "violations.read" },
+  { id: "rules", label: "Rules", icon: Scale, needs: "rules.read" },
   { id: "email", label: "Email Center", icon: Mail },
-  { id: "reports", label: "Reports", icon: FileText },
-  { id: "alerts", label: "Alerts", icon: Bell },
+  { id: "reports", label: "Reports", icon: FileText, needs: "reports.read" },
+  { id: "alerts", label: "Alerts", icon: Bell, needs: "alerts.read" },
   { id: "settings", label: "Settings", icon: SettingsIcon, needs: "settings.read" },
   { id: "users", label: "Users & Access", icon: Users, needs: "users.read" },
   { id: "audit", label: "Audit Log", icon: ClipboardList, needs: "audit.read" },
@@ -698,7 +372,6 @@ export default function App() {
   // Sidebar can shrink to an icon rail so wide screens (e.g. Product Summary) get the full width.
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem("navCollapsed") === "1"; } catch { return false; } });
   const toggleNav = () => setNavCollapsed((c) => { try { localStorage.setItem("navCollapsed", c ? "0" : "1"); } catch { /* storage unavailable */ } return !c; });
-  const [violation, setViolation] = useState(null);
 
   const [toasts, setToasts] = useState([]);
   const toastSeq = React.useRef(0);
@@ -716,9 +389,26 @@ export default function App() {
     [clients, activeClient],
   );
   const workspace = db[client.name] || EMPTY_WORKSPACE;
-  const activeViolationsCount = workspace.violations.filter((v) => v.status === "Open" || v.status === "Notified").length;
-  const navBadges = { violations: activeViolationsCount, alerts: shared.alertUnread };
   const actions = useMemo(() => api.actionsFor(currentUser, client), [currentUser, client]);
+  // Open violations for the sidebar badge, refreshed when the screen changes.
+  const [openViolations, setOpenViolations] = useState(0);
+  const canViolations = actions.includes("violations.read");
+  useEffect(() => {
+    if (screen !== 'app' || !canViolations || !client.id && !api.isMock) return;
+    let live = true;
+    api.violations(client, { active: true, limit: 1 }).then((r) => { if (live) setOpenViolations(r?.total ?? 0); }).catch(() => {});
+    return () => { live = false; };
+  }, [screen, client, canViolations, view]);
+  // Unread alerts for the sidebar badge (the Alerts screen updates it when alerts are read).
+  const [alertUnread, setAlertUnread] = useState(0);
+  const canAlerts = actions.includes("alerts.read");
+  useEffect(() => {
+    if (screen !== 'app' || !canAlerts || !client.id && !api.isMock) return;
+    let live = true;
+    api.alertEvents(client, { unread: true, limit: 1 }).then((r) => { if (live) setAlertUnread(r?.unread ?? 0); }).catch(() => {});
+    return () => { live = false; };
+  }, [screen, client, canAlerts, view]);
+  const navBadges = { violations: openViolations, alerts: alertUnread };
   const nav = useMemo(() => NAV.filter((n) => !n.needs || actions.includes(n.needs)), [actions]);
   const accountRole = currentUser?.accounts?.find((a) => a.id === client.id)?.role;
   // Switching to an account where the current screen isn't allowed shows the Overview instead.
@@ -732,11 +422,8 @@ export default function App() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, duration);
   }, []);
-  const workspaceCtx = useMemo(() => ({ client, actions, showToast }), [client, actions, showToast]);
+  const workspaceCtx = useMemo(() => ({ client, actions, showToast, chartColors, go: setView }), [client, actions, showToast, chartColors]);
 
-  const updateWorkspace = (clientName, fn) => {
-    setDb(prev => ({ ...prev, [clientName]: fn(prev[clientName] || EMPTY_WORKSPACE) }));
-  };
 
   // Wake the API while the user is still typing (the free host sleeps when idle).
   useEffect(() => { api.wake(); }, []);
@@ -786,45 +473,20 @@ export default function App() {
     showToast(`Loaded ${clientName} portal sandbox.`, "success");
   };
 
-  const setViolationStatus = (violationId, status) => {
-    updateWorkspace(activeClient, (clientData) => ({
-      ...clientData,
-      violations: clientData.violations.map(v => v.id === violationId ? { ...v, status } : v),
-    }));
-  };
-
-  const handleSendWarning = async (violationId) => {
-    await api.sendWarning(activeClient, violationId);
-    setViolationStatus(violationId, "Notified");
-    showToast(`Notice sent for violation ID ${violationId}`, "success");
-    setViolation(null); // Close the drawer
-  };
-
-  const handleResolveViolation = async (violationId) => {
-    await api.resolveViolation(activeClient, violationId);
-    setViolationStatus(violationId, "Resolved");
-    showToast(`Violation ID ${violationId} resolved successfully.`, "success");
-    setViolation(null); // Close the drawer
-  };
-
-  const handleEscalateViolation = async (violationId) => {
-    await api.escalateViolation(activeClient, violationId);
-    showToast("Escalated to brand manager dashboard queue.", "info");
-  };
-
   const mainContent = useMemo(() => {
     switch (currentView) {
-      case "overview": return <OverviewView onOpenViolation={setViolation} clientName={client.name} />;
+      case "overview": return <OverviewView logo={<ClientLogo name={client.name} className="w-8 h-8 rounded-lg shadow-sm border border-brand-beige p-1" />} />;
       case "product": return <ProductSummaryView />;
       case "mapping": return <MappingCenterView />;
       case "sources": return <SourcesTermsView skus={workspace.skus} />;
       case "pricing": return <MapPoliciesView />;
       case "merchants": return <SellersView />;
       case "health": return <DataHealthView />;
-      case "violations": return <ViolationsView onOpenViolation={setViolation} clientName={client.name} />;
+      case "violations": return <ViolationsView />;
       case "email": return <EmailCenterView clientName={client.name} />;
-      case "reports": return <ReportsView clientName={client.name} />;
-      case "alerts": return <AlertsView clientName={client.name} />;
+      case "reports": return <ReportsView />;
+      case "rules": return <RulesView />;
+      case "alerts": return <AlertsView onUnreadChange={setAlertUnread} />;
       case "settings": return <SettingsView />;
       case "users": return <UsersView />;
       case "audit": return <AuditLogView />;
@@ -1001,7 +663,6 @@ export default function App() {
       <div className="flex-1 overflow-y-auto p-6 bg-brand-ivory">{mainContent}</div>
 
       {/* Slide-out drawer details */}
-      <ViolationDrawer violation={violation} onClose={() => setViolation(null)} onSendWarning={handleSendWarning} onResolve={handleResolveViolation} onEscalate={handleEscalateViolation} />
 
       {/* TOAST alerts */}
       <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">

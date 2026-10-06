@@ -17,9 +17,9 @@ Target model for all phases. Where the implemented schema (`server/db/*.sql`) al
 | Market identity (shared core) | seller, seller_alias, seller_link, seller_classification (per account, effective-dated), seller_contact |
 | Observations (shared core) | listing, listing_discovery (term found listing; drives term yield), observation (monthly partitions), evidence |
 | Mapping (per account) | listing_match (current state per account), listing_state_event (history; human decisions are labels), match_candidate + match_signal (six signals per candidate), match_rule, suppression |
-| MAP decisions | rule, rule_version, violation, violation_event, replay_run |
+| MAP decisions | rule, rule_version, dry_run, judge_run, verdict (one per account × observation), violation (one per breach episode of a listing), violation_observation, violation_event (status history), replay_run, replay_result (implemented P3, migrations 031–032) |
 | Enforcement | case, case_violation, notice, notice_template, communication, marketplace_report |
-| Delivery | report_template, report_definition, report_run, destination, distribution_list, evidence_link, alert_rule, alert_event, notification |
+| Delivery | report_template, report_definition (destinations: email, hosted link, SFTP), report_run (frozen snapshot), report_delivery, evidence_link (violation:view / report:view), alert_rule, alert_event, notification (implemented P3, migrations 032–035) |
 | Health & ops | source_health_snapshot, data_quality_flag, ticket |
 
 Key relationships: term → product (assigned); listing → source, seller, product (matched); observation → listing; evidence → observation; violation → observation, map_price (version), rule_version, class at capture; case_violation → violation; evidence_link → violation/evidence; source_health_snapshot → source × account × cycle.
@@ -40,7 +40,8 @@ Key relationships: term → product (assigned); listing → source, seller, prod
 | observation | id, listing_id, observed_at (UTC), advertised_price, list_price, currency, promo_text, coupon, qty, availability, seller_name_raw, crawl_run_id, status | Append-only, partitioned monthly |
 | evidence | id, observation_id, screenshot_uri, html_uri, pdf_uri, sha256, captured_at, method | S3 Object Lock; hash in Postgres |
 | rule_version | rule_id, version, scope, condition (JSON), verdict, severity bands, valid_from/to, priority | Edit = new version |
-| violation | id, account_id, observation_id, listing_id, product_id, seller_id, map_price_id, rule_version_id, class_at_capture, map_amount, observed_price, depth_abs, depth_pct, severity, status, first_seen, last_seen | Reproducible |
+| verdict | account_id, observation_id, observed_at, listing_id, product_id, seller_id, outcome (violation / needs_review / authorised_promo / compliant / exempt / no_map), severity, rule_version_id, map_price_id, promo_id, map_amount, observed_price, depth_abs, depth_pct, class_at_capture, rule_set | Append-only; one per account × observation; reproducible |
+| violation | id, account_id, seq, listing_id, product_id, seller_id, first_verdict_id, opened_at, class_at_capture, map_price_id, rule_version_id | One breach episode of a listing; verdicts link to it; status only in violation_event; view violation_current |
 | case | id, account_id, seller_id, state, owner, opened_at, response_due, channel | Resolve on compliant observation or manual close with reason |
 | evidence_link | token_hash, violation_id, scope, expires_at, created_by, views | Never an open URL |
 
