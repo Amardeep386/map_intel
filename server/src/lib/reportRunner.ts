@@ -126,7 +126,8 @@ export async function failRun(db: Db, runId: string, error: string): Promise<voi
 // Delivery
 // ---------------------------------------------------------------------------
 export interface DeliveryResult { channel: 'email' | 'hosted' | 'sftp'; status: string; target: string; detail?: Record<string, unknown> }
-type SftpDeliver = (db: Db, run: { id: string; accountId: string; files: StoredFile[] }, dest: { credentialId: string; folder?: string }) => Promise<DeliveryResult>;
+export interface SftpDest { credentialId: string; host: string; port?: number; folder?: string; hostKey?: string }
+type SftpDeliver = (db: Db, run: { id: string; accountId: string; files: StoredFile[] }, dest: SftpDest) => Promise<DeliveryResult>;
 let sftpDeliver: SftpDeliver | null = null;
 /** lib/sftp.ts registers itself here (keeps ssh2 out of the API bundle when unused). */
 export function registerSftp(fn: SftpDeliver): void {
@@ -136,7 +137,7 @@ export function registerSftp(fn: SftpDeliver): void {
 export async function deliverRun(db: Db, runId: string, now = new Date()): Promise<DeliveryResult[]> {
   const r = await loadRun(db, runId);
   const def = r.definition_id
-    ? (await db.query<{ recipients: string[]; destinations: { email?: boolean; hosted?: boolean; sftp?: { credentialId: string; folder?: string } } }>(
+    ? (await db.query<{ recipients: string[]; destinations: { email?: boolean; hosted?: boolean; sftp?: SftpDest | null } }>(
       'SELECT recipients, destinations FROM report_definition WHERE id = $1', [r.definition_id])).rows[0]
     : null;
   const dest = def?.destinations ?? { hosted: true };

@@ -6,6 +6,7 @@
 import { parseArgs } from 'node:util';
 import { closeBrowser, renderPdf } from '../collector/browser.js';
 import { closeDb, withSystem } from '../lib/db.js';
+import '../lib/sftp.js'; // registers SFTP delivery with the runner
 import { completeRun, failRun, generateRun, queueDueRuns, queueRun, runCode, runHtml } from '../lib/reportRunner.js';
 
 const { values } = parseArgs({

@@ -122,6 +122,12 @@ export async function evidenceLockStatus(): Promise<LockStatus> {
   return { bucketEnabled, defaultRule, retentionDays, problem };
 }
 
+/** A stored object's bytes (report files on their way to SFTP). */
+export async function getObjectBytes(key: string): Promise<Buffer> {
+  const obj = await s3.send(new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }));
+  return Buffer.from(await obj.Body!.transformToByteArray());
+}
+
 /** Re-read a stored evidence file and check its bytes still hash to the recorded SHA-256. */
 export async function verifyEvidence(uri: string, sha256: string): Promise<{ ok: boolean; actual: string; retainUntil: Date | null; mode: string | null }> {
   const Key = keyFromUri(uri);

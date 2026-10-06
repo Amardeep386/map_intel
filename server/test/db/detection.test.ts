@@ -466,3 +466,56 @@ test('routes: report templates with adoption counts; definitions validated; Bran
   assert.equal(off.json().active, false);
   assert.equal((await call(app, null, 'GET', '/r/not-a-real-token-but-long-enough')).statusCode, 404);
 });
+
+test('SFTP delivery: vault credential, pinned host key, files from S3 arrive with the stored SHA-256; email logged; hosted link', async () => {
+  const { encrypt } = await import('../../src/lib/vault.js');
+  const { deliverRun } = await import('../../src/lib/reportRunner.js');
+  const { fingerprint } = await import('../../src/lib/sftp.js'); // also registers SFTP delivery
+  const { startSftp } = await import('../sftpServer.js');
+  const { createHash } = await import('node:crypto');
+  const srv = await startSftp('lgdrop', 'drop-pass-1', fingerprint);
+  try {
+    await scratch(async (db) => {
+      // Real files of an earlier LG run (any stored report run will do).
+      const src = await one<{ files: { kind: string; key: string; sha256: string; fileName: string }[] } | undefined>(db,
+        "SELECT files FROM report_run WHERE status = 'done' AND jsonb_array_length(files) = 2 ORDER BY created_at LIMIT 1");
+      assert.ok(src, 'needs one finished report run in the database (npm run reports -- --account lg --template listing_map)');
+      const w = await world(db, 'sftp');
+      const sealed = encrypt('drop-pass-1', { accountId: w.account, kind: 'sftp' });
+      const cred = (await one<{ id: string }>(db,
+        `INSERT INTO credential (account_id, kind, label, username, ciphertext, iv, auth_tag, key_id, hint)
+         VALUES ($1, 'sftp', 'Brand drop', 'lgdrop', $2, $3, $4, $5, $6) RETURNING id`,
+        [w.account, sealed.ciphertext, sealed.iv, sealed.authTag, sealed.keyId, sealed.hint])).id;
+      const tpl = (await one<{ id: string }>(db, "SELECT id FROM report_template WHERE code = 'listing_map'")).id;
+      const def = (await one<{ id: string }>(db,
+        `INSERT INTO report_definition (account_id, name, template_id, cadence, recipients, destinations)
+         VALUES ($1, 'Weekly to SFTP', $2, 'manual', '{map-room@example.com}', $3) RETURNING id`,
+        [w.account, tpl, JSON.stringify({ email: true, hosted: true, sftp: { credentialId: cred, host: '127.0.0.1', port: srv.port, folder: '/in/lg', hostKey: srv.hostKeyFingerprint } })])).id;
+      const run = (await one<{ id: string }>(db,
+        `INSERT INTO report_run (account_id, seq, definition_id, template_id, template_version, name, params, trigger, status, period_from, period_to, snapshot, files)
+         VALUES ($1, 1, $2, $3, 1, 'Weekly to SFTP', '{}', 'test', 'awaiting_pdf', now() - interval '7 days', now(), $4, $5) RETURNING id`,
+        [w.account, def, tpl, JSON.stringify({ period: { label: 'test week' }, account: { name: 'Test' }, summary: { violations: 0 }, quality: { note: null } }), JSON.stringify(src!.files)])).id;
+
+      const out = await deliverRun(db, run);
+      assert.deepEqual(out.map((d) => [d.channel, d.status]), [['hosted', 'delivered'], ['email', 'logged'], ['sftp', 'delivered']]);
+      for (const f of src!.files) {
+        const got = srv.files.get(`/in/lg/${f.fileName}`);
+        assert.ok(got, f.fileName);
+        assert.equal(createHash('sha256').update(got!).digest('hex'), f.sha256);
+      }
+      const mail = await one<{ status: string; recipients: string[]; body: string }>(db, 'SELECT status, recipients, body FROM notification WHERE report_run_id = $1', [run]);
+      assert.deepEqual([mail.status, mail.recipients], ['logged', ['map-room@example.com']]);
+      assert.match(mail.body, /\/report\/[A-Za-z0-9_-]{43}/);
+      assert.equal((await one<{ n: number }>(db, 'SELECT count(*)::int AS n FROM report_delivery WHERE report_run_id = $1', [run])).n, 3);
+
+      // A changed server key fails the SFTP delivery, recorded, without stopping the others.
+      await db.query("UPDATE report_definition SET destinations = jsonb_set(destinations, '{sftp,hostKey}', $2) WHERE id = $1", [def, JSON.stringify(`SHA256:${'B'.repeat(43)}`)]);
+      const again = await deliverRun(db, run);
+      const s = again.find((d) => d.channel === 'sftp')!;
+      assert.equal(s.status, 'failed');
+      assert.match(String(s.detail?.error), /host key changed/);
+    });
+  } finally {
+    await srv.close();
+  }
+});

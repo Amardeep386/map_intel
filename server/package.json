@@ -52,12 +52,16 @@
     "jose": "^6.0.0",
     "pg": "^8.13.1",
     "playwright": "1.56.0",
+    "ssh2": "^1.17.0",
+    "ssh2-sftp-client": "^12.1.1",
     "undici": "^7.30.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.10",
+    "@types/ssh2": "^1.15.6",
+    "@types/ssh2-sftp-client": "^9.0.6",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },
