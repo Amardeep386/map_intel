@@ -10,6 +10,8 @@ import { judgeAccount } from '../../src/lib/judge.js';
 import { dryRun, publish, replay } from '../../src/lib/ruleAdmin.js';
 import { contentHash } from '../../src/lib/rules.js';
 import { changeStatus, listViolations, violationDetail } from '../../src/lib/violations.js';
+import { createLink, evidenceRecord, openLink } from '../../src/lib/evidenceLinks.js';
+import { withSystem } from '../../src/lib/db.js';
 import { closeQueue } from '../../src/lib/queue.js';
 import { call, createTestAccount, createUser, expectRefused, removeTestAccounts, removeTestUsers, testApp, type TestUser } from './helpers.js';
 
@@ -307,4 +309,54 @@ test('routes: Violations read for Brand users, status changes for Analysts, CSV 
   assert.equal(csv.statusCode, 200);
   assert.match(csv.headers['content-type'] as string, /text\/csv/);
   assert.ok(csv.body.startsWith('Violation,SKU,Product'));
+});
+
+test('evidence links: token hashed, scoped, counted; the record lists the judged facts with a stable hash', async () => {
+  await scratch(async (db) => {
+    const w = await world(db, 'links');
+    await db.query("INSERT INTO map_price (account_id, product_id, amount, effective_from) VALUES ($1, $2, 1000, $3)", [w.account, w.product, d('09-01T00:00:00')]);
+    await observe(db, w, d('10-02T00:00:00'), 700);
+    await judgeAccount(db, w.account, { trigger: 'test' });
+    const vid = (await one<{ id: string }>(db, 'SELECT id FROM violation WHERE account_id = $1', [w.account])).id;
+
+    const link = await createLink(db, { accountId: w.account, scope: 'violation:view', violationId: vid, days: 30, via: 'test' });
+    assert.match(link.url, /\/evidence\/[A-Za-z0-9_-]{43}$/);
+    const stored = await one<{ token_hash: string }>(db, 'SELECT token_hash FROM evidence_link WHERE id = $1', [link.id]);
+    assert.notEqual(stored.token_hash, link.token); // only the hash is kept
+
+    const opened = await openLink(db, link.token);
+    assert.deepEqual([opened?.state, opened?.scope, opened?.violation_id], ['open', 'violation:view', vid]);
+    await openLink(db, link.token);
+    assert.equal((await one<{ views: number }>(db, 'SELECT views FROM evidence_link WHERE id = $1', [link.id])).views, 2);
+    assert.equal(await openLink(db, 'not-a-real-token-but-long-enough'), null);
+
+    await db.query('UPDATE evidence_link SET revoked_at = now() WHERE id = $1', [link.id]);
+    assert.equal((await openLink(db, link.token))?.state, 'revoked');
+    assert.equal((await one<{ views: number }>(db, 'SELECT views FROM evidence_link WHERE id = $1', [link.id])).views, 2); // not counted
+
+    const r1 = await evidenceRecord(db, vid);
+    const r2 = await evidenceRecord(db, vid);
+    assert.equal(r1!.record, 'V-00001');
+    assert.deepEqual([r1!.map, r1!.advertised, r1!.depthPct, r1!.seller.classAtCapture], [1000, 700, 30, 'Unknown']);
+    assert.equal(r1!.observations.length, 1);
+    assert.match(r1!.recordSha256, /^[0-9a-f]{64}$/);
+    assert.equal(r1!.recordSha256, r2!.recordSha256);
+  });
+});
+
+test('routes: /e/:token refuses unknown, expired and wrong-scope links; creating a link needs violations.write', async () => {
+  assert.equal((await call(app, null, 'GET', '/e/not-a-real-token-but-long-enough')).statusCode, 404);
+  const tokens = await withSystem(async (db) => {
+    const report = await createLink(db, { accountId: acct, scope: 'report:view', reportRunId: '00000000-0000-4000-8000-000000000001', via: 'test' });
+    const old = await createLink(db, { accountId: acct, scope: 'report:view', reportRunId: '00000000-0000-4000-8000-000000000002', via: 'test', days: 1, now: new Date(Date.now() - 3 * 86_400_000) });
+    return { report: report.token, old: old.token };
+  });
+  const wrong = await call(app, null, 'GET', `/e/${tokens.report}`);
+  assert.equal(wrong.statusCode, 403);
+  const expired = await call(app, null, 'GET', `/e/${tokens.old}`);
+  assert.equal(expired.statusCode, 410);
+  assert.equal(expired.json().state, 'expired');
+  const missing = '00000000-0000-4000-8000-000000000000';
+  assert.equal((await call(app, u.brand, 'POST', `/accounts/${acct}/violations/${missing}/links`, {})).statusCode, 403);
+  assert.equal((await call(app, u.analyst, 'POST', `/accounts/${acct}/violations/${missing}/links`, {})).statusCode, 404);
 });

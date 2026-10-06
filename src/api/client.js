@@ -439,6 +439,26 @@ export const api = {
   setViolationStatus(client, violationId, body) {
     return USE_MOCK ? mockDetection.setViolationStatus(client, violationId, body) : request(`/accounts/${client.id}/violations/${violationId}/status`, { method: "POST", body });
   },
+  /** An expiring link to the violation's hosted evidence page (default 30 days). */
+  createEvidenceLink(client, violationId, days) {
+    return USE_MOCK ? mockDetection.createLink(client, violationId) : request(`/accounts/${client.id}/violations/${violationId}/links`, { method: "POST", body: days ? { days } : {} });
+  },
+  evidenceLinks(client, violationId) {
+    return USE_MOCK ? Promise.resolve([]) : request(`/accounts/${client.id}/violations/${violationId}/links`);
+  },
+  revokeEvidenceLink(client, violationId, linkId) {
+    return USE_MOCK ? Promise.resolve({ ok: true }) : request(`/accounts/${client.id}/violations/${violationId}/links/${linkId}/revoke`, { method: "POST" });
+  },
+  /** The public evidence page behind a link (no sign-in). Returns { status, data }. */
+  async evidenceByToken(linkToken) {
+    if (USE_MOCK || linkToken.startsWith("mock-")) return { status: 200, data: mockDetection.evidenceRecord(linkToken) };
+    try {
+      const res = await fetch(`${API_URL}/e/${encodeURIComponent(linkToken)}`);
+      return { status: res.status, data: await res.json().catch(() => ({})) };
+    } catch {
+      return { status: 0, data: { error: "The evidence service cannot be reached. Try again in a minute." } };
+    }
+  },
   /** Download the filtered list as CSV (signed in, so fetched with the token). */
   async downloadViolationsCsv(client, filters = {}) {
     if (USE_MOCK) throw new Error("CSV export works when the portal is connected to the API.");

@@ -15,6 +15,7 @@ import { policyRoutes } from './routes/policies.js';
 import { mappingRoutes } from './routes/mapping.js';
 import { ruleRoutes } from './routes/rules.js';
 import { violationRoutes } from './routes/violations.js';
+import { evidenceLinkRoutes } from './routes/evidenceLinks.js';
 import { sellerRoutes } from './routes/sellers.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
@@ -156,6 +157,7 @@ export async function buildApp() {
   await app.register(mappingRoutes);
   await app.register(ruleRoutes);
   await app.register(violationRoutes);
+  await app.register(evidenceLinkRoutes);
   await app.register(collectionRoutes);
   await app.register(dataHealthRoutes);
   await app.register(credentialRoutes);

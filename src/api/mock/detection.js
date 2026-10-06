@@ -80,4 +80,21 @@ export const mockDetection = {
     v.events = [...v.events, { id: `${id}-e${v.events.length + 1}`, status, reason: reason || null, created_at: new Date().toISOString(), actor: "you (sample data)" }];
     return v;
   },
+  async createLink(client, id) {
+    const token = `mock-${client.name}-${id}`;
+    return { id: token, url: `${window.location.origin}/evidence/${token}`, expiresAt: new Date(Date.now() + 30 * DAY).toISOString() };
+  },
+  /** The hosted evidence page for a mock link token ("mock-<client>-<violation id>"). */
+  evidenceRecord(linkToken) {
+    const client = linkToken.split("-")[1] || "LG";
+    const v = all({ name: client }).find((x) => linkToken.endsWith(x.id)) ?? all({ name: client })[0];
+    return {
+      state: "open", expiresAt: new Date(Date.now() + 30 * DAY).toISOString(), record: v.code, brand: client,
+      product: { sku: v.sku, name: v.product }, seller: { name: v.seller, classAtCapture: v.class_at_capture, source: v.source },
+      listing: { url: v.url, title: v.title }, map: v.last_map, advertised: v.last_price, depthAbs: v.last_depth_abs, depthPct: v.last_depth_pct,
+      severity: v.severity, firstSeen: v.opened_at, lastSeen: v.last_seen, status: v.status, rule: v.rule, policy: v.policy,
+      observations: v.history.map((h) => ({ at: h.observed_at, price: h.price, map: h.map, depthPct: h.depth_pct, outcome: h.outcome })),
+      proofs: [], files: [], verification: null, recordSha256: "sample0000000000000000000000000000000000000000000000000000000000",
+    };
+  },
 };

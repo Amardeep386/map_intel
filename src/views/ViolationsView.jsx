@@ -3,7 +3,7 @@
 // judged on, the proof of every observation, the status history, and status changes (each one a
 // new event, never an edit).
 import React, { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Ban, CircleCheck, Download, ExternalLink, Lock, Megaphone, RotateCcw } from "lucide-react";
+import { AlertTriangle, Ban, CircleCheck, Copy, Download, ExternalLink, Lock, Megaphone, RotateCcw, ShieldCheck } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../api/client.js";
 import { Card, Drawer, Field, inputCls, KV, Modal, Note, PageHeader, Pill, PrimaryButton, SearchBox, SecondaryButton, Table, Tabs, Td } from "../ui.jsx";
@@ -100,6 +100,19 @@ export function ViolationDrawer({ violationId, onClose, onChanged }) {
     }
   };
 
+  const shareLink = async (copy) => {
+    const tab = copy ? null : window.open("", "_blank"); // opened now, so the browser does not block it
+    const link = await attempt(showToast, () => api.createEvidenceLink(client, violationId));
+    if (!link) { tab?.close(); return; }
+    if (tab) { tab.location.href = link.url; return; }
+    try {
+      await navigator.clipboard.writeText(link.url);
+      showToast(`Evidence link copied. It expires ${new Date(link.expiresAt).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })}.`);
+    } catch {
+      showToast(`Copying was blocked by the browser. The link: ${link.url}`, "info");
+    }
+  };
+
   if (!v) return <Drawer open onClose={onClose} eyebrow="Violation profile" title="Loading…"><div className="text-sm text-brand-taupe">Loading…</div></Drawer>;
   const writable = can("violations.write") && !v.episode_closed;
   const chart = [...v.history].reverse().map((h) => ({ t: new Date(h.observed_at).toLocaleDateString("en-US", { month: "short", day: "2-digit" }), price: h.price, map: h.promo ?? h.map }));
@@ -147,6 +160,10 @@ export function ViolationDrawer({ violationId, onClose, onChanged }) {
             <KV k="Policy document" v={v.policy ? `${v.policy.name} v${v.policy.version}` : "None in force"} />
           </div>
           <div className="flex flex-col gap-1.5 mt-3">
+            {can("violations.write") && <>
+              <button onClick={() => shareLink(false)} className="text-xs text-brand-copper hover:underline inline-flex items-center gap-1 cursor-pointer font-semibold"><ShieldCheck className="w-3.5 h-3.5" />Preview shareable evidence page</button>
+              <button onClick={() => shareLink(true)} className="text-xs text-brand-copper hover:underline inline-flex items-center gap-1 cursor-pointer"><Copy className="w-3.5 h-3.5" />Copy expiring link (30 days)</button>
+            </>}
             {v.url && <a href={v.url} target="_blank" rel="noreferrer" className="text-xs text-brand-copper hover:underline inline-flex items-center gap-1">Open live listing <ExternalLink className="w-3 h-3" /></a>}
           </div>
           <div className="text-[10px] text-brand-taupe mt-3">Each observation's page screenshot or API evidence card is stored with its SHA-256 and locked (S3 Object Lock).</div>
