@@ -18,6 +18,7 @@ import {
 import { mockConfig } from "./mock/config.js";
 import { mockCatalog } from "./mock/catalog.js";
 import { mockHealth } from "./mock/health.js";
+import { mockDetection } from "./mock/detection.js";
 
 export const USE_MOCK = String(import.meta.env.VITE_USE_MOCK ?? "true").toLowerCase() !== "false";
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
@@ -425,6 +426,28 @@ export const api = {
   /** Re-run the failed jobs of the latest run (optionally one source). */
   rerunFailed(client, source) {
     return USE_MOCK ? mockHealth.rerun(client, source) : request(`/accounts/${client.id}/health/rerun`, { method: "POST", body: source ? { source } : {} });
+  },
+
+  // ---------------- Violations (P3) ----------------
+  /** Filters: status / severity (comma lists), source, seller, product, q, active, from, to, limit, offset. */
+  violations(client, filters = {}) {
+    return USE_MOCK ? mockDetection.violations(client, filters) : request(`/accounts/${client.id}/violations${qs(filters)}`);
+  },
+  violation(client, violationId) {
+    return USE_MOCK ? mockDetection.violation(client, violationId) : request(`/accounts/${client.id}/violations/${violationId}`);
+  },
+  setViolationStatus(client, violationId, body) {
+    return USE_MOCK ? mockDetection.setViolationStatus(client, violationId, body) : request(`/accounts/${client.id}/violations/${violationId}/status`, { method: "POST", body });
+  },
+  /** Download the filtered list as CSV (signed in, so fetched with the token). */
+  async downloadViolationsCsv(client, filters = {}) {
+    if (USE_MOCK) throw new Error("CSV export works when the portal is connected to the API.");
+    const res = await fetch(`${API_URL}/accounts/${client.id}/violations.csv${qs(filters)}`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new ApiError(res.status, `Export failed (${res.status})`);
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement("a"), { href: url, download: `violations-${client.name}-${new Date().toISOString().slice(0, 10)}.csv` });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 
   // ---------------- Evidence (real when the backend is on) ----------------

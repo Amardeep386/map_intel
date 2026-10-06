@@ -15,6 +15,10 @@ export const TONE = {
   Staged: AMBER, Included: GREEN, Excluded: GREY,
   include: GREEN, review: AMBER, exclude: GREY,
   Synthetic: "bg-purple-50 text-purple-700 border-purple-200",
+  // Violations (P3)
+  Open: RED, "Needs review": AMBER, "Under notice": "bg-orange-50 text-orange-700 border-orange-200", "Authorised promo": BLUE, Resolved: GREEN, Dismissed: GREY,
+  Minor: GREY, Standard: AMBER, Severe: RED,
+  Published: GREEN, Draft: AMBER, Closed: GREY,
 };
 
 /** $1,299 / $1,299.50; "—" when empty. */

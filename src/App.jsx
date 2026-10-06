@@ -15,23 +15,15 @@ import samsungLogo from "./assets/samsung.png";
 import philipsLogo from "./assets/philips.png";
 import kawasakiLogo from "./assets/kawasaki.png";
 import { api } from "./api/client.js";
-import { Card, KPI, PageHeader, Pill, PrimaryButton, SearchBox, Table } from "./ui.jsx";
+import { Card, KPI, PageHeader, Pill, PrimaryButton, Table } from "./ui.jsx";
 import { WorkspaceContext } from "./workspace.js";
 import { SourcesTermsView } from "./views/SourcesTermsView.jsx";
 import { MapPoliciesView, ProductSummaryView } from "./views/CatalogViews.jsx";
 import { MappingCenterView } from "./views/MappingCenterView.jsx";
 import { SellersView } from "./views/SellersView.jsx";
 import { DataHealthView } from "./views/DataHealthView.jsx";
+import { ViolationsView } from "./views/ViolationsView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
-
-// ---------- Format Currency Utility (USD) ----------
-const formatUSD = (number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2
-  }).format(number);
-};
 
 const SEVERITY_COLORS = { Critical: "#dc2626", High: "#ea580c", Medium: "#f59e0b", Low: "#64748B" };
 const SEVERITY_BG = { Critical: "bg-red-50 text-red-700 border-red-200", High: "bg-orange-50 text-orange-700 border-orange-200", Medium: "bg-amber-50 text-amber-700 border-amber-200", Low: "bg-slate-50 text-slate-700 border-slate-200" };
@@ -189,41 +181,6 @@ function OverviewView({ onOpenViolation, clientName }) {
           </div>
         </Card>
       </div>
-    </div>
-  );
-}
-
-function ViolationsView({ onOpenViolation, clientName }) {
-  const { db } = React.useContext(DataContext);
-  const violations = (db[clientName] || EMPTY_WORKSPACE).violations;
-  const [q, setQ] = useState("");
-  const filtered = violations.filter((v) => (v.product + v.merchant + v.id).toLowerCase().includes(q.toLowerCase()));
-  return (
-    <div>
-      <PageHeader title={`Violations — ${clientName} (Sandbox)`} />
-      <Card>
-        <div className="flex justify-between mb-4">
-          <SearchBox value={q} onChange={setQ} placeholder="Search SKU, merchant..." />
-        </div>
-        <Table columns={["Violation ID", "SKU / Product", "Merchant / Seller", "MAP", "Advertised", "Gap", "Duration", "Severity", "Status"]}>
-          {filtered.map((v) => (
-            <tr key={v.id} onClick={() => onOpenViolation(v)} className="border-b border-brand-beige hover:bg-brand-beige/20 cursor-pointer">
-              <td className="py-2 px-3 font-semibold text-brand-copper">{v.id}</td>
-              <td className="py-2 px-3">
-                <div className="text-brand-charcoal font-semibold">{v.product}</div>
-                <div className="text-xs text-brand-taupe">{v.sku}</div>
-              </td>
-              <td className="py-2 px-3 text-brand-charcoal"><MerchantLogo name={v.merchant} /></td>
-              <td className="py-2 px-3 text-brand-charcoal">${v.map}</td>
-              <td className="py-2 px-3 text-brand-charcoal">${v.advertised}</td>
-              <td className="py-2 px-3 text-red-600 font-bold">{v.gap}%</td>
-              <td className="py-2 px-3 text-brand-taupe">{v.duration}</td>
-              <td className="py-2 px-3"><Pill text={v.severity} tone={SEVERITY_BG[v.severity]} /></td>
-              <td className="py-2 px-3"><Pill text={v.status} tone={STATUS_BG[v.status] || STATUS_BG.Open} /></td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
     </div>
   );
 }
@@ -732,7 +689,7 @@ export default function App() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, duration);
   }, []);
-  const workspaceCtx = useMemo(() => ({ client, actions, showToast }), [client, actions, showToast]);
+  const workspaceCtx = useMemo(() => ({ client, actions, showToast, chartColors, go: setView }), [client, actions, showToast, chartColors]);
 
   const updateWorkspace = (clientName, fn) => {
     setDb(prev => ({ ...prev, [clientName]: fn(prev[clientName] || EMPTY_WORKSPACE) }));
@@ -821,7 +778,7 @@ export default function App() {
       case "pricing": return <MapPoliciesView />;
       case "merchants": return <SellersView />;
       case "health": return <DataHealthView />;
-      case "violations": return <ViolationsView onOpenViolation={setViolation} clientName={client.name} />;
+      case "violations": return <ViolationsView />;
       case "email": return <EmailCenterView clientName={client.name} />;
       case "reports": return <ReportsView clientName={client.name} />;
       case "alerts": return <AlertsView clientName={client.name} />;

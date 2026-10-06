@@ -80,26 +80,25 @@ export async function loadContext(db: Db, accountId: string, obs: ObservationRow
   const base = await readJudgeSettings(db, accountId);
   const products = [...new Set(obs.map((o) => o.product_id))];
   const sellers = [...new Set(obs.map((o) => o.seller_id).filter((s): s is string => !!s))];
-  const [maps, classes, promos, cats] = await Promise.all([
-    db.query(
+  // One query at a time: pg does not allow parallel queries on one client.
+  const maps = await db.query(
       `SELECT id, product_id, amount::float8 AS amount, currency, region, effective_from AS "from", effective_to AS "to"
          FROM map_price WHERE account_id = $1 AND product_id = ANY($2::uuid[])`,
       [accountId, products],
-    ),
-    db.query(
+    );
+  const classes = await db.query(
       `SELECT seller_id, class, effective_from AS "from", effective_to AS "to"
          FROM seller_classification WHERE account_id = $1 AND seller_id = ANY($2::uuid[])`,
       [accountId, sellers],
-    ),
-    db.query(
+    );
+  const promos = await db.query(
       `SELECT w.id, p.product_id, p.promo_amount::float8 AS amount, w.effective_from AS "from", w.effective_to AS "to", w.cancelled_at,
               (SELECT array_agg(s.seller_id) FROM promo_window_seller s WHERE s.promo_id = w.id) AS sellers
          FROM promo_window w JOIN promo_window_product p ON p.promo_id = w.id
         WHERE w.account_id = $1 AND p.product_id = ANY($2::uuid[])`,
       [accountId, products],
-    ),
-    db.query('SELECT id, category FROM product WHERE account_id = $1 AND id = ANY($2::uuid[])', [accountId, products]),
-  ]);
+    );
+  const cats = await db.query('SELECT id, category FROM product WHERE account_id = $1 AND id = ANY($2::uuid[])', [accountId, products]);
   return {
     ...base,
     rules: rules ?? (await loadRules(db, accountId)),

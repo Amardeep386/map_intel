@@ -9,6 +9,7 @@ import { closeDb, pool, type Db } from '../../src/lib/db.js';
 import { judgeAccount } from '../../src/lib/judge.js';
 import { dryRun, publish, replay } from '../../src/lib/ruleAdmin.js';
 import { contentHash } from '../../src/lib/rules.js';
+import { changeStatus, listViolations, violationDetail } from '../../src/lib/violations.js';
 import { closeQueue } from '../../src/lib/queue.js';
 import { call, createTestAccount, createUser, expectRefused, removeTestAccounts, removeTestUsers, testApp, type TestUser } from './helpers.js';
 
@@ -258,4 +259,52 @@ test('routes: Rules list, draft -> publish refused -> dry run -> publish; roles'
   assert.equal(created.json().code, 'R-02');
   const bad = await call(app, u.manager, 'POST', base, { name: 'x', condition: { type: 'below_map' }, verdict: 'violation', severity: { minorBelowPct: 20, severeAbovePct: 10 } });
   assert.equal(bad.statusCode, 400);
+});
+
+test('violations: list, detail with history, status changes as events (reasons, closed episodes refused)', async () => {
+  await scratch(async (db) => {
+    const w = await world(db, 'vlist');
+    await db.query("INSERT INTO map_price (account_id, product_id, amount, effective_from) VALUES ($1, $2, 1000, $3)", [w.account, w.product, d('09-01T00:00:00')]);
+    await observe(db, w, d('10-02T00:00:00'), 700);
+    await observe(db, w, d('10-03T00:00:00'), 650);
+    await judgeAccount(db, w.account, { trigger: 'test' });
+
+    const { total, rows } = await listViolations(db, { status: ['Open'], q: 'det-1' });
+    const mine = rows.filter((r) => r.product_id === w.product);
+    assert.ok(total >= 1);
+    assert.equal(mine.length, 1);
+    const v = mine[0];
+    assert.deepEqual([v.code, v.seller, v.source_code, v.severity, v.observations, v.last_price, v.last_map], ['V-00001', 'Det Seller', 'walmart_us', 'Severe', 2, 650, 1000]);
+
+    await assert.rejects(changeStatus(db, w.account, v.id, 'Dismissed', null, null), /reason/);
+    await changeStatus(db, w.account, v.id, 'Under notice', null, null);
+    await assert.rejects(changeStatus(db, w.account, v.id, 'Under notice', null, null), /already/);
+    await changeStatus(db, w.account, v.id, 'Resolved', 'Seller fixed the price by phone', null);
+    await assert.rejects(changeStatus(db, w.account, v.id, 'Open', null, null), /ended/);
+
+    const det = await violationDetail(db, v.id);
+    assert.deepEqual(det!.events.map((e: { status: string }) => e.status), ['Open', 'Under notice', 'Resolved']);
+    assert.equal(det!.history.length, 2);
+    assert.ok(det!.history.every((h: { in_violation: boolean }) => h.in_violation));
+
+    // A later breach of the same listing opens a new violation.
+    await observe(db, w, d('10-05T00:00:00'), 600);
+    await judgeAccount(db, w.account, { trigger: 'test' });
+    assert.equal((await listViolations(db, { productId: w.product })).total, 2);
+  });
+});
+
+test('routes: Violations read for Brand users, status changes for Analysts, CSV export', async () => {
+  const base = `/accounts/${acct}/violations`;
+  const res = await call(app, u.brand, 'GET', `${base}?status=Open,Needs%20review&active=true`);
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(res.json().total, 0);
+  assert.equal((await call(app, u.brand, 'GET', `${base}?status=Bogus`)).statusCode, 400);
+  const missing = '00000000-0000-4000-8000-000000000000';
+  assert.equal((await call(app, u.brand, 'POST', `${base}/${missing}/status`, { status: 'Dismissed', reason: 'x' })).statusCode, 403);
+  assert.equal((await call(app, u.analyst, 'POST', `${base}/${missing}/status`, { status: 'Dismissed', reason: 'x' })).statusCode, 404);
+  const csv = await call(app, u.analyst, 'GET', `${base}.csv`);
+  assert.equal(csv.statusCode, 200);
+  assert.match(csv.headers['content-type'] as string, /text\/csv/);
+  assert.ok(csv.body.startsWith('Violation,SKU,Product'));
 });
