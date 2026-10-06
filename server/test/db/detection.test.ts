@@ -471,7 +471,7 @@ test('SFTP delivery: vault credential, pinned host key, files from S3 arrive wit
   const { encrypt } = await import('../../src/lib/vault.js');
   const { deliverRun } = await import('../../src/lib/reportRunner.js');
   const { fingerprint } = await import('../../src/lib/sftp.js'); // also registers SFTP delivery
-  const { startSftp } = await import('../sftpServer.js');
+  const { startSftp } = await import('../../src/lib/sftpTestServer.js');
   const { createHash } = await import('node:crypto');
   const srv = await startSftp('lgdrop', 'drop-pass-1', fingerprint);
   try {

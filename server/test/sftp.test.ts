@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { fingerprint, SftpError, testConnection, uploadFiles, type SftpLogin } from '../src/lib/sftp.js';
-import { startSftp, type TestSftp } from './sftpServer.js';
+import { startSftp, type TestSftp } from '../src/lib/sftpTestServer.js';
 
 let srv: TestSftp;
 let login: SftpLogin;

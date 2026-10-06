@@ -32,6 +32,7 @@
     "synthetic": "tsx src/scripts/synthetic-candidates.ts",
     "exit:p2a": "tsx src/scripts/exit-p2a.ts",
     "exit:p2b": "tsx src/scripts/exit-p2b.ts",
+    "exit:p3": "tsx src/scripts/exit-p3.ts",
     "catalogue:demo": "tsx src/scripts/load-demo-catalogue.ts",
     "terms:reset": "tsx src/scripts/reset-terms.ts",
     "slice:lg": "tsx src/scripts/slice-lg.ts",

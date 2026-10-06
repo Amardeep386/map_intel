@@ -1,4 +1,4 @@
-// A small in-memory SFTP server for tests (ssh2). Password login, one user, files kept in a Map.
+// A small in-memory SFTP server for tests and the P3 exit test (ssh2). Password login, one user, files in a Map.
 import { posix } from 'node:path';
 import ssh2 from 'ssh2';
 
