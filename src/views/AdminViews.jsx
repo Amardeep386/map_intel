@@ -90,9 +90,9 @@ export function SettingsView() {
         <Card title="Match confidence thresholds">
           <div className="space-y-3 text-xs">
             <div className="h-3 rounded-full overflow-hidden flex">
-              <div className="bg-red-300" style={{ width: `${review}%` }} />
-              <div className="bg-amber-300" style={{ width: `${Math.max(include - review, 0)}%` }} />
-              <div className="bg-emerald-400" style={{ width: `${Math.max(100 - include, 0)}%` }} />
+              <div className="bg-red-200" style={{ width: `${review}%` }} />
+              <div className="bg-amber-200" style={{ width: `${Math.max(include - review, 0)}%` }} />
+              <div className="bg-emerald-200" style={{ width: `${Math.max(100 - include, 0)}%` }} />
             </div>
             <div className="flex justify-between text-brand-taupe"><span>0</span><span>Auto-exclude &lt; {review}</span><span>Review {review}–{include - 1}</span><span>Auto-include ≥ {include}</span><span>100</span></div>
             <div className="grid grid-cols-3 gap-3">

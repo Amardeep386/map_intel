@@ -2,16 +2,38 @@
 /* docs/reference/ holds the prototype (reference code, not part of the app): keep its classes out of the build */
 @source not "../docs/reference";
 
+/* Theme tokens live in mirethos-theme.css; these names make them Tailwind colours. */
 @theme {
-  --color-brand-ivory: var(--bg-primary);      /* Backgrounds */
-  --color-brand-beige: var(--border-color);    /* Borders */
+  --color-brand-ivory: var(--bg-primary);      /* Page */
+  --color-brand-beige: var(--border-color);    /* Hairlines (also light fills) */
   --color-brand-taupe: var(--text-muted);      /* Muted text */
-  --color-brand-copper: var(--accent-coral);   /* Primary accent */
-  --color-brand-charcoal: var(--text-primary); /* Dark text/headings */
-  --color-brand-sidebar: var(--card-bg);       /* Sidebar background */
-  --color-brand-white: var(--card-bg);         /* Card Backgrounds */
-  --color-brand-olive: var(--accent-sage);     /* Secondary accent */
+  --color-brand-copper: var(--accent-coral);   /* The client's accent */
+  --color-brand-charcoal: var(--text-primary); /* Ink */
+  --color-brand-sidebar: var(--rail);          /* Sidebar */
+  --color-brand-white: var(--card-bg);         /* Surfaces */
+  --color-brand-olive: var(--accent-sage);     /* Quiet fill */
   --color-on-accent: var(--accent-contrast);   /* Text on the accent colour */
-  
-  --font-sans: 'Outfit', sans-serif;
+
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink-2: var(--ink-2);
+  --color-line-strong: var(--line-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-action-ink: var(--action-ink);
+  --color-rail: var(--rail);
+  --color-rail-2: var(--rail-2);
+  --color-rail-line: var(--rail-line);
+  --color-rail-ink: var(--rail-ink);
+  --color-rail-ink-2: var(--rail-ink-2);
+  --color-rail-accent: var(--rail-accent);
+  --color-copper-300: var(--copper-300);
+  --color-copper-500: var(--copper-500);
+  --color-copper-700: var(--copper-700);
+  --color-champagne: var(--champagne);
+
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }

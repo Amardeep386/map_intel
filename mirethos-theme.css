@@ -1,295 +1,202 @@
 /*
- * Mirethos Core Stylesheet (mirethos-theme.css)
- * This contains all custom CSS variables (light and dark mode), typography setup,
- * global overlays, micro-animations, custom scrollbars, selections, magnetic buttons, 
- * and spotlight cards.
+ * Mirethos theme (MAP Intel portal).
+ *
+ * The frame is Mirethos: the brushed-copper logo on deep espresso, warm porcelain pages, white
+ * surfaces with hairline borders, near-black warm ink. The open client's brand colour is the
+ * accent (active states, links, focus, key chart series) and is only ever used in small doses;
+ * App.jsx sets --accent-brand from the client. Copper ramp sampled from the logo:
+ * #3D1304 · #773C20 · #AB5C36 · #DA9066 · #FCE8C3.
+ *
+ * Older variable names (--bg-primary, --card-bg, --accent-coral …) are kept: every screen reads
+ * them through the brand-* Tailwind colours in src/index.css.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Reenie+Beanie&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Creamy Sand Light Theme */
-  --bg-primary: #FAF6EE;
-  --text-primary: #3C2F2F;
-  --text-muted: #6B5A4F;          /* 5.9:1 on the page colour (was #827064, 4.4:1) */
-  --card-bg: #FFFFFF;
-  --accent-coral: var(--accent-brand, #A65E44);
-  --accent-sage: #F0E6D2;
-  --accent-lavender: #EADEC9;
-  --glow-color-rgb: 166, 94, 68;
-  --border-color: rgba(60, 47, 47, 0.12);
-  --shadow-soft: 0 4px 20px -2px rgba(60, 47, 47, 0.05), 0 2px 8px -1px rgba(60, 47, 47, 0.03);
+  /* Copper, from the logo */
+  --copper-900: #3D1304;
+  --copper-800: #5A2812;
+  --copper-700: #773C20;
+  --copper-600: #91492A;
+  --copper-500: #AB5C36;
+  --copper-400: #C3754F;
+  --copper-300: #DA9066;
+  --copper-200: #EBC2A3;
+  --copper-100: #F6E3D2;
+  --champagne: #FCE8C3;
+  --copper-sheen: linear-gradient(135deg, #DA9066 0%, #AB5C36 48%, #773C20 100%);
 
-  /* Text on the accent colour (buttons, badges); App sets it from the brand's accent. */
+  /* Neutrals (light) */
+  --canvas: #F6F3EF;
+  --surface: #FFFFFF;
+  --surface-2: #FAF8F5;           /* table heads, subtle fills */
+  --surface-3: #F2EEE9;           /* hover, pressed */
+  --line: rgba(58, 38, 24, 0.10);
+  --line-strong: rgba(58, 38, 24, 0.18);
+  --ink: #1C1714;
+  --ink-2: #4A3F38;
+  --ink-3: #6E6158;               /* muted text: 5.6:1 on white */
+
+  /* The client's colour (App.jsx), and what is derived from it */
+  --accent: var(--accent-brand, #AB5C36);
+  --accent-soft: color-mix(in oklab, var(--accent) 9%, var(--surface));
+  --accent-line: color-mix(in oklab, var(--accent) 32%, var(--surface));
   --accent-contrast: #FFFFFF;
 
-  /* Map to Tailwind Theme Variables */
+  /* Primary action: espresso, so the client colour never paints large areas */
+  --action: #1C1714;
+  --action-hover: #3A2F29;
+  --action-ink: #FBF8F4;
+
+  /* Sidebar: espresso in both themes */
+  --rail: #17120F;
+  --rail-2: #201915;
+  --rail-line: rgba(252, 232, 195, 0.08);
+  --rail-ink: #EFE7DE;
+  --rail-ink-2: #A7998D;
+  --rail-accent: var(--accent-brand-dark, #DA9066);
+
+  --shadow-1: 0 1px 2px rgba(28, 23, 20, 0.04);
+  --shadow-2: 0 1px 2px rgba(28, 23, 20, 0.05), 0 8px 24px -12px rgba(28, 23, 20, 0.12);
+  --shadow-3: 0 24px 64px -16px rgba(28, 23, 20, 0.28);
+
+  /* Older names used across the screens */
+  --bg-primary: var(--canvas);
+  --text-primary: var(--ink);
+  --text-muted: var(--ink-3);
+  --card-bg: var(--surface);
+  --accent-coral: var(--accent);
+  --accent-sage: var(--surface-3);
+  --accent-lavender: var(--surface-3);
+  --border-color: var(--line);
+  --shadow-soft: var(--shadow-2);
+  --glow-color-rgb: 171, 92, 54;
+
   --color-brand-ivory: var(--bg-primary);
   --color-brand-beige: var(--border-color);
   --color-brand-taupe: var(--text-muted);
   --color-brand-copper: var(--accent-coral);
   --color-brand-charcoal: var(--text-primary);
-  --color-brand-sidebar: var(--bg-primary);
+  --color-brand-sidebar: var(--rail);
   --color-brand-white: var(--card-bg);
   --color-brand-olive: var(--accent-sage);
+
+  /* Status colours, tuned warm and quiet (Tailwind's defaults read as generic). */
+  --color-emerald-50: #EEF5EF;  --color-emerald-200: #CBE0D0;  --color-emerald-500: #4E9A6A;  --color-emerald-600: #357A50;  --color-emerald-700: #2C6643;
+  --color-red-50: #FBEFEC;      --color-red-200: #EFCDC4;      --color-red-500: #C2412D;      --color-red-600: #B0341F;      --color-red-700: #932B1A;  --color-red-800: #74210F;
+  --color-amber-50: #FBF4E6;    --color-amber-200: #EDD7A8;    --color-amber-500: #C98A2B;    --color-amber-600: #A66F1A;    --color-amber-700: #855714;  --color-amber-800: #6A4510;
+  --color-orange-50: #FBF0E7;   --color-orange-200: #EFD0B8;   --color-orange-600: #A9531F;   --color-orange-700: #8C451A;
+  --color-blue-50: #EEF2F7;     --color-blue-200: #CCD7E6;     --color-blue-600: #3A5A88;     --color-blue-700: #2F4A72;
+  --color-slate-50: #F4F2EF;    --color-slate-100: #EBE8E4;    --color-slate-200: #DDD8D2;    --color-slate-500: #857C74;    --color-slate-600: #5F5852;  --color-slate-700: #4A4440;
+  --color-purple-50: #F3EFF7;   --color-purple-200: #DACFE7;   --color-purple-700: #5A3F7C;
 }
 
-:root.dark, body.dark {
-  /* Enhanced Chocolate Dark Theme (Matching Light Theme) */
-  --bg-primary: #17110F;         /* Rich Espresso background */
-  --text-primary: #FAF6EE;       /* Warm off-white text to match light bg */
-  --text-muted: #A9998E;         /* Warm muted taupe */
-  --card-bg: #221916;            /* Deep Cocoa for elevated cards */
-  --accent-coral: var(--accent-brand, #E38663);       /* Vibrant Terracotta/Coral for primary actions */
-  --accent-sage: #53423B;        /* Earthy brown for secondary elements */
-  --accent-lavender: #4A3A34;    /* Deeper earthy tone for variety */
-  --glow-color-rgb: 227, 134, 99;
-  --border-color: rgba(250, 246, 238, 0.11); /* Subtle warm glass border */
-  --shadow-soft: 0 8px 32px -4px rgba(0, 0, 0, 0.6), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+:root.dark {
+  --canvas: #110D0B;
+  --surface: #1A1411;
+  --surface-2: #1F1814;
+  --surface-3: #2A211C;
+  --line: rgba(252, 232, 210, 0.08);
+  --line-strong: rgba(252, 232, 210, 0.16);
+  --ink: #F3EDE6;
+  --ink-2: #D3C7BB;
+  --ink-3: #A2948A;
 
-  /* Map to Tailwind Theme Variables */
-  --color-brand-ivory: var(--bg-primary);
-  --color-brand-beige: var(--border-color);
-  --color-brand-taupe: var(--text-muted);
-  --color-brand-copper: var(--accent-coral);
-  --color-brand-charcoal: var(--text-primary);
-  --color-brand-sidebar: var(--bg-primary);
-  --color-brand-white: var(--card-bg);
-  --color-brand-olive: var(--accent-sage);
+  --accent: var(--accent-brand, #DA9066);
+  --action: #F3EDE6;
+  --action-hover: #FFFFFF;
+  --action-ink: #17120F;
+
+  --rail: #0C0907;
+  --rail-2: #16110E;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  --shadow-3: 0 24px 64px -16px rgba(0, 0, 0, 0.8);
+  --glow-color-rgb: 218, 144, 102;
+
+  /* Status colours for a dark page: light text, dark tints. */
+  --color-red-600: oklch(72% 0.15 28);
+  --color-red-700: oklch(80% 0.11 25);
+  --color-red-800: oklch(88% 0.06 22);
+  --color-emerald-600: oklch(74% 0.12 158);
+  --color-emerald-700: oklch(80% 0.11 158);
+  --color-amber-600: oklch(80% 0.13 78);
+  --color-amber-700: oklch(84% 0.13 80);
+  --color-amber-800: oklch(89% 0.11 85);
+  --color-orange-700: oklch(82% 0.11 60);
+  --color-blue-700: oklch(81% 0.08 252);
+  --color-purple-700: oklch(82% 0.09 306);
+  --color-slate-600: oklch(72% 0.02 60);
+  --color-slate-700: oklch(85% 0.015 60);
+
+  --color-red-50: color-mix(in oklch, oklch(60% 0.17 28) 16%, var(--surface));
+  --color-emerald-50: color-mix(in oklch, oklch(62% 0.12 158) 15%, var(--surface));
+  --color-amber-50: color-mix(in oklch, oklch(70% 0.14 78) 14%, var(--surface));
+  --color-orange-50: color-mix(in oklch, oklch(66% 0.15 50) 14%, var(--surface));
+  --color-blue-50: color-mix(in oklch, oklch(60% 0.1 252) 16%, var(--surface));
+  --color-purple-50: color-mix(in oklch, oklch(60% 0.14 306) 16%, var(--surface));
+  --color-slate-50: color-mix(in oklch, oklch(55% 0.02 60) 14%, var(--surface));
+  --color-slate-100: color-mix(in oklch, oklch(55% 0.02 60) 22%, var(--surface));
+
+  --color-red-200: color-mix(in oklch, oklch(60% 0.17 28) 38%, var(--surface));
+  --color-emerald-200: color-mix(in oklch, oklch(62% 0.12 158) 34%, var(--surface));
+  --color-amber-200: color-mix(in oklch, oklch(70% 0.14 78) 34%, var(--surface));
+  --color-orange-200: color-mix(in oklch, oklch(66% 0.15 50) 34%, var(--surface));
+  --color-blue-200: color-mix(in oklch, oklch(60% 0.1 252) 38%, var(--surface));
+  --color-purple-200: color-mix(in oklch, oklch(60% 0.14 306) 38%, var(--surface));
+  --color-slate-200: color-mix(in oklch, oklch(55% 0.02 60) 38%, var(--surface));
 }
 
-/* Base Body Styling */
+html, body {
+  background-color: var(--canvas);
+  color: var(--ink);
+}
 body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  transition: background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1), color 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Selection Color Override */
+/* Numbers line up in tables and KPIs. */
+.tabular-nums, table, .kpi-value { font-variant-numeric: tabular-nums; }
+
 ::selection {
-  background: var(--accent-coral);
-  color: #292524;
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  color: inherit;
 }
 
-/* Custom Scrollbar override */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 99px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-coral);
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--accent) 55%, transparent);
+  outline-offset: 2px;
 }
 
-/* SVG Grain overlay layer */
-.grain-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-  opacity: 0.35;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-3); background-clip: padding-box; }
+.rail ::-webkit-scrollbar-thumb { background: var(--rail-line); background-clip: padding-box; }
 
-/* Mouse-Revealed Background Grid overlay */
-#grid-bg {
-  background-image: 
-    linear-gradient(rgba(166, 94, 68, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(166, 94, 68, 0.08) 1px, transparent 1px);
-  background-size: 50px 50px;
-  mask-image: radial-gradient(300px circle at var(--grid-mouse-x, -1000px) var(--grid-mouse-y, -1000px), black 20%, transparent 80%);
-  -webkit-mask-image: radial-gradient(300px circle at var(--grid-mouse-x, -1000px) var(--grid-mouse-y, -1000px), black 20%, transparent 80%);
-  will-change: mask-image, -webkit-mask-image;
-}
-
-body.dark #grid-bg {
-  background-image: 
-    linear-gradient(rgba(223, 154, 125, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(223, 154, 125, 0.05) 1px, transparent 1px);
-}
-
-/* Utility Animations */
-@keyframes marquee {
-  0% { transform: translateX(0%); }
-  100% { transform: translateX(-50%); }
-}
-.animate-marquee {
-  animation: marquee 30s linear infinite;
-}
-
-/* Float Animations for Cards */
-@keyframes float-slow {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-12px) rotate(1.5deg); }
-}
-@keyframes float-slower {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(12px) rotate(-1.5deg); }
-}
-.animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
-.animate-float-slower { animation: float-slower 8s ease-in-out infinite; }
-
-/* Blob blur animations */
-@keyframes float-blob-1 {
-  0%, 100% { transform: translateY(0px) scale(1); }
-  50% { transform: translateY(-12px) scale(1.03); }
-}
-@keyframes float-blob-2 {
-  0%, 100% { transform: translateY(0px) scale(1); }
-  50% { transform: translateY(12px) scale(0.97); }
-}
-.animate-blob-1 { animation: float-blob-1 8s ease-in-out infinite; }
-.animate-blob-2 { animation: float-blob-2 10s ease-in-out infinite; }
-
-/* No scrollbar helpers */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Pulse Accent indicator */
-@keyframes pulse-coral {
-  0% { box-shadow: 0 0 0 0 rgba(255, 183, 178, 0.4); }
-  70% { box-shadow: 0 0 0 15px rgba(255, 183, 178, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 183, 178, 0); }
-}
-.animate-pulse-coral { animation: pulse-coral 2s infinite; }
-
-/* Magnetic Button sweep effect */
-.btn-magnetic {
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.1s ease-out;
-}
-.btn-magnetic::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
-  transform: translateX(-100%);
-  transition: none;
-  pointer-events: none;
-}
-.btn-magnetic:hover::after {
-  transform: translateX(100%);
-  transition: transform 0.8s ease-in-out;
+/* The copper wordmark: letter-spaced caps with the logo's sheen. */
+.wordmark {
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  background: linear-gradient(180deg, #F1D2B6 0%, #DA9066 55%, #B86A43 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-/* Magic Bento Spotlight Card styling */
-.magic-card {
-  --spotlight-radius: 300px;
-  will-change: transform;
-  transform-style: preserve-3d;
-  position: relative;
-  overflow: hidden;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-.magic-card:hover {
-  border-color: rgba(var(--glow-color-rgb), 0.3) !important;
-  box-shadow: 0 10px 30px -10px rgba(var(--glow-color-rgb), 0.1);
-}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.animate-fade-in { animation: fade-in 180ms ease-out; }
 
-.spotlight-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(var(--spotlight-radius) circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
-      rgba(var(--glow-color-rgb), 0.08),
-      transparent 80%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  z-index: 1;
-}
-.magic-card:hover .spotlight-overlay { opacity: 1; }
+.no-transition, .no-transition * { transition: none !important; }
 
-.border-glow {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: radial-gradient(var(--spotlight-radius) circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
-      rgba(var(--glow-color-rgb), 0.5),
-      transparent 40%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  z-index: 2;
-}
-.magic-card:hover .border-glow { opacity: 1; }
-
-/* Font Family Helper Mappings */
-.font-sans {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-}
-.font-cursive {
-  font-family: 'Reenie Beanie', cursive;
-}
-
-/* Custom circular clip path transition */
-::view-transition-old(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-::view-transition-new(root) {
-  animation: clipPathReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  mix-blend-mode: normal;
-}
-@keyframes clipPathReveal {
-  from {
-    clip-path: circle(0% at var(--click-x, 50%) var(--click-y, 50%));
-  }
-  to {
-    clip-path: circle(150% at var(--click-x, 50%) var(--click-y, 50%));
-  }
-}
-
-.no-transition,
-.no-transition * {
-  transition: none !important;
-}
-
-/*
- * Dark mode: the status colours (green / red / amber / blue / slate ...) are written for a light page
- * (text-*-600/700/800 on bg-*-50 with border-*-200). On the dark page those texts are too dark to
- * read and the tints glow white, so dark mode swaps in light text shades and dark tints.
- */
-:root.dark {
-  --color-red-600: oklch(70.4% 0.191 22.216);
-  --color-red-700: oklch(80.8% 0.114 19.571);
-  --color-red-800: oklch(88.5% 0.062 18.334);
-  --color-emerald-700: oklch(76.5% 0.177 163.223);
-  --color-amber-700: oklch(82.8% 0.189 84.429);
-  --color-amber-800: oklch(87.9% 0.169 91.605);
-  --color-orange-700: oklch(83.7% 0.128 66.29);
-  --color-blue-700: oklch(80.9% 0.105 251.813);
-  --color-purple-700: oklch(82.7% 0.119 306.383);
-  --color-slate-600: oklch(70.4% 0.04 256.788);
-  --color-slate-700: oklch(86.9% 0.022 252.894);
-
-  --color-red-50: color-mix(in oklch, oklch(63.7% 0.237 25.331) 16%, var(--card-bg));
-  --color-emerald-50: color-mix(in oklch, oklch(69.6% 0.17 162.48) 14%, var(--card-bg));
-  --color-amber-50: color-mix(in oklch, oklch(76.9% 0.188 70.08) 14%, var(--card-bg));
-  --color-orange-50: color-mix(in oklch, oklch(70.5% 0.213 47.604) 14%, var(--card-bg));
-  --color-blue-50: color-mix(in oklch, oklch(62.3% 0.214 259.815) 16%, var(--card-bg));
-  --color-purple-50: color-mix(in oklch, oklch(62.7% 0.265 303.9) 16%, var(--card-bg));
-  --color-slate-50: color-mix(in oklch, oklch(55.4% 0.046 257.417) 14%, var(--card-bg));
-  --color-slate-100: color-mix(in oklch, oklch(55.4% 0.046 257.417) 22%, var(--card-bg));
-
-  --color-red-200: color-mix(in oklch, oklch(63.7% 0.237 25.331) 40%, var(--card-bg));
-  --color-emerald-200: color-mix(in oklch, oklch(69.6% 0.17 162.48) 36%, var(--card-bg));
-  --color-amber-200: color-mix(in oklch, oklch(76.9% 0.188 70.08) 36%, var(--card-bg));
-  --color-orange-200: color-mix(in oklch, oklch(70.5% 0.213 47.604) 36%, var(--card-bg));
-  --color-blue-200: color-mix(in oklch, oklch(62.3% 0.214 259.815) 40%, var(--card-bg));
-  --color-purple-200: color-mix(in oklch, oklch(62.7% 0.265 303.9) 40%, var(--card-bg));
-  --color-slate-200: color-mix(in oklch, oklch(55.4% 0.046 257.417) 40%, var(--card-bg));
-}
+.font-sans { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; }
+.font-mono { font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }

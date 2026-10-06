@@ -10,6 +10,7 @@ import appleLogo from "./assets/apple.png";
 import samsungLogo from "./assets/samsung.png";
 import philipsLogo from "./assets/philips.png";
 import kawasakiLogo from "./assets/kawasaki.png";
+import mirethosMark from "./assets/mirethos-mark.png";
 import { api } from "./api/client.js";
 import { Card, PageHeader, Pill, PrimaryButton, Table } from "./ui.jsx";
 import { WorkspaceContext } from "./workspace.js";
@@ -50,7 +51,7 @@ function ClientLogo({ name, className }) {
   if (src && !error) {
     return (
       // Always a white tile, in dark mode too: brand marks are made for white (Apple's is black).
-      <div className={`flex items-center justify-center overflow-hidden bg-white ${className || "w-5 h-5 rounded-sm"}`}>
+      <div className={`flex items-center justify-center overflow-hidden bg-white ring-1 ring-black/5 ${className || "w-5 h-5 rounded-sm"}`}>
         <img 
           src={src} 
           alt={name} 
@@ -173,38 +174,41 @@ function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
 }
 
 // ---------- Navigation layout menu ----------
+// Grouped as the work flows: watch, catalogue, collection, enforcement, administration.
 const NAV = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "product", label: "Product Summary", icon: Package },
-  { id: "mapping", label: "Mapping Center", icon: Shuffle, needs: "mapping.read" },
-  { id: "sources", label: "Sources & Terms", icon: Radar, needs: "sources.read" },
-  { id: "health", label: "Data Health", icon: Activity, needs: "health.read" },
-  { id: "pricing", label: "MAP Policies", icon: DollarSign },
-  { id: "merchants", label: "Sellers", icon: Store, needs: "sellers.read" },
-  { id: "violations", label: "Violations", icon: AlertTriangle, needs: "violations.read" },
-  { id: "rules", label: "Rules", icon: Scale, needs: "rules.read" },
-  { id: "email", label: "Email Center", icon: Mail },
-  { id: "reports", label: "Reports", icon: FileText, needs: "reports.read" },
-  { id: "alerts", label: "Alerts", icon: Bell, needs: "alerts.read" },
-  { id: "settings", label: "Settings", icon: SettingsIcon, needs: "settings.read" },
-  { id: "users", label: "Users & Access", icon: Users, needs: "users.read" },
-  { id: "audit", label: "Audit Log", icon: ClipboardList, needs: "audit.read" },
+  { id: "overview", label: "Overview", icon: LayoutDashboard, group: "" },
+  { id: "violations", label: "Violations", icon: AlertTriangle, needs: "violations.read", group: "Monitor" },
+  { id: "alerts", label: "Alerts", icon: Bell, needs: "alerts.read", group: "Monitor" },
+  { id: "reports", label: "Reports", icon: FileText, needs: "reports.read", group: "Monitor" },
+  { id: "product", label: "Product Summary", icon: Package, group: "Catalogue" },
+  { id: "pricing", label: "MAP Policies", icon: DollarSign, group: "Catalogue" },
+  { id: "merchants", label: "Sellers", icon: Store, needs: "sellers.read", group: "Catalogue" },
+  { id: "mapping", label: "Mapping Center", icon: Shuffle, needs: "mapping.read", group: "Collection" },
+  { id: "sources", label: "Sources & Terms", icon: Radar, needs: "sources.read", group: "Collection" },
+  { id: "health", label: "Data Health", icon: Activity, needs: "health.read", group: "Collection" },
+  { id: "rules", label: "Rules", icon: Scale, needs: "rules.read", group: "Collection" },
+  { id: "email", label: "Email Center", icon: Mail, group: "Enforcement" },
+  { id: "settings", label: "Settings", icon: SettingsIcon, needs: "settings.read", group: "Admin" },
+  { id: "users", label: "Users & Access", icon: Users, needs: "users.read", group: "Admin" },
+  { id: "audit", label: "Audit Log", icon: ClipboardList, needs: "audit.read", group: "Admin" },
 ];
 
 export const DataContext = React.createContext(null);
 
 const EMPTY_WORKSPACE = { skus: [], violations: [], merchants: [], mappingStage: [], mappingInclude: [], mappingExclude: [], promotions: [] };
 const EMPTY_SHARED = { emails: [], reports: [], alertRules: [], alertUnread: 0, users: [], audit: [], severityDist: [], trend: [] };
-const DEFAULT_CHART_COLORS = { grid: "rgba(60, 47, 47, 0.08)", muted: "#827064", text: "#3C2F2F", card: "#FFFFFF", accent: "#A65E44" };
+const DEFAULT_CHART_COLORS = { grid: "rgba(58, 38, 24, 0.10)", muted: "#6E6158", text: "#1C1714", card: "#FFFFFF", accent: "#AB5C36" };
 
+// Each client's colour, tuned to read well as an accent: light = on a white page, dark = on espresso.
 const BRAND_COLORS = {
-  LG: { light: "#A50034", dark: "#FF4D6D" },
-  Philips: { light: "#0066A1", dark: "#3B82F6" },
-  Kawasaki: { light: "#1F2937", dark: "#6EE7B7" },
-  Citizen: { light: "#475569", dark: "#94A3B8" },
-  Apple: { light: "#3A3A3C", dark: "#A1A1A6" },
-  Samsung: { light: "#1428A0", dark: "#6B8BFF" },
+  LG: { light: "#A50034", dark: "#F0587C" },
+  Philips: { light: "#0B5ED7", dark: "#6EA8FE" },
+  Kawasaki: { light: "#3B7A2A", dark: "#86C46E" },
+  Citizen: { light: "#475569", dark: "#A3B1C6" },
+  Apple: { light: "#3A3A3C", dark: "#C7C7CC" },
+  Samsung: { light: "#1428A0", dark: "#7D93FF" },
 };
+const MIRETHOS_COLORS = { light: "#AB5C36", dark: "#DA9066" };
 
 const initials = (name) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 
@@ -222,48 +226,48 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
   const field = "w-full h-11 pl-10 pr-3 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal placeholder:text-brand-taupe/70 shadow-sm transition focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
   return (
     // Before sign-in no brand is chosen: use Mirethos copper, not the default client's accent.
-    <div className="min-h-screen flex bg-brand-ivory font-sans text-brand-charcoal" style={{ "--color-brand-copper": "#A65E44", "--accent-coral": "#A65E44" }}>
+    <div className="min-h-screen flex bg-brand-ivory font-sans text-brand-charcoal" style={{ "--color-brand-copper": "#AB5C36", "--accent-coral": "#AB5C36" }}>
       <aside className="hidden lg:flex relative w-[46%] max-w-[640px] flex-col justify-between overflow-hidden p-12 text-[#FAF6EE]"
-        style={{ background: "radial-gradient(120% 80% at 0% 0%, rgba(227,134,99,0.28) 0%, rgba(227,134,99,0) 55%), radial-gradient(90% 70% at 100% 100%, rgba(166,94,68,0.35) 0%, rgba(166,94,68,0) 60%), #17110F" }}>
-        <div className="absolute inset-0 opacity-[0.07] pointer-events-none"
+        style={{ background: "radial-gradient(110% 70% at 0% 0%, rgba(218,144,102,0.16) 0%, rgba(218,144,102,0) 55%), radial-gradient(90% 70% at 100% 100%, rgba(171,92,54,0.22) 0%, rgba(171,92,54,0) 60%), #17120F" }}>
+        <div className="absolute inset-0 opacity-[0.045] pointer-events-none"
           style={{ backgroundImage: "linear-gradient(#FAF6EE 1px, transparent 1px), linear-gradient(90deg, #FAF6EE 1px, transparent 1px)", backgroundSize: "44px 44px" }} />
         <div className="relative flex items-center gap-3">
-          <img src="/favicon.ico" alt="" className="w-10 h-10 rounded-xl bg-[#FAF6EE] p-1.5" />
-          <div>
-            <div className="text-lg font-semibold tracking-[0.18em]">MIRETHOS</div>
-            <div className="text-[11px] uppercase tracking-[0.2em] text-[#A9998E]">MAP Intelligence</div>
+          <img src={mirethosMark} alt="" className="h-11 w-auto" />
+          <div className="leading-none">
+            <div className="wordmark text-lg">MIRETHOS</div>
+            <div className="mt-1.5 text-[10.5px] uppercase tracking-[0.24em] text-[#A7998D]">MAP Intelligence</div>
           </div>
         </div>
         <div className="relative">
           <h1 className="text-4xl xl:text-[44px] leading-[1.1] font-semibold tracking-tight">
-            Protect your price.<br /><span className="text-[#E38663]">Prove every breach.</span>
+            Protect your price.<br /><span className="text-[#DA9066]">Prove every breach.</span>
           </h1>
-          <p className="mt-5 text-[15px] leading-relaxed text-[#CDBFB4] max-w-md">
+          <p className="mt-5 text-[15px] leading-relaxed text-[#CBBFB4] max-w-md">
             Minimum Advertised Price monitoring and enforcement for brands that sell across marketplaces.
           </p>
           <div className="mt-10 space-y-5">
             {LOGIN_POINTS.map(({ icon: Icon, title, text }) => (
               <div key={title} className="flex gap-4">
-                <div className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-[#E38663]/15 ring-1 ring-[#E38663]/30">
-                  <Icon className="w-5 h-5 text-[#E38663]" />
+                <div className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-[#DA9066]/10 ring-1 ring-[#DA9066]/25">
+                  <Icon className="w-5 h-5 text-[#DA9066]" strokeWidth={1.75} />
                 </div>
                 <div>
                   <div className="text-sm font-semibold">{title}</div>
-                  <div className="text-[13px] leading-snug text-[#A9998E] max-w-sm">{text}</div>
+                  <div className="text-[13px] leading-snug text-[#A7998D] max-w-sm">{text}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
-        <div className="relative text-xs text-[#A9998E]">© {new Date().getFullYear()} Mirethos</div>
+        <div className="relative text-xs text-[#A7998D]">© {new Date().getFullYear()} Mirethos</div>
       </aside>
 
       <main className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-[400px]">
           <div className="lg:hidden flex items-center gap-3 mb-10">
-            <img src="/favicon.ico" alt="" className="w-9 h-9 rounded-xl bg-brand-white border border-brand-beige p-1.5" />
+            <img src={mirethosMark} alt="" className="h-9 w-auto" />
             <div>
-              <div className="text-base font-semibold tracking-[0.18em]">MIRETHOS</div>
+              <div className="text-base font-semibold tracking-[0.22em] text-copper-700">MIRETHOS</div>
               <div className="text-[10px] uppercase tracking-[0.2em] text-brand-taupe">MAP Intelligence</div>
             </div>
           </div>
@@ -299,8 +303,8 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
               <input type="checkbox" defaultChecked className="w-4 h-4 rounded accent-[var(--accent-coral)] cursor-pointer" /> Keep me signed in
             </label>
 
-            <button type="submit" disabled={busy}
-              className="group w-full h-11 rounded-xl bg-brand-copper text-white text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(166,94,68,0.7)] hover:brightness-110 active:brightness-95 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-wait">
+            <button type="submit" disabled={busy} style={{ background: "var(--copper-sheen)" }}
+              className="group w-full h-11 rounded-xl text-white text-sm font-semibold shadow-[0_6px_18px_-8px_rgba(119,60,32,0.6)] hover:brightness-110 active:brightness-95 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-wait">
               {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</> : <>Sign in <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" /></>}
             </button>
             {slow && (
@@ -342,9 +346,11 @@ export default function App() {
   const [chartColors, setChartColors] = useState(DEFAULT_CHART_COLORS);
   useEffect(() => {
     const accent = clients.find((c) => c.name === activeClient)?.accent;
-    const colors = (accent?.light && accent) || BRAND_COLORS[activeClient] || { light: "#A65E44", dark: "#E38663" };
+    // Before a client is open (sign-in, client picker) the accent is Mirethos copper.
+    const colors = screen !== 'app' ? MIRETHOS_COLORS : (accent?.light && accent) || BRAND_COLORS[activeClient] || MIRETHOS_COLORS;
     const accentHex = isDark ? colors.dark : colors.light;
     document.documentElement.style.setProperty('--accent-brand', accentHex);
+    document.documentElement.style.setProperty('--accent-brand-dark', colors.dark || accentHex);
     document.documentElement.style.setProperty('--accent-contrast', textOn(accentHex));
 
     if (isDark) {
@@ -355,20 +361,19 @@ export default function App() {
       document.body.classList.remove('dark');
     }
 
-    // Charts read the live theme tokens so they follow light/dark mode and the client accent.
-    const css = getComputedStyle(document.documentElement);
-    const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+    // Chart colours follow light / dark mode and the client accent (same values as mirethos-theme.css).
     setChartColors({
-      grid: token('--border-color', DEFAULT_CHART_COLORS.grid),
-      muted: token('--text-muted', DEFAULT_CHART_COLORS.muted),
-      text: token('--text-primary', DEFAULT_CHART_COLORS.text),
-      card: token('--card-bg', DEFAULT_CHART_COLORS.card),
+      grid: isDark ? "rgba(252, 232, 210, 0.07)" : "rgba(58, 38, 24, 0.08)",
+      muted: isDark ? "#A2948A" : "#6E6158",
+      text: isDark ? "#F3EDE6" : "#1C1714",
+      card: isDark ? "#1A1411" : "#FFFFFF",
       accent: (isDark ? colors.dark : colors.light) || DEFAULT_CHART_COLORS.accent,
     });
-  }, [isDark, activeClient, clients]);
+  }, [isDark, activeClient, clients, screen]);
   
   const [view, setView] = useState("overview");
   const [clientOpen, setClientOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
   // Sidebar can shrink to an icon rail so wide screens (e.g. Product Summary) get the full width.
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem("navCollapsed") === "1"; } catch { return false; } });
   const toggleNav = () => setNavCollapsed((c) => { try { localStorage.setItem("navCollapsed", c ? "0" : "1"); } catch { /* storage unavailable */ } return !c; });
@@ -475,7 +480,7 @@ export default function App() {
 
   const mainContent = useMemo(() => {
     switch (currentView) {
-      case "overview": return <OverviewView logo={<ClientLogo name={client.name} className="w-8 h-8 rounded-lg shadow-sm border border-brand-beige p-1" />} />;
+      case "overview": return <OverviewView />;
       case "product": return <ProductSummaryView />;
       case "mapping": return <MappingCenterView />;
       case "sources": return <SourcesTermsView skus={workspace.skus} />;
@@ -527,47 +532,47 @@ export default function App() {
   // RENDER: CLIENT SELECTION
   // --------------------------------------------------------------------------
   if (screen === 'client-select') {
+    const firstName = (currentUser?.name || "").split(" ")[0];
     return (
-      <div className="min-vh-100 flex items-center justify-center bg-brand-ivory font-sans p-4" style={{ minHeight: '100vh' }}>
-        <div className="max-w-2xl w-full">
-          <div className="flex items-center gap-2.5 mb-8 justify-center">
-            <img src="/favicon.ico" alt="Mirethos Logo" className="w-8 h-8 bg-brand-white p-1 rounded-md border border-brand-beige" />
-            <div>
-              <span className="text-brand-charcoal text-lg font-bold tracking-wide">MIRETHOS</span>
-              <span className="text-[10px] text-brand-taupe uppercase tracking-wider block -mt-1">AI Market Intelligence Platform</span>
+      <div className="min-h-screen bg-brand-ivory font-sans text-brand-charcoal flex flex-col">
+        <header className="h-16 px-8 flex items-center justify-between bg-rail border-b border-rail-line">
+          <div className="flex items-center gap-3">
+            <img src={mirethosMark} alt="" className="h-8 w-auto" />
+            <div className="leading-none">
+              <div className="wordmark text-[15px]">MIRETHOS</div>
+              <div className="mt-1 text-[9.5px] uppercase tracking-[0.22em] text-rail-ink-2">MAP Intelligence</div>
             </div>
           </div>
-
-          <div className="bg-brand-white border border-brand-beige rounded-xl p-6 shadow-md">
-            <h2 className="text-base font-bold text-brand-charcoal mb-1">Select Client</h2>
-            <p className="text-xs text-brand-taupe mb-5">Choose a client to access the MAP Intelligence Portal</p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {clients.map((c) => (
-                <div key={c.name} className="bg-brand-white border border-brand-beige hover:border-brand-copper/50 rounded-xl p-4 transition-all cursor-pointer shadow-sm"
-                  onClick={() => handleSelectClient(c.name)}>
-                  <div className="flex justify-between items-start mb-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.status === 'Sandbox' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{c.status}</span>
-                    <div className="flex items-center justify-end">
-                      <ClientLogo name={c.name} className="w-10 h-10 rounded-lg border border-brand-beige shadow-sm bg-brand-white" />
+          <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
+        </header>
+        <main className="flex-1 w-full max-w-4xl mx-auto px-6 py-14">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-copper-500">Workspaces</div>
+          <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.02em]">{firstName ? `Welcome back, ${firstName}.` : "Welcome back."}</h1>
+          <p className="mt-1.5 text-sm text-brand-taupe">Choose a brand to open its MAP workspace.</p>
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {clients.map((c) => {
+              const tone = (c.accent?.light && c.accent) || BRAND_COLORS[c.name] || MIRETHOS_COLORS;
+              return (
+                <button key={c.name} onClick={() => handleSelectClient(c.name)}
+                  className="group text-left bg-brand-white border border-brand-beige rounded-xl p-5 shadow-[var(--shadow-1)] hover:shadow-[var(--shadow-2)] hover:border-line-strong transition cursor-pointer relative overflow-hidden">
+                  <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: tone.light }} />
+                  <div className="flex items-center gap-3.5">
+                    <ClientLogo name={c.name} className="w-11 h-11 rounded-lg border border-brand-beige" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-semibold">{c.name}</div>
+                      <div className="text-xs text-brand-taupe mt-0.5">{c.status === "Sandbox" ? "Sandbox workspace" : "Live workspace"}</div>
                     </div>
+                    <ArrowRight className="w-4 h-4 text-brand-taupe transition group-hover:translate-x-0.5 group-hover:text-brand-charcoal" />
                   </div>
-                  <div className="space-y-1 text-xs text-brand-taupe mb-4">
-                    <div>• SKUs Configured: {c.skus}</div>
-                    <div>• Scanned Storefronts: {c.merchants}</div>
+                  <div className="mt-5 pt-4 border-t border-brand-beige grid grid-cols-2 gap-3">
+                    <div><div className="text-[10.5px] uppercase tracking-[0.06em] text-brand-taupe">SKUs</div><div className="text-lg font-semibold tabular-nums mt-0.5">{c.skus}</div></div>
+                    <div><div className="text-[10.5px] uppercase tracking-[0.06em] text-brand-taupe">Storefronts</div><div className="text-lg font-semibold tabular-nums mt-0.5">{c.merchants}</div></div>
                   </div>
-                  <div className="text-xs font-semibold text-brand-copper flex items-center gap-1">
-                    Open Workspace &rarr;
-                  </div>
-                </div>
-              ))}
-            </div>
+                </button>
+              );
+            })}
           </div>
-
-          <div className="text-center mt-6">
-            <button className="text-xs text-brand-taupe hover:text-brand-charcoal font-semibold border border-brand-beige bg-brand-white rounded-lg px-3 py-1.5 cursor-pointer" onClick={() => setScreen('login')}>Back to Log In</button>
-          </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -575,100 +580,136 @@ export default function App() {
   // --------------------------------------------------------------------------
   // RENDER: WORKSPACE PORTAL SHELL
   // --------------------------------------------------------------------------
+  const groups = [...new Set(nav.map((n) => n.group))];
+  const current = nav.find((n) => n.id === currentView);
+  const userName = currentUser?.name || "Fenil Dholaviya";
   return (
     <DataContext.Provider value={{ db, setDb, shared, chartColors }}>
     <WorkspaceContext.Provider value={workspaceCtx}>
       <div className="flex h-screen bg-brand-ivory font-sans text-brand-charcoal">
-      
-      {/* Sidebar */}
-      <div className={`${navCollapsed ? "w-14" : "w-60"} bg-brand-sidebar text-brand-charcoal flex flex-col shrink-0 border-r border-brand-beige shadow-lg transition-[width] duration-200`}>
-        <div className={`flex items-center gap-2.5 py-4 border-b border-brand-beige ${navCollapsed ? "flex-col px-2" : "px-4"}`}>
-          <img src="/favicon.ico" alt="Mirethos Logo" className="w-6.5 h-6.5 bg-brand-white p-1 rounded-md" />
-          {!navCollapsed && <span className="text-brand-charcoal text-sm font-bold tracking-wide flex-1">MIRETHOS</span>}
-          <button onClick={toggleNav} title={navCollapsed ? "Expand menu" : "Collapse menu"} className="text-brand-taupe hover:text-brand-charcoal hover:bg-brand-beige rounded-md p-1 cursor-pointer">
-            {navCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-          </button>
+
+      {/* Sidebar: Mirethos espresso in both themes */}
+      <aside className={`rail ${navCollapsed ? "w-[60px]" : "w-[248px]"} bg-rail text-rail-ink flex flex-col shrink-0 border-r border-rail-line transition-[width] duration-200`}>
+        <div className={`h-16 flex items-center gap-2.5 border-b border-rail-line ${navCollapsed ? "justify-center px-2" : "px-5"}`}>
+          <img src={mirethosMark} alt="Mirethos" className="h-7 w-auto shrink-0" />
+          {!navCollapsed && (
+            <div className="leading-none flex-1 min-w-0">
+              <div className="wordmark text-[13.5px]">MIRETHOS</div>
+              <div className="mt-1 text-[9px] uppercase tracking-[0.22em] text-rail-ink-2">MAP Intelligence</div>
+            </div>
+          )}
         </div>
 
-        {/* Client selector details */}
-        <div className={`${navCollapsed ? "px-1.5" : "px-3"} py-3 border-b border-brand-beige relative`}>
-          <button onClick={() => setClientOpen((o) => !o)} title={navCollapsed ? client.name : undefined} className={`w-full flex items-center hover:bg-brand-beige rounded-lg py-2 text-sm cursor-pointer ${navCollapsed ? "justify-center px-1" : "justify-between px-2.5"}`}>
-            <div className="flex items-center gap-2">
-              <ClientLogo name={client.name} className="w-6 h-6 rounded-md border border-brand-beige shadow-sm p-0.5" />
-              {!navCollapsed && (
-                <div className="text-left">
-                  <div className="text-brand-charcoal text-sm font-semibold">{client.name}</div>
-                  <div className="text-[10px] text-brand-taupe font-medium">{client.status}</div>
+        {/* Workspace switcher */}
+        <div className={`${navCollapsed ? "px-2" : "px-3"} pt-3 pb-2 relative`}>
+          <button onClick={() => setClientOpen((o) => !o)} title={navCollapsed ? client.name : undefined}
+            className={`w-full flex items-center gap-2.5 rounded-lg bg-rail-2 border border-rail-line hover:border-white/15 py-2 cursor-pointer transition ${navCollapsed ? "justify-center px-1" : "px-2.5"}`}>
+            <ClientLogo name={client.name} className="w-7 h-7 rounded-md" />
+            {!navCollapsed && (
+              <>
+                <div className="text-left flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-rail-ink truncate">{client.name}</div>
+                  <div className="text-[10.5px] text-rail-ink-2">{client.status} workspace</div>
                 </div>
-              )}
-            </div>
-            {!navCollapsed && <ChevronDown className="w-4 h-4 text-brand-taupe" />}
+                <ChevronDown className={`w-4 h-4 text-rail-ink-2 transition ${clientOpen ? "rotate-180" : ""}`} />
+              </>
+            )}
           </button>
           {clientOpen && (
-            <div className={`absolute ${navCollapsed ? "left-1.5 w-52" : "left-3 right-3"} top-full mt-1 bg-brand-white border border-brand-beige rounded-lg overflow-hidden z-10 shadow-xl`}>
+            <div className={`absolute ${navCollapsed ? "left-2 w-56" : "left-3 right-3"} top-full mt-1 bg-rail-2 border border-rail-line rounded-lg overflow-hidden z-20 shadow-[var(--shadow-3)] py-1`}>
               {clients.map((c) => (
                 <button key={c.name} onClick={() => { setActiveClient(c.name); setClientOpen(false); }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-beige flex justify-between items-center cursor-pointer ${c.name === activeClient ? "text-brand-charcoal font-bold" : "text-brand-taupe"}`}>
-                  <div className="flex items-center gap-2">
-                    <ClientLogo name={c.name} className="w-4 h-4 rounded-sm" />
-                    <span>{c.name}</span>
-                  </div>
-                  <span className="text-[10px] text-brand-taupe">{c.skus} SKUs</span>
+                  className={`w-full text-left px-3 py-2 text-[13px] flex justify-between items-center cursor-pointer hover:bg-white/5 ${c.name === activeClient ? "text-rail-ink" : "text-rail-ink-2"}`}>
+                  <span className="flex items-center gap-2.5"><ClientLogo name={c.name} className="w-5 h-5 rounded" />{c.name}</span>
+                  <span className="text-[10.5px] tabular-nums">{c.skus} SKUs</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Navigation list */}
-        <nav className="flex-1 overflow-y-auto py-2">
-          {nav.map((n) => {
-            const Icon = n.icon;
-            const active = currentView === n.id;
-            return (
-              <button key={n.id} onClick={() => setView(n.id)} title={navCollapsed ? n.label : undefined}
-                className={`relative w-full flex items-center gap-2.5 py-2 text-sm ${navCollapsed ? "justify-center px-0" : "px-4"} transition-colors border-l-2 cursor-pointer ${
-                  active ? "bg-brand-beige border-brand-copper text-brand-charcoal font-semibold" : "border-transparent text-brand-taupe hover:text-brand-charcoal hover:bg-brand-beige/50"
-                }`}>
-                <Icon className="w-4 h-4 shrink-0" />
-                {!navCollapsed && <span className="flex-1 text-left">{n.label}</span>}
-                {navBadges[n.id] ? <span className={`${navCollapsed ? "absolute top-0.5 right-1.5" : ""} text-[10px] font-bold bg-brand-copper text-on-accent rounded-full px-1.5 py-0.5`}>{navBadges[n.id]}</span> : null}
-              </button>
-            );
-          })}
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-2 pb-3">
+          {groups.map((g) => (
+            <div key={g || "home"} className="mt-2.5 first:mt-1">
+              {g && !navCollapsed && <div className="px-3 pb-1 pt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-rail-ink-2/70">{g}</div>}
+              {g && navCollapsed && <div className="mx-3 mb-2 border-t border-rail-line" />}
+              {nav.filter((n) => n.group === g).map((n) => {
+                const Icon = n.icon;
+                const active = currentView === n.id;
+                return (
+                  <button key={n.id} onClick={() => setView(n.id)} title={navCollapsed ? n.label : undefined}
+                    className={`relative w-full flex items-center gap-3 h-8 rounded-md text-[13px] transition-colors cursor-pointer ${navCollapsed ? "justify-center px-0" : "px-3"} ${
+                      active ? "bg-white/[0.07] text-rail-ink font-medium" : "text-rail-ink-2 hover:text-rail-ink hover:bg-white/[0.04]"}`}>
+                    {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-rail-accent" />}
+                    <Icon className={`w-4 h-4 shrink-0 ${active ? "text-rail-accent" : ""}`} strokeWidth={active ? 2 : 1.75} />
+                    {!navCollapsed && <span className="flex-1 text-left truncate">{n.label}</span>}
+                    {navBadges[n.id] ? (
+                      <span className={`${navCollapsed ? "absolute top-1 right-1.5 w-1.5 h-1.5 p-0" : "min-w-5 h-5 px-1.5"} tabular-nums text-[10.5px] font-semibold rounded-full inline-flex items-center justify-center bg-rail-accent text-[#17120F]`}>
+                        {navCollapsed ? "" : navBadges[n.id]}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        {/* Bottom User Avatar */}
-        <div className={`py-3 border-t border-brand-beige flex items-center justify-between ${navCollapsed ? "flex-col gap-2 px-1" : "px-4"}`}>
-          <div className="flex items-center gap-2" title={navCollapsed ? currentUser?.name || "Fenil Dholaviya" : undefined}>
-            <div className="w-7 h-7 rounded-full bg-brand-copper flex items-center justify-center text-xs text-on-accent font-bold">{initials(currentUser?.name || "Fenil Dholaviya")}</div>
-            <div className={`text-[11px] ${navCollapsed ? "hidden" : ""}`}>
-              <div className="text-brand-charcoal font-bold">{currentUser?.name || "Fenil Dholaviya"}</div>
-              <div className="text-brand-taupe">{accountRole ?? (currentUser?.role === "member" ? "Member" : "Admin")}</div>
-            </div>
+        <div className={`border-t border-rail-line p-2 flex ${navCollapsed ? "flex-col items-center gap-1" : "items-center"}`}>
+          <button onClick={toggleNav} title={navCollapsed ? "Expand menu" : "Collapse menu"} className="text-rail-ink-2 hover:text-rail-ink hover:bg-white/5 rounded-md p-2 cursor-pointer">
+            {navCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
+          {!navCollapsed && <span className="text-[10.5px] text-rail-ink-2/60 ml-1">© {new Date().getFullYear()} Mirethos</span>}
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-16 shrink-0 flex items-center justify-between gap-4 px-8 border-b border-brand-beige bg-brand-white">
+          <div className="flex items-center gap-2 text-[13px] min-w-0">
+            <span className="text-brand-taupe">{client.name}</span>
+            <span className="text-line-strong">/</span>
+            {current?.group && <><span className="text-brand-taupe">{current.group}</span><span className="text-line-strong">/</span></>}
+            <span className="font-medium text-brand-charcoal truncate">{current?.label}</span>
+            <span className="ml-2 inline-flex items-center gap-1.5 h-5 px-1.5 rounded-[5px] text-[10.5px] font-medium border border-brand-beige text-brand-taupe">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)" }} />{client.status}
+            </span>
           </div>
-          <div className={`flex items-center gap-2 ${navCollapsed ? "flex-col" : ""}`}>
-            <button onClick={() => setIsDark(!isDark)} title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-              className="text-brand-taupe hover:text-brand-charcoal hover:bg-brand-beige rounded-md p-1 cursor-pointer">
+          <div className="flex items-center gap-1.5 relative">
+            <button onClick={() => setIsDark(!isDark)} title={isDark ? "Light theme" : "Dark theme"}
+              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-brand-taupe hover:text-brand-charcoal hover:bg-surface-3 cursor-pointer">
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
-            <button onClick={handleLogout} className="text-[10px] text-brand-copper hover:underline cursor-pointer">
-              Exit
+            <button onClick={() => setUserOpen((o) => !o)} className="flex items-center gap-2.5 pl-1.5 pr-2 h-9 rounded-lg hover:bg-surface-3 cursor-pointer">
+              <span className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[11px] font-semibold text-[#FBF8F4]" style={{ background: "var(--copper-sheen)" }}>{initials(userName)}</span>
+              <span className="text-left leading-tight hidden md:block">
+                <span className="block text-[12.5px] font-medium">{userName}</span>
+                <span className="block text-[11px] text-brand-taupe">{accountRole ?? (currentUser?.role === "member" ? "Member" : "Administrator")}</span>
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-brand-taupe" />
             </button>
+            {userOpen && (
+              <div className="absolute right-0 top-11 w-52 bg-brand-white border border-brand-beige rounded-lg shadow-[var(--shadow-3)] py-1 z-30 animate-fade-in">
+                <div className="px-3 py-2 border-b border-brand-beige">
+                  <div className="text-[12.5px] font-medium truncate">{currentUser?.email || userName}</div>
+                </div>
+                <button onClick={() => { setUserOpen(false); setScreen('client-select'); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-3 cursor-pointer">Switch workspace</button>
+                <button onClick={() => { setUserOpen(false); handleLogout(); }} className="w-full text-left px-3 py-2 text-[13px] text-red-700 hover:bg-surface-3 cursor-pointer">Sign out</button>
+              </div>
+            )}
           </div>
-        </div>
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <div className="px-8 py-7 max-w-[1600px] mx-auto">{mainContent}</div>
+        </main>
       </div>
 
-      {/* Main Content Pane */}
-      <div className="flex-1 overflow-y-auto p-6 bg-brand-ivory">{mainContent}</div>
-
-      {/* Slide-out drawer details */}
-
-      {/* TOAST alerts */}
+      {/* Toasts */}
       <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
         {toasts.map(t => (
-          <div key={t.id} className="bg-brand-charcoal text-brand-ivory px-4 py-3 rounded-xl shadow-xl text-sm flex items-center gap-2 animate-fade-in">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div key={t.id} className="bg-[#17120F] text-[#F3EDE6] border border-white/10 pl-3 pr-4 py-2.5 rounded-lg shadow-[var(--shadow-3)] text-[13px] flex items-center gap-2.5 animate-fade-in max-w-md">
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.type === "info" ? "#DA9066" : "#6FBF8B" }} />
             <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
           </div>
         ))}

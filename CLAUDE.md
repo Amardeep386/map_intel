@@ -23,7 +23,7 @@ Pricing Intel is a **separate portal built later**. Do not add competitive-prici
 | `docs/reference/blueprint.html` | Blueprint with diagrams (roadmap, ERD, data flow) |
 
 ## Rules
-1. **Keep the current UI/UX.** Reuse the existing building blocks (Pill, KPI, Card, PageHeader, PrimaryButton, SearchBox, Table, drawers, modals), `brand-*` Tailwind colours and theme variables. New screens follow `docs/reference/prototype-src/`. No redesigns, no new UI libraries.
+1. **Follow the Mirethos design system** (redesign of 6 Oct 2026, decision 41): tokens in `mirethos-theme.css` (copper ramp from the logo, espresso sidebar, porcelain page, white surfaces, hairline borders, Geist / Geist Mono), mapped to Tailwind in `src/index.css`. Reuse the building blocks in `src/ui.jsx` (Pill, KPI, Card, PageHeader, PrimaryButton, SecondaryButton, SearchBox, Table, Tabs, Drawer, Modal, Field, inputCls). The client's colour is an accent only (active states, links, focus, key series); primary buttons are espresso. No glows, gradients on surfaces, oversized radii or new UI libraries.
 2. **Never read, print or commit `.env` files** (`.env`, `.env.local`, `server/.env`). Use `.env.example` for new variables.
 3. **Append-only facts.** Observations, MAP prices, seller classifications and violations are never updated in place; corrections are new rows. Effective-dated tables use half-open `[from, to)` intervals.
 4. **Tenant isolation.** Every account-owned table has `account_id` with row-level security. The shared source catalogue is the only cross-account data.

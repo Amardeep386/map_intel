@@ -11,7 +11,7 @@ export function ReportPage({ token }) {
   const r = res?.status === 200 ? res.data : null;
   return (
     <div className="min-h-screen bg-brand-ivory flex flex-col">
-      <div className="bg-brand-charcoal text-brand-ivory text-xs px-4 py-2 flex items-center gap-3 flex-wrap">
+      <div className="bg-rail text-rail-ink text-xs px-4 py-2.5 flex items-center gap-3 flex-wrap">
         <span className="inline-flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> MAP Intel report · view-only{r ? ` · this link expires ${formatDay(r.expiresAt)}` : ""}</span>
         {r && <span className="ml-auto flex gap-3">
           {r.files.map((f) => (

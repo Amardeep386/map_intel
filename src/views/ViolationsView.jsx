@@ -3,7 +3,7 @@
 // judged on, the proof of every observation, the status history, and status changes (each one a
 // new event, never an edit).
 import React, { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Ban, CircleCheck, Copy, Download, ExternalLink, Lock, Megaphone, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Ban, CircleCheck, Copy, Download, ExternalLink, FileSearch, Lock, Megaphone, RotateCcw, ShieldCheck } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../api/client.js";
 import { Card, Drawer, Field, inputCls, KV, Modal, Note, PageHeader, Pill, PrimaryButton, SearchBox, SecondaryButton, Table, Tabs, Td } from "../ui.jsx";
@@ -51,22 +51,22 @@ export function ViolationsView() {
         {data && !rows.length ? (
           <div className="text-sm text-brand-taupe py-8 text-center">No violations here. Prices are judged after every collection run.</div>
         ) : (
-          <Table columns={["Violation ID", "SKU / Product", "Seller", "Seller class", "Source", "MAP", "Advertised", "Gap", "First seen", "Severity", "Status", "Proof"]}>
+          <Table columns={["Violation", "Product", "Seller", "Class", "MAP", "Advertised", "Gap", "First seen", "Severity", "Status", ""]}>
             {rows.map((v) => (
-              <tr key={v.id} onClick={() => setSel(v.id)} className="hover:bg-brand-beige/20 cursor-pointer">
-                <Td className="font-semibold text-brand-copper whitespace-nowrap">{v.code}</Td>
-                <Td><div className="font-semibold">{v.product}</div><div className="text-xs text-brand-taupe">{v.sku}</div></Td>
-                <Td>{v.seller}</Td>
+              <tr key={v.id} onClick={() => setSel(v.id)} className="hover:bg-surface-2 cursor-pointer">
+                <Td className="font-mono text-[12px] font-medium text-brand-copper whitespace-nowrap">{v.code}</Td>
+                <Td className="min-w-[220px] max-w-[340px]"><div className="font-medium leading-snug">{v.product}</div><div className="text-[11px] text-brand-taupe font-mono mt-0.5">{v.sku}</div></Td>
+                <Td className="whitespace-nowrap"><div>{v.seller}</div><div className="text-[11.5px] text-brand-taupe">{v.source}</div></Td>
                 <Td><Pill text={v.class_at_capture} tone={TONE[v.class_at_capture]} /></Td>
-                <Td className="text-brand-taupe whitespace-nowrap">{v.source}</Td>
-                <Td className="whitespace-nowrap">{money(v.last_map)}</Td>
-                <Td className="whitespace-nowrap">{money(v.last_price)}</Td>
-                <Td className="text-red-600 font-bold whitespace-nowrap">−{pct(v.last_depth_pct)}</Td>
-                <Td className="text-brand-taupe whitespace-nowrap">{formatWhen(v.opened_at)}</Td>
+                <Td className="whitespace-nowrap tabular-nums">{money(v.last_map)}</Td>
+                <Td className="whitespace-nowrap tabular-nums">{money(v.last_price)}</Td>
+                <Td className="text-red-600 font-semibold whitespace-nowrap tabular-nums">−{pct(v.last_depth_pct)}</Td>
+                <Td className="text-brand-taupe whitespace-nowrap">{new Date(v.opened_at).toLocaleDateString("en-US", { month: "short", day: "2-digit" })}</Td>
                 <Td><Pill text={v.severity} tone={TONE[v.severity]} /></Td>
                 <Td><Pill text={v.status} tone={TONE[v.status]} /></Td>
                 <Td>
-                  <button onClick={(e) => { e.stopPropagation(); openEvidence(showToast, v.evidence_id); }} className="text-xs text-brand-copper underline cursor-pointer disabled:opacity-40" disabled={!v.evidence_id}>View</button>
+                  <button onClick={(e) => { e.stopPropagation(); openEvidence(showToast, v.evidence_id); }} title="Open the latest proof"
+                    className="text-brand-taupe hover:text-brand-copper p-1 rounded cursor-pointer disabled:opacity-30" disabled={!v.evidence_id}><FileSearch className="w-4 h-4" /></button>
                 </Td>
               </tr>
             ))}
@@ -199,7 +199,7 @@ export function ViolationDrawer({ violationId, onClose, onChanged }) {
               <XAxis dataKey="t" tick={{ fontSize: 11, fill: chartColors.muted }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: chartColors.muted }} axisLine={false} tickLine={false} tickFormatter={(n) => `$${n}`} width={60} domain={["dataMin - 50", "dataMax + 50"]} />
               <Tooltip contentStyle={tooltipStyle} formatter={(n) => money(n)} />
-              <ReferenceLine y={v.last_map} stroke="#dc2626" strokeDasharray="4 4" label={{ value: `MAP ${money(v.last_map)}`, fill: chartColors.muted, fontSize: 10, position: "insideTopRight" }} />
+              <ReferenceLine y={v.last_map} stroke="#B0341F" strokeDasharray="4 4" label={{ value: `MAP ${money(v.last_map)}`, fill: chartColors.muted, fontSize: 10, position: "insideTopRight" }} />
               <Line type="stepAfter" dataKey="price" name="Advertised" stroke={chartColors.accent} strokeWidth={2} dot={{ r: 3, fill: chartColors.accent }} />
             </LineChart>
           </ResponsiveContainer>
