@@ -10,12 +10,14 @@ import { formatDay, money, TONE } from "../format.js";
 import { attempt, useWorkspace } from "../workspace.js";
 import { ViolationDrawer } from "./ViolationsView.jsx";
 
-const SEVERITY_COLORS = { Minor: "#64748B", Standard: "#f59e0b", Severe: "#dc2626" };
-const UNAUTH = "#dc2626";
+// Severity and seller-class colours are fixed (not the client's accent) so they read the same in every workspace.
+const SEVERITY_COLORS = { Minor: "#A39A92", Standard: "#C98A2B", Severe: "#B0341F" };
+const UNAUTH = "#B0341F";
+const AUTH = "#8C8279";
 const shortDay = (d) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
 const ttc = (h) => (h === null || h === undefined ? "—" : h < 48 ? `${Math.round(h)}h` : `${(h / 24).toFixed(1)}d`);
 
-export function OverviewView({ logo }) {
+export function OverviewView() {
   const { client, showToast, chartColors, go } = useWorkspace();
   const [o, setO] = useState(null);
   const [sel, setSel] = useState(null);
@@ -39,7 +41,7 @@ export function OverviewView({ logo }) {
   return (
     <div>
       <PageHeader
-        title={<div className="flex items-center gap-3">{logo}<span>Dashboard — {client.name} ({client.status})</span></div>}
+        title="Overview"
         subtitle={o ? `${formatDay(o.period.from)} – ${formatDay(o.period.to)} · MAP in force as of each observation date` : "Loading…"} />
 
       {o?.quality?.note && (
@@ -66,7 +68,7 @@ export function OverviewView({ logo }) {
         <Card title={`Violations by severity (last ${o?.period.days ?? 30} days)`}>
           <ResponsiveContainer width="100%" height={160}>
             <PieChart>
-              <Pie data={o?.severity ?? []} dataKey="value" innerRadius={40} outerRadius={65} paddingAngle={2} stroke={chartColors.card}>
+              <Pie data={o?.severity ?? []} dataKey="value" innerRadius={48} outerRadius={66} paddingAngle={2} stroke={chartColors.card} strokeWidth={2}>
                 {(o?.severity ?? []).map((d) => <Cell key={d.name} fill={SEVERITY_COLORS[d.name]} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: chartColors.text }} />
@@ -88,13 +90,13 @@ export function OverviewView({ logo }) {
               <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: chartColors.muted }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: chartColors.text }} labelStyle={{ color: chartColors.muted }}
                 labelFormatter={(l, p) => (p?.[0] && degraded.has(p[0].payload.day) ? `${l} · degraded collection` : l)} />
-              <Line type="monotone" dataKey="unauthorised" name="Unauthorised" stroke={UNAUTH} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="authorised" name="MAP Authorised" stroke={chartColors.accent} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="unauthorised" name="Unauthorised" stroke={UNAUTH} strokeWidth={2} dot={false} activeDot={{ r: 3.5 }} />
+              <Line type="monotone" dataKey="authorised" name="MAP Authorised" stroke={AUTH} strokeWidth={1.75} strokeDasharray="4 3" dot={false} />
             </LineChart>
           </ResponsiveContainer>
           <div className="flex flex-wrap gap-4 justify-center text-xs text-brand-taupe">
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: UNAUTH }} />Unauthorised / unknown</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: chartColors.accent }} />MAP Authorised</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: AUTH }} />MAP Authorised</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm bg-amber-200" />Degraded collection (not a clean line)</span>
           </div>
         </Card>

@@ -7,6 +7,7 @@ import { api } from "../api/client.js";
 import { Card, KV, Table, Td } from "../ui.jsx";
 import { formatDay, money } from "../format.js";
 import { formatWhen } from "../workspace.js";
+import mirethosMark from "../assets/mirethos-mark.png";
 
 const shortHash = (h) => (h ? `${h.slice(0, 8)}…${h.slice(-6)}` : "—");
 
@@ -25,9 +26,9 @@ export function EvidencePage({ token }) {
   return (
     <Shell expiresAt={r.expiresAt}>
       <div className="flex items-center gap-2.5 mb-5">
-        <img src="/favicon.ico" alt="" className="w-7 h-7 bg-white p-1 rounded-md border border-brand-beige" />
+        <img src={mirethosMark} alt="" className="h-9 w-auto" />
         <div>
-          <div className="text-sm font-bold tracking-wide text-brand-charcoal">MIRETHOS · MAP Evidence Record</div>
+          <div className="text-sm font-semibold tracking-[0.12em] text-brand-charcoal">MIRETHOS · MAP EVIDENCE RECORD</div>
           <div className="text-[11px] text-brand-taupe">Record {r.record} · {r.brand} · record SHA-256 <span className="font-mono">{shortHash(r.recordSha256)}</span></div>
         </div>
       </div>
@@ -105,7 +106,7 @@ export function EvidencePage({ token }) {
 function Shell({ children, expiresAt }) {
   return (
     <div className="min-h-screen bg-brand-ivory">
-      <div className="bg-brand-charcoal text-brand-ivory text-xs px-4 py-2 flex items-center gap-1.5">
+      <div className="bg-rail text-rail-ink text-xs px-4 py-2.5 flex items-center gap-1.5">
         <Lock className="w-3.5 h-3.5" /> MAP Intel evidence · view-only{expiresAt ? ` · this link expires ${formatDay(expiresAt)}` : ""}
       </div>
       <div className="max-w-4xl mx-auto p-6">{children}</div>
