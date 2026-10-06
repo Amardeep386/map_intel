@@ -13,6 +13,7 @@ import { auditRoutes } from './routes/audit.js';
 import { catalogueRoutes } from './routes/catalogue.js';
 import { policyRoutes } from './routes/policies.js';
 import { mappingRoutes } from './routes/mapping.js';
+import { ruleRoutes } from './routes/rules.js';
 import { sellerRoutes } from './routes/sellers.js';
 import { authRoutes } from './routes/auth.js';
 import { collectionRoutes } from './routes/collection.js';
@@ -152,6 +153,7 @@ export async function buildApp() {
   await app.register(policyRoutes);
   await app.register(sellerRoutes);
   await app.register(mappingRoutes);
+  await app.register(ruleRoutes);
   await app.register(collectionRoutes);
   await app.register(dataHealthRoutes);
   await app.register(credentialRoutes);
