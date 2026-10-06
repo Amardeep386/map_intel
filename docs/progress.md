@@ -3,18 +3,18 @@
 **This file in the repo (`docs/progress.md`) is the master copy.** Claude Code reads it at the start of every phase or session and updates it before finishing. The planning chat in the Mirethos Claude project mirrors it after each review. Newest entry at the top of "Log". Keep entries short: what was built, where it lives, decisions, known issues, next step.
 
 ## Current status
-- **Phase:** **P3 Detection & reporting done for the LG slice scope (exit test 20/20, 6 Oct 2026)** on branch `phase-3-detection` (not merged, not pushed), built on the LG slice data (decision 40). The full P2b collection push (all launch sources, Apple + Samsung, Amazon) comes **before pilot go-live**, not after P5.
+- **Phase:** **P3 Detection & reporting done for the LG slice scope (exit test 20/20, 6 Oct 2026)** on branch `phase-3-detection`, **merged into `main` and pushed 6 Oct 2026 (live on Vercel + Render)**, built on the LG slice data (decision 40). The full P2b collection push (all launch sources, Apple + Samsung, Amazon) comes **before pilot go-live**, not after P5.
 - **P2b:** P2b Collectors **in progress**, finishing through a first real slice on the **LG Sandbox**, now **route D: Walmart + eBay (Browse API), Amazon paused** (branch `amazon-lg-slice`, **merged into `main` on 5 Oct 2026**). **Exit test `--scope lg-slice` passed 10/10 on 5 Oct 2026** after three daily monitoring runs (2–4 Oct); M7 report in `server/reports/lg-slice-m7-2026-10-05.md`. Amazon.com blocked both free US egresses on 30 Sep. Demo catalogue and brand logos added 28 Sep 2026. P2a done 25 Sep 2026 (merged into `main`), P1 done 24 Sep 2026, P0 done 23 Sep 2026.
-- **Last updated:** 6 Oct 2026 (Claude Code: P3 exit test 20/20, LG slice scope)
+- **Last updated:** 6 Oct 2026 (Claude Code: P3 merged into main and pushed)
 - **Repo:** `E:\Claude Mirethos docs\Map Intel\Map Intel` (git, remote `github.com/Amardeep386/map_intel`). `main` = `origin/main` = P2a + Phase 2b + the demo catalogue + brand logos (latest `2cfc942` plus this docs commit). Phase 2b reached `main` on 28 Sep through the `demo-catalogue` merge (`bd96457`), at your request, before its exit test. Branches `phase-2b-collectors` and `demo-catalogue` are pushed and fully contained in `main`.
 - **Live (since 25 Sep 2026):** portal https://map-intel-iota.vercel.app (Vercel, deploys `main`), API https://map-intel-api.onrender.com (Render free plan: no worker, sleeps when idle; a GitHub Action pings it every 10 min). Production shares Neon, Upstash and S3 with development.
 - **Dev workflow:** Cursor with Claude Code in the terminal, working in the repo folder. Services: Neon (Postgres 18), Upstash (Redis), AWS S3. No Docker on the PC.
 - **Portal:** mock mode by default; `VITE_USE_MOCK=false` puts every P1, P2a and P2b screen on the API.
 - **Env (server/.env, never committed):** `DATABASE_URL`, `DATABASE_URL_API`, `VAULT_KEYS` + `VAULT_ACTIVE_KEY`, `PORTAL_URL`, and since 27 Sep `S3_OBJECT_LOCK_DAYS=365` (you set it). New optional collector variables are in `server/.env.example`.
-- **Next step (resume here): look at the P3 screens, then merge.** Exit test `npm run exit:p3 -- --scope lg-slice` passed **20/20** on 6 Oct 2026 (`server/reports/exit-p3-2026-10-06.md`).
+- **Next step (resume here): look at the P3 screens on the live site** (merged + pushed 6 Oct, `8dac4c5`). Exit test `npm run exit:p3 -- --scope lg-slice` passed **20/20** on 6 Oct 2026 (`server/reports/exit-p3-2026-10-06.md`).
   1. **You (or Claude Code with a working browser):** click through Overview, Violations, Rules, Reports, Alerts and an evidence / report link on the API (local `npm run dev` in `server/` + portal with the API on, or after the merge on the live site). Not yet seen in a browser.
   2. **You:** exclude the windwing521 "Bent#23" eBay listing in Mapping Center (V-00003); the judge then ends that violation.
-  3. **Merge `phase-3-detection` into `main` and push** (when you say): Render runs migrations 031–035 (already applied), Vercel deploys the screens, `lg-slice.yml` then judges and raises alerts after each daily run, and `reports.yml` starts hourly. Add repository secrets `VAULT_KEYS` / `VAULT_ACTIVE_KEY` only when an SFTP destination is used.
+  3. **Done 6 Oct:** merged into `main` and pushed; live API and portal verified serving P3. From now on `lg-slice.yml` judges and raises alerts after each daily run and `reports.yml` runs hourly. Add repository secrets `VAULT_KEYS` / `VAULT_ACTIVE_KEY` only when an SFTP destination is used.
   4. **Then the collection push before pilot go-live (decision 40)**, and the three-brand P3 exit test.
 - **Phase order from 6 Oct 2026 (decision 40):**
   1. **Now:** P3 built and tested on the LG slice (Walmart + eBay, daily on GitHub Actions). Small collection jobs run alongside: real fixtures, shorter eBay terms, keep the daily run healthy.
@@ -112,7 +112,7 @@
 - [x] P2a Catalogue: products, MAP history, promo windows, policy docs, sellers, Mapping Center (exit test 14/14, 25 Sep 2026)
 - [x] P2b Collectors (LG slice scope): scheduler, production collectors, evidence capture, observation store, source health (exit test `--scope lg-slice` 10/10, 5 Oct 2026; Walmart + eBay API; Amazon paused, manual evidence in P3)
 - [ ] P2b full scope: all launch sources, Apple + Samsung, Amazon (gate before P3 pilot go-live, decision 40)
-- [x] P3 Detection & reporting (LG slice scope): rules, violations, dashboard, reports, evidence links, alerts (exit test `--scope lg-slice` 20/20, 6 Oct 2026; branch `phase-3-detection`, not merged). Pilot go-live waits for the full collection push and the three-brand run (decision 40)
+- [x] P3 Detection & reporting (LG slice scope): rules, violations, dashboard, reports, evidence links, alerts (exit test `--scope lg-slice` 20/20, 6 Oct 2026; merged into `main` and pushed 6 Oct). Pilot go-live waits for the full collection push and the three-brand run (decision 40)
 - [ ] P4 Enforcement & learning: cases, notices, marketplace channels, learning loop, alerts
 - [ ] P5 Scale & governance: onboarding, budget, tickets, SSO, API
 
