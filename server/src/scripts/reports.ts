@@ -5,6 +5,7 @@
 //                                                            one ad-hoc run now (generated, printed, delivered)
 import { parseArgs } from 'node:util';
 import { closeBrowser, renderPdf } from '../collector/browser.js';
+import { evaluateAlerts } from '../lib/alerts.js';
 import { closeDb, withSystem } from '../lib/db.js';
 import '../lib/sftp.js'; // registers SFTP delivery with the runner
 import { completeRun, failRun, generateRun, queueDueRuns, queueRun, runCode, runHtml } from '../lib/reportRunner.js';
@@ -52,6 +53,9 @@ async function main(): Promise<void> {
   if (values.due) {
     const fired = await withSystem((db) => queueDueRuns(db));
     console.log(`due schedules: ${fired.length}${fired.length ? ` (${fired.map((f) => f.code).join(', ')})` : ''}`);
+    // "Source degraded before a scheduled report" looks ahead from here, every hour.
+    const accounts = await withSystem(async (db) => (await db.query<{ id: string }>('SELECT DISTINCT account_id AS id FROM report_definition WHERE active')).rows);
+    for (const a of accounts) await withSystem((db) => evaluateAlerts(db, a.id));
   }
   if (values.pending) {
     const runs = await withSystem(async (db) =>

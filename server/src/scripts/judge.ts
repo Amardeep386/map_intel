@@ -6,6 +6,7 @@
 // they finish (collector/jobs.ts finalizeRun).
 import { parseArgs } from 'node:util';
 import { closeDb, withSystem } from '../lib/db.js';
+import { evaluateAlerts } from '../lib/alerts.js';
 import { judgeAccount } from '../lib/judge.js';
 
 const { values } = parseArgs({
@@ -30,6 +31,8 @@ async function main(): Promise<void> {
   for (const a of accounts) {
     const r = await withSystem((db) => judgeAccount(db, a.id, { trigger: values.backfill ? 'backfill' : 'cli', since }));
     console.log(`${a.slug.padEnd(10)} observations ${r.observations}  verdicts ${r.verdicts}  opened ${r.opened}  resolved ${r.resolved}  closed (no longer included) ${r.closedExcluded}`);
+    const al = await withSystem((db) => evaluateAlerts(db, a.id));
+    console.log(`${''.padEnd(10)} alerts raised ${al.raised} ${JSON.stringify(al.byRule)}  emails logged ${al.emailed}`);
   }
 }
 

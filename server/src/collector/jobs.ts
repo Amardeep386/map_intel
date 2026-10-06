@@ -394,7 +394,7 @@ export async function runCrawlJob(crawlJobId: string, attempt: number, maxAttemp
   return result;
 }
 
-/** A run has finished: record source health for its account (M8), then judge its observations (P3). */
+/** A run has finished: record source health for its account (M8), judge its observations and raise alerts (P3). */
 export async function finalizeRun(crawlRunId: string): Promise<void> {
   const { recordRunHealth } = await import('../lib/health.js');
   await recordRunHealth(crawlRunId);
@@ -402,5 +402,10 @@ export async function finalizeRun(crawlRunId: string): Promise<void> {
   await withSystem(async (db) => {
     const run = (await db.query<{ account_id: string | null }>('SELECT account_id FROM crawl_run WHERE id = $1', [crawlRunId])).rows[0];
     if (run?.account_id) await judgeAccount(db, run.account_id, { trigger: 'crawl', crawlRunId });
+  });
+  const { evaluateAlerts } = await import('../lib/alerts.js');
+  await withSystem(async (db) => {
+    const run = (await db.query<{ account_id: string | null }>('SELECT account_id FROM crawl_run WHERE id = $1', [crawlRunId])).rows[0];
+    if (run?.account_id) await evaluateAlerts(db, run.account_id);
   });
 }

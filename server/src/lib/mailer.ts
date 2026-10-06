@@ -9,6 +9,7 @@ export interface Mail {
   subject: string;
   body: string; // plain text
   reportRunId?: string | null;
+  alertEventId?: string | null;
 }
 
 export interface MailResult { id: string; status: 'logged' | 'sent' | 'failed'; provider: string }
@@ -26,8 +27,8 @@ export async function sendMail(db: Db, m: Mail): Promise<MailResult> {
 
 async function record(db: Db, m: Mail, status: string, provider: string, error: string | null): Promise<string> {
   return (await db.query<{ id: string }>(
-    `INSERT INTO notification (account_id, recipients, subject, body, status, provider, error, report_run_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [m.accountId, m.to, m.subject.slice(0, 300), m.body, status, provider, error, m.reportRunId ?? null],
+    `INSERT INTO notification (account_id, recipients, subject, body, status, provider, error, report_run_id, alert_event_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [m.accountId, m.to, m.subject.slice(0, 300), m.body, status, provider, error, m.reportRunId ?? null, m.alertEventId ?? null],
   )).rows[0].id;
 }

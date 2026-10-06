@@ -519,3 +519,60 @@ test('SFTP delivery: vault credential, pinned host key, files from S3 arrive wit
     await srv.close();
   }
 });
+
+test('alerts: one per change (new seller once, severe once per violation, degraded source once per report slot); emails logged', async () => {
+  const { evaluateAlerts } = await import('../../src/lib/alerts.js');
+  await scratch(async (db) => {
+    const w = await world(db, 'alerts');
+    const now = new Date();
+    const at = (h: number) => new Date(now.getTime() - h * 3_600_000);
+    await db.query("INSERT INTO map_price (account_id, product_id, amount, effective_from) VALUES ($1, $2, 1000, $3)", [w.account, w.product, at(500)]);
+    await db.query("UPDATE alert_rule SET recipients = '{map-room@example.com}' WHERE account_id = $1", [w.account]);
+    await observe(db, w, at(50), 960); // Minor: seller alert only
+    await judgeAccount(db, w.account, { trigger: 'test' });
+    let r = await evaluateAlerts(db, w.account, now);
+    assert.deepEqual(r.byRule, { 'A-01': 1, 'A-02': 0, 'A-03': 0 });
+
+    await observe(db, w, at(40), 700); // the same violation turns Severe
+    await judgeAccount(db, w.account, { trigger: 'test' });
+    r = await evaluateAlerts(db, w.account, now);
+    assert.deepEqual(r.byRule, { 'A-01': 0, 'A-02': 1, 'A-03': 0 });
+    r = await evaluateAlerts(db, w.account, now); // nothing changed: nothing new
+    assert.equal(r.raised, 0);
+
+    // Walmart degraded, and a weekly report runs within 24 h.
+    await db.query('INSERT INTO account_source (account_id, source_id, options) VALUES ($1, $2, $3)', [w.account, w.source, '{}']);
+    const run = (await one<{ id: string }>(db, "INSERT INTO crawl_run (trigger, account_id, status, jobs_total, jobs_done) VALUES ('schedule', $1, 'finished', 1, 1) RETURNING id", [w.account])).id;
+    await db.query("INSERT INTO source_health_snapshot (account_id, source_id, crawl_run_id, jobs_planned, jobs_executed, health, main_failure, created_at) VALUES ($1, $2, $3, 1, 1, 'Blocked', 'blocked', $4)", [w.account, w.source, run, at(1)]);
+    const tpl = (await one<{ id: string }>(db, "SELECT id FROM report_template WHERE code = 'listing_map'")).id;
+    const soon = new Date(now.getTime() + 3 * 3_600_000);
+    await db.query("INSERT INTO report_definition (account_id, name, template_id, cadence, timezone) VALUES ($1, 'Weekly', $2, $3, 'UTC')",
+      [w.account, tpl, `${soon.getUTCMinutes()} ${soon.getUTCHours()} * * *`]);
+    r = await evaluateAlerts(db, w.account, now);
+    assert.deepEqual(r.byRule, { 'A-01': 0, 'A-02': 0, 'A-03': 1 });
+    assert.equal((await evaluateAlerts(db, w.account, new Date(now.getTime() + 60_000))).raised, 0); // same slot: once
+
+    const events = (await db.query<{ level: string; title: string }>('SELECT level, title FROM alert_event WHERE account_id = $1 ORDER BY created_at, level', [w.account])).rows;
+    assert.deepEqual(events.map((e) => e.level).sort(), ['Health', 'Severe', 'Standard']);
+    assert.ok(events.some((e) => e.title === 'Walmart.com is blocked before "Weekly"'));
+    assert.equal((await one<{ n: number }>(db, "SELECT count(*)::int AS n FROM notification WHERE account_id = $1 AND status = 'logged' AND alert_event_id IS NOT NULL", [w.account])).n, 3);
+    await expectRefused(db, "UPDATE alert_event SET title = 'x' WHERE account_id = $1", [w.account]);
+    await db.query('UPDATE alert_event SET read_at = now() WHERE account_id = $1', [w.account]); // marking read is allowed
+  });
+});
+
+test('routes: alert inbox and rules; recipients validated; Brand users see no alerts', async () => {
+  const base = `/accounts/${acct}/alerts`;
+  const inbox = await call(app, u.analyst, 'GET', `${base}/events?unread=true`);
+  assert.equal(inbox.statusCode, 200, inbox.body);
+  assert.equal(inbox.json().unread, 0);
+  assert.equal((await call(app, u.brand, 'GET', `${base}/events`)).statusCode, 403);
+  const rules = (await call(app, u.analyst, 'GET', `${base}/rules`)).json();
+  assert.deepEqual(rules.map((r: { code: string }) => r.code), ['A-01', 'A-02', 'A-03']);
+  assert.equal((await call(app, u.analyst, 'PATCH', `${base}/rules/${rules[1].id}`, { active: false })).statusCode, 403);
+  assert.equal((await call(app, u.manager, 'PATCH', `${base}/rules/${rules[1].id}`, { recipients: ['not-an-email'] })).statusCode, 400);
+  const ok = await call(app, u.manager, 'PATCH', `${base}/rules/${rules[1].id}`, { recipients: ['map-room@example.com'], severity: 'Standard' });
+  assert.equal(ok.statusCode, 200, ok.body);
+  assert.deepEqual([ok.json().recipients, ok.json().config.severity], [['map-room@example.com'], 'Standard']);
+  assert.equal((await call(app, u.analyst, 'POST', `${base}/events/read`, { all: true })).statusCode, 200);
+});
