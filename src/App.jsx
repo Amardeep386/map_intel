@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
-  Plus, ChevronDown, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
+  ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
   Eye, EyeOff, ShieldCheck, ArrowRight
 } from "lucide-react";
 import lgLogo from "./assets/lg.png";
@@ -20,6 +20,9 @@ import { SellersView } from "./views/SellersView.jsx";
 import { DataHealthView } from "./views/DataHealthView.jsx";
 import { ViolationsView } from "./views/ViolationsView.jsx";
 import { OverviewView } from "./views/OverviewView.jsx";
+import { RulesView } from "./views/RulesView.jsx";
+import { ReportsView } from "./views/ReportsView.jsx";
+import { AlertsView } from "./views/AlertsView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 
 const STATUS_BG = {
@@ -87,48 +90,6 @@ function EmailCenterView({ clientName }) {
   );
 }
 
-function ReportsView({ clientName }) {
-  const { shared } = React.useContext(DataContext);
-  return (
-    <div>
-      <PageHeader title={`Reports — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Schedule report</PrimaryButton>} />
-      <Card>
-        <Table columns={["Report name", "Frequency", "Recipients", "Last run", "Format"]}>
-          {shared.reports.map((r, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{r.name}</td>
-              <td className="py-2 px-3 text-brand-taupe">{r.freq}</td>
-              <td className="py-2 px-3 text-brand-taupe">{r.recipients}</td>
-              <td className="py-2 px-3 text-brand-taupe">{r.lastRun}</td>
-              <td className="py-2 px-3"><Pill text={r.format} tone="bg-slate-100 text-slate-600 border-slate-200" /></td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
-function AlertsView({ clientName }) {
-  const { shared } = React.useContext(DataContext);
-  return (
-    <div>
-      <PageHeader title={`Alerts — ${clientName} (Sandbox)`} action={<PrimaryButton><Plus className="w-4 h-4" /> Add rule</PrimaryButton>} />
-      <Card>
-        <Table columns={["Alert name", "Condition", "Channel", "Recipients"]}>
-          {shared.alertRules.map((a, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{a.name}</td>
-              <td className="py-2 px-3 text-brand-taupe">{a.condition}</td>
-              <td className="py-2 px-3 text-brand-taupe">{a.channel}</td>
-              <td className="py-2 px-3 text-brand-taupe">{a.recipients}</td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
 
 // ---------- Accept an invite (opened from an invite link) ----------
 function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
@@ -221,6 +182,7 @@ const NAV = [
   { id: "pricing", label: "MAP Policies", icon: DollarSign },
   { id: "merchants", label: "Sellers", icon: Store, needs: "sellers.read" },
   { id: "violations", label: "Violations", icon: AlertTriangle, needs: "violations.read" },
+  { id: "rules", label: "Rules", icon: Scale, needs: "rules.read" },
   { id: "email", label: "Email Center", icon: Mail },
   { id: "reports", label: "Reports", icon: FileText, needs: "reports.read" },
   { id: "alerts", label: "Alerts", icon: Bell, needs: "alerts.read" },
@@ -437,7 +399,16 @@ export default function App() {
     api.violations(client, { active: true, limit: 1 }).then((r) => { if (live) setOpenViolations(r?.total ?? 0); }).catch(() => {});
     return () => { live = false; };
   }, [screen, client, canViolations, view]);
-  const navBadges = { violations: openViolations, alerts: shared.alertUnread };
+  // Unread alerts for the sidebar badge (the Alerts screen updates it when alerts are read).
+  const [alertUnread, setAlertUnread] = useState(0);
+  const canAlerts = actions.includes("alerts.read");
+  useEffect(() => {
+    if (screen !== 'app' || !canAlerts || !client.id && !api.isMock) return;
+    let live = true;
+    api.alertEvents(client, { unread: true, limit: 1 }).then((r) => { if (live) setAlertUnread(r?.unread ?? 0); }).catch(() => {});
+    return () => { live = false; };
+  }, [screen, client, canAlerts, view]);
+  const navBadges = { violations: openViolations, alerts: alertUnread };
   const nav = useMemo(() => NAV.filter((n) => !n.needs || actions.includes(n.needs)), [actions]);
   const accountRole = currentUser?.accounts?.find((a) => a.id === client.id)?.role;
   // Switching to an account where the current screen isn't allowed shows the Overview instead.
@@ -513,8 +484,9 @@ export default function App() {
       case "health": return <DataHealthView />;
       case "violations": return <ViolationsView />;
       case "email": return <EmailCenterView clientName={client.name} />;
-      case "reports": return <ReportsView clientName={client.name} />;
-      case "alerts": return <AlertsView clientName={client.name} />;
+      case "reports": return <ReportsView />;
+      case "rules": return <RulesView />;
+      case "alerts": return <AlertsView onUnreadChange={setAlertUnread} />;
       case "settings": return <SettingsView />;
       case "users": return <UsersView />;
       case "audit": return <AuditLogView />;

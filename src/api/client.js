@@ -18,7 +18,10 @@ import {
 import { mockConfig } from "./mock/config.js";
 import { mockCatalog } from "./mock/catalog.js";
 import { mockHealth } from "./mock/health.js";
-import { mockDetection } from "./mock/detection.js";
+import { mockDetection as mockViolations } from "./mock/detection.js";
+import { mockP3 } from "./mock/p3admin.js";
+
+const mockDetection = { ...mockViolations, ...mockP3 };
 
 export const USE_MOCK = String(import.meta.env.VITE_USE_MOCK ?? "true").toLowerCase() !== "false";
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
@@ -482,6 +485,34 @@ export const api = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
+
+  // ---------------- Rules (P3) ----------------
+  rules(client) { return USE_MOCK ? mockDetection.rules(client) : request(`/accounts/${client.id}/rules`); },
+  rule(client, ruleId) { return USE_MOCK ? mockDetection.rule(client, ruleId) : request(`/accounts/${client.id}/rules/${ruleId}`); },
+  createRule(client, body) { return USE_MOCK ? mockDetection.createRule(client, body) : request(`/accounts/${client.id}/rules`, { method: "POST", body }); },
+  saveRuleDraft(client, ruleId, body) { return USE_MOCK ? mockDetection.saveDraft(client, ruleId, body) : request(`/accounts/${client.id}/rules/${ruleId}/draft`, { method: "PUT", body }); },
+  discardRuleDraft(client, ruleId) { return USE_MOCK ? mockDetection.discardDraft(client, ruleId) : request(`/accounts/${client.id}/rules/${ruleId}/draft`, { method: "DELETE" }); },
+  dryRunRule(client, ruleId, range) { return USE_MOCK ? mockDetection.dryRun(client, ruleId, range) : request(`/accounts/${client.id}/rules/${ruleId}/draft/dry-run`, { method: "POST", body: range }); },
+  publishRule(client, ruleId) { return USE_MOCK ? mockDetection.publish(client, ruleId) : request(`/accounts/${client.id}/rules/${ruleId}/draft/publish`, { method: "POST" }); },
+  replayRuleVersion(client, versionId, range) { return USE_MOCK ? mockDetection.replay(client, versionId, range) : request(`/accounts/${client.id}/rules/versions/${versionId}/replay`, { method: "POST", body: range }); },
+
+  // ---------------- Reports (P3) ----------------
+  reportTemplates(client) { return USE_MOCK ? mockDetection.reportTemplates(client) : request(`/accounts/${client.id}/reports/templates`); },
+  reportDefinitions(client) { return USE_MOCK ? mockDetection.reportDefinitions(client) : request(`/accounts/${client.id}/reports/definitions`); },
+  createReportDefinition(client, body) { return USE_MOCK ? mockDetection.createReportDefinition(client, body) : request(`/accounts/${client.id}/reports/definitions`, { method: "POST", body }); },
+  updateReportDefinition(client, id, body) { return USE_MOCK ? mockDetection.updateReportDefinition(client, id, body) : request(`/accounts/${client.id}/reports/definitions/${id}`, { method: "PATCH", body }); },
+  runReportDefinition(client, id) { return USE_MOCK ? mockDetection.runReport(client, id) : request(`/accounts/${client.id}/reports/definitions/${id}/run`, { method: "POST" }); },
+  runReport(client, body) { return USE_MOCK ? mockDetection.runReport(client, null, body) : request(`/accounts/${client.id}/reports/runs`, { method: "POST", body }); },
+  reportRuns(client) { return USE_MOCK ? mockDetection.reportRuns(client) : request(`/accounts/${client.id}/reports/runs`); },
+  reportRun(client, runId) { return USE_MOCK ? mockDetection.reportRun(client, runId) : request(`/accounts/${client.id}/reports/runs/${runId}`); },
+  reportRunLink(client, runId) { return USE_MOCK ? mockDetection.reportRunLink(client, runId) : request(`/accounts/${client.id}/reports/runs/${runId}/link`, { method: "POST" }); },
+  sftpTest(client, body) { return USE_MOCK ? mockDetection.sftpTest(client, body) : request(`/accounts/${client.id}/reports/sftp-test`, { method: "POST", body }); },
+
+  // ---------------- Alerts (P3) ----------------
+  alertEvents(client, filters = {}) { return USE_MOCK ? mockDetection.alertEvents(client, filters) : request(`/accounts/${client.id}/alerts/events${qs(filters)}`); },
+  markAlertsRead(client, body) { return USE_MOCK ? mockDetection.markAlertsRead(client, body) : request(`/accounts/${client.id}/alerts/events/read`, { method: "POST", body }); },
+  alertRules(client) { return USE_MOCK ? mockDetection.alertRules(client) : request(`/accounts/${client.id}/alerts/rules`); },
+  updateAlertRule(client, id, body) { return USE_MOCK ? mockDetection.updateAlertRule(client, id, body) : request(`/accounts/${client.id}/alerts/rules/${id}`, { method: "PATCH", body }); },
 
   // ---------------- Evidence (real when the backend is on) ----------------
   async getEvidence(evidenceId) {
