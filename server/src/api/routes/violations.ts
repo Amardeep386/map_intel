@@ -6,6 +6,7 @@ import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { withTenant } from '../../lib/db.js';
 import type { ViolationStatus } from '../../lib/rules.js';
 import { changeStatus, listViolations, SEVERITIES, STATUSES, toCsv, violationDetail, ViolationError, type ViolationFilter } from '../../lib/violations.js';
+import { overview } from '../../lib/overview.js';
 import { HttpError } from '../app.js';
 import { parse, uuidOr404 } from '../validate.js';
 
@@ -42,18 +43,24 @@ function toFilter(q: Query): ViolationFilter {
 export async function violationRoutes(app: FastifyInstance): Promise<void> {
   const base = '/accounts/:accountId/violations';
 
+  /** Overview dashboard: KPIs, severity mix, trend with degraded days, recent violations, top sellers. */
+  app.get<{ Params: Params; Querystring: Query }>('/accounts/:accountId/overview', { config: { permission: 'violations.read' } }, async (req) => {
+    const q = parse(z.object({ days: z.coerce.number().int().min(7).max(365).default(30) }), req.query);
+    return withTenant(req.params.accountId, (db) => overview(db, req.params.accountId, { days: q.days }));
+  });
+
   app.get<{ Params: Params; Querystring: Query }>(base, { config: { permission: 'violations.read' } }, async (req) => {
     const f = toFilter(req.query);
     return withTenant(req.params.accountId, async (db) => {
-      const r = await listViolations(db, f);
-      const counts = (await db.query<{ status: string; n: number }>('SELECT status, count(*)::int AS n FROM violation_current GROUP BY status')).rows;
+      const r = await listViolations(db, req.params.accountId, f);
+      const counts = (await db.query<{ status: string; n: number }>('SELECT status, count(*)::int AS n FROM violation_current WHERE account_id = $1 GROUP BY status', [req.params.accountId])).rows;
       return { ...r, counts: Object.fromEntries(counts.map((c) => [c.status, c.n])) };
     });
   });
 
   app.get<{ Params: Params; Querystring: Query }>(`${base}.csv`, { config: { permission: 'violations.read' } }, async (req, reply) => {
     const f = { ...toFilter(req.query), limit: 1000, offset: 0 };
-    const { rows } = await withTenant(req.params.accountId, (db) => listViolations(db, f));
+    const { rows } = await withTenant(req.params.accountId, (db) => listViolations(db, req.params.accountId, f));
     reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', 'attachment; filename="violations.csv"');
     return toCsv(
       ['Violation', 'SKU', 'Product', 'Seller', 'Seller class', 'Source', 'MAP', 'Advertised', 'Below MAP %', 'Severity', 'Status', 'First seen', 'Last seen', 'Observations', 'Rule', 'Listing URL'],

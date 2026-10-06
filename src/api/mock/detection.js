@@ -97,4 +97,31 @@ export const mockDetection = {
       proofs: [], files: [], verification: null, recordSha256: "sample0000000000000000000000000000000000000000000000000000000000",
     };
   },
+  async overview(client) {
+    const vs = all(client);
+    const active = vs.filter((v) => !v.episode_closed && ["Open", "Needs review", "Under notice"].includes(v.status));
+    const sev = (s) => vs.filter((v) => v.severity === s).length;
+    const trend = Array.from({ length: 31 }, (_, i) => {
+      const day = new Date(Date.now() - (30 - i) * DAY).toISOString().slice(0, 10);
+      return { day, unauthorised: 2 + ((i * 7) % 5), authorised: (i * 3) % 3 };
+    });
+    const sellers = {};
+    for (const v of vs) {
+      const s = (sellers[v.seller] ??= { seller: v.seller, source: v.source, violations: 0, active: 0, avg_depth: 0, class: v.class_at_capture });
+      s.violations += 1;
+      s.active += active.includes(v) ? 1 : 0;
+      s.avg_depth = Math.round(((s.avg_depth * (s.violations - 1) + v.max_depth_pct) / s.violations) * 10) / 10;
+    }
+    return {
+      period: { from: new Date(Date.now() - 30 * DAY).toISOString(), to: new Date().toISOString(), days: 30 },
+      kpis: { compliance: 94.2, compliancePrev: 91.8, judged: 412, openViolations: active.length, openedLast24h: 2, unauthorisedSellers: new Set(active.filter((v) => v.class_at_capture !== "MAP Authorised").map((v) => v.seller)).size,
+        skusMonitored: demoFor(client.name).products.filter((p) => p.status === "Active").length, medianTtcHours: 93, resolvedInPeriod: vs.filter((v) => v.status === "Resolved").length, coverage: 91 },
+      severity: ["Minor", "Standard", "Severe"].map((name) => ({ name, value: sev(name) })),
+      trend,
+      degradedDays: [trend[24], trend[25]].map((d) => ({ day: d.day, sources: ["Target"] })),
+      quality: { coverage: 91, degraded: [{ code: "target_us", name: "Target", health: "Failing" }], note: "Data quality: Target failing (blocked). Violations from this source may be undercounted." },
+      recent: active.filter((v) => v.severity !== "Minor").slice(0, 6),
+      topSellers: Object.values(sellers).sort((a, b) => b.violations - a.violations).slice(0, 6),
+    };
+  },
 };

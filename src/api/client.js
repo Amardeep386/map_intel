@@ -429,6 +429,9 @@ export const api = {
   },
 
   // ---------------- Violations (P3) ----------------
+  overview(client, days) {
+    return USE_MOCK ? mockDetection.overview(client) : request(`/accounts/${client.id}/overview${qs({ days })}`);
+  },
   /** Filters: status / severity (comma lists), source, seller, product, q, active, from, to, limit, offset. */
   violations(client, filters = {}) {
     return USE_MOCK ? mockDetection.violations(client, filters) : request(`/accounts/${client.id}/violations${qs(filters)}`);

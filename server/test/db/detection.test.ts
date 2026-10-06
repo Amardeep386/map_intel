@@ -12,6 +12,7 @@ import { contentHash } from '../../src/lib/rules.js';
 import { changeStatus, listViolations, violationDetail } from '../../src/lib/violations.js';
 import { createLink, evidenceRecord, openLink } from '../../src/lib/evidenceLinks.js';
 import { withSystem } from '../../src/lib/db.js';
+import { overview } from '../../src/lib/overview.js';
 import { closeQueue } from '../../src/lib/queue.js';
 import { call, createTestAccount, createUser, expectRefused, removeTestAccounts, removeTestUsers, testApp, type TestUser } from './helpers.js';
 
@@ -271,9 +272,9 @@ test('violations: list, detail with history, status changes as events (reasons, 
     await observe(db, w, d('10-03T00:00:00'), 650);
     await judgeAccount(db, w.account, { trigger: 'test' });
 
-    const { total, rows } = await listViolations(db, { status: ['Open'], q: 'det-1' });
+    const { total, rows } = await listViolations(db, w.account, { status: ['Open'], q: 'det-1' });
     const mine = rows.filter((r) => r.product_id === w.product);
-    assert.ok(total >= 1);
+    assert.equal(total, 1);
     assert.equal(mine.length, 1);
     const v = mine[0];
     assert.deepEqual([v.code, v.seller, v.source_code, v.severity, v.observations, v.last_price, v.last_map], ['V-00001', 'Det Seller', 'walmart_us', 'Severe', 2, 650, 1000]);
@@ -292,7 +293,7 @@ test('violations: list, detail with history, status changes as events (reasons, 
     // A later breach of the same listing opens a new violation.
     await observe(db, w, d('10-05T00:00:00'), 600);
     await judgeAccount(db, w.account, { trigger: 'test' });
-    assert.equal((await listViolations(db, { productId: w.product })).total, 2);
+    assert.equal((await listViolations(db, w.account, { productId: w.product })).total, 2);
   });
 });
 
@@ -359,4 +360,43 @@ test('routes: /e/:token refuses unknown, expired and wrong-scope links; creating
   const missing = '00000000-0000-4000-8000-000000000000';
   assert.equal((await call(app, u.brand, 'POST', `/accounts/${acct}/violations/${missing}/links`, {})).statusCode, 403);
   assert.equal((await call(app, u.analyst, 'POST', `/accounts/${acct}/violations/${missing}/links`, {})).statusCode, 404);
+});
+
+test('overview: compliance, open violations, time to compliance, trend split by class, degraded days', async () => {
+  await scratch(async (db) => {
+    const w = await world(db, 'overview');
+    const now = new Date();
+    const at = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000);
+    await db.query("INSERT INTO map_price (account_id, product_id, amount, effective_from) VALUES ($1, $2, 1000, $3)", [w.account, w.product, at(60)]);
+    await db.query("INSERT INTO seller_classification (account_id, seller_id, class, effective_from) VALUES ($1, $2, 'Unauthorised', $3)", [w.account, w.seller, at(60)]);
+    await observe(db, w, at(6), 800);   // below
+    await observe(db, w, at(5), 800);   // below
+    await observe(db, w, at(4), 1000);  // compliant: resolved after 48 h
+    await observe(db, w, at(2), 980);   // inside tolerance
+    await observe(db, w, at(1), 700);   // below again: open, Severe
+    await judgeAccount(db, w.account, { trigger: 'test' });
+    // A degraded Walmart run three days ago.
+    await db.query('INSERT INTO account_source (account_id, source_id, options) VALUES ($1, $2, $3)', [w.account, w.source, '{}']);
+    const run = (await one<{ id: string }>(db, "INSERT INTO crawl_run (trigger, account_id, status, jobs_total, jobs_done) VALUES ('schedule', $1, 'finished', 2, 2) RETURNING id", [w.account])).id;
+    await db.query(
+      `INSERT INTO source_health_snapshot (account_id, source_id, crawl_run_id, jobs_planned, jobs_executed, health, created_at)
+       VALUES ($1, $2, $3, 4, 3, 'Degraded', $4)`, [w.account, w.source, run, at(3)]);
+
+    const o = await overview(db, w.account, { days: 30, now });
+    assert.equal(o.kpis.compliance, 40); // 2 of 5 judged prices at or above MAP (minus tolerance)
+    assert.equal(o.kpis.openViolations, 1);
+    assert.equal(o.kpis.unauthorisedSellers, 1);
+    assert.equal(o.kpis.skusMonitored, 1);
+    assert.equal(o.kpis.medianTtcHours, 48);
+    assert.equal(o.kpis.coverage, 75);
+    assert.deepEqual(o.severity, [{ name: 'Minor', value: 0 }, { name: 'Standard', value: 0 }, { name: 'Severe', value: 2 }]);
+    assert.equal(o.trend.length, 31);
+    assert.equal(o.trend.reduce((n, d) => n + d.unauthorised, 0), 3);
+    assert.equal(o.trend.reduce((n, d) => n + d.authorised, 0), 0);
+    assert.deepEqual(o.degradedDays.map((d) => d.sources), [['Walmart.com']]);
+    assert.match(o.quality.note ?? '', /Walmart\.com degraded/);
+    assert.equal(o.recent.length, 1);
+    assert.equal(o.topSellers[0].seller, 'Det Seller');
+    assert.equal(o.topSellers[0].violations, 2);
+  });
 });

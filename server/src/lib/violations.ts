@@ -40,9 +40,9 @@ const SELECT = `
     JOIN listing l ON l.id = v.listing_id
     LEFT JOIN seller se ON se.id = v.seller_id`;
 
-function where(f: ViolationFilter): { sql: string; params: unknown[] } {
-  const c: string[] = [];
-  const p: unknown[] = [];
+function where(accountId: string, f: ViolationFilter): { sql: string; params: unknown[] } {
+  const c: string[] = ['v.account_id = $1'];
+  const p: unknown[] = [accountId];
   const add = (sql: string, v: unknown) => { p.push(v); c.push(sql.replace('?', `$${p.length}`)); };
   if (f.status?.length) add('v.status = ANY(?::text[])', f.status);
   if (f.severity?.length) add('v.severity = ANY(?::text[])', f.severity);
@@ -57,11 +57,11 @@ function where(f: ViolationFilter): { sql: string; params: unknown[] } {
     const i = `$${p.length}`;
     c.push(`(p.product_code ILIKE ${i} OR p.name ILIKE ${i} OR se.name ILIKE ${i} OR 'V-' || lpad(v.seq::text, 5, '0') ILIKE ${i})`);
   }
-  return { sql: c.length ? `WHERE ${c.join(' AND ')}` : '', params: p };
+  return { sql: `WHERE ${c.join(' AND ')}`, params: p };
 }
 
-export async function listViolations(db: Db, f: ViolationFilter = {}) {
-  const w = where(f);
+export async function listViolations(db: Db, accountId: string, f: ViolationFilter = {}) {
+  const w = where(accountId, f);
   const n = w.params.length;
   const rows = (await db.query(
     `${SELECT} ${w.sql} ORDER BY v.episode_closed, v.max_depth_pct DESC NULLS LAST, v.opened_at DESC LIMIT $${n + 1} OFFSET $${n + 2}`,
