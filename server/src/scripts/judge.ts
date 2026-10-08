@@ -30,7 +30,7 @@ async function main(): Promise<void> {
   if (!accounts.length) throw new Error(`no account ${values.account}`);
   for (const a of accounts) {
     const r = await withSystem((db) => judgeAccount(db, a.id, { trigger: values.backfill ? 'backfill' : 'cli', since }));
-    console.log(`${a.slug.padEnd(10)} observations ${r.observations}  verdicts ${r.verdicts}  opened ${r.opened}  resolved ${r.resolved}  closed (no longer included) ${r.closedExcluded}`);
+    console.log(`${a.slug.padEnd(10)} observations ${r.observations}  verdicts ${r.verdicts}  opened ${r.opened}  resolved ${r.resolved}  closed (no longer included) ${r.closedExcluded}  cases resolved ${r.casesResolved}`);
     const al = await withSystem((db) => evaluateAlerts(db, a.id));
     console.log(`${''.padEnd(10)} alerts raised ${al.raised} ${JSON.stringify(al.byRule)}  emails logged ${al.emailed}`);
   }

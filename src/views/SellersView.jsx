@@ -1,19 +1,34 @@
 // Sellers (docs/reference/prototype-src/views_monitor.jsx): storefronts found on the account's
 // listings, with effective-dated classification (a change is a new record), aliases, linked
-// sellers and notice contacts. Risk, violations and time to compliance arrive with P3 / P4.
+// sellers and notice contacts. P4: risk index (frequency, depth, recurrence, responsiveness over 90
+// days), violations, time to compliance and compliance per seller; open a case from the profile.
 import React, { useCallback, useEffect, useState } from "react";
-import { Plus, Store, Trash2 } from "lucide-react";
+import { Gavel, Plus, Store, Trash2 } from "lucide-react";
 import { api } from "../api/client.js";
 import {
-  Card, Drawer, Field, KPI, KV, Modal, Note, PageHeader, Pill, PrimaryButton, SearchBox, SecondaryButton, Table, Td, inputCls,
+  Bar, Card, Drawer, Field, KPI, KV, Modal, Note, PageHeader, Pill, PrimaryButton, SearchBox, SecondaryButton, Table, Td, inputCls,
 } from "../ui.jsx";
-import { TONE, formatDay } from "../format.js";
+import { TONE, formatDay, money } from "../format.js";
 import { attempt, useWorkspace } from "../workspace.js";
 import { DEMO_MERCHANTS } from "../api/mock/demo.js";
 
 const CLASSES = ["MAP Authorised", "Unauthorised", "Brand Direct", "Unknown"];
 // Every merchant on the brands' lists is a catalogue source (server/src/collector/catalogue.ts).
 const SOURCES = DEMO_MERCHANTS.map((m) => [m.source, m.name]).sort((x, y) => x[1].localeCompare(y[1]));
+
+const riskTone = (r) => (r > 60 ? "bg-red-500" : r > 30 ? "bg-amber-500" : "bg-emerald-500");
+const hours = (h) => (h === null || h === undefined ? "—" : h < 48 ? `${h} h` : `${Math.round(h / 24)} d`);
+const pct = (p) => (p === null || p === undefined ? "—" : `${p}%`);
+
+function RiskCell({ value }) {
+  if (value === undefined) return <span className="text-brand-taupe">—</span>;
+  return (
+    <span className="flex items-center gap-2 w-24">
+      <span className="tabular-nums w-6">{value}</span>
+      <span className="flex-1"><Bar value={value} max={100} tone={riskTone(value)} /></span>
+    </span>
+  );
+}
 
 export function SellersView() {
   const { client, can, showToast } = useWorkspace();
@@ -26,7 +41,9 @@ export function SellersView() {
   const load = useCallback(async () => setRows((await attempt(showToast, () => api.sellers(client))) ?? []), [client, showToast]);
   useEffect(() => { attempt(showToast, load); }, [load, showToast]);
 
-  const list = (rows ?? []).filter((s) => (cls === "All" || s.classification === cls) && `${s.name} ${s.source}`.toLowerCase().includes(q.toLowerCase()));
+  const list = (rows ?? [])
+    .filter((s) => (cls === "All" || s.classification === cls) && `${s.name} ${s.source}`.toLowerCase().includes(q.toLowerCase()))
+    .sort((x, y) => (y.risk ?? 0) - (x.risk ?? 0) || x.name.localeCompare(y.name));
   const count = (c) => (rows ?? []).filter((s) => s.classification === c).length;
   return (
     <div>
@@ -37,23 +54,26 @@ export function SellersView() {
         <KPI label="Unauthorised" value={count("Unauthorised")} subTone="text-red-600 font-semibold" sub="classified" />
         <KPI label="MAP Authorised" value={count("MAP Authorised")} />
         <KPI label="Unknown" value={count("Unknown")} sub="waiting for a classification" subTone="text-amber-700" />
+        <KPI label="High risk" value={(rows ?? []).filter((s) => (s.risk ?? 0) > 60).length} sub="risk index above 60 (90 days)" subTone="text-red-600 font-semibold" />
       </div>
       <Card>
         <div className="flex justify-between mb-4 gap-3 flex-wrap">
           <SearchBox value={q} onChange={setQ} placeholder="Search seller or source..." />
           <select value={cls} onChange={(e) => setCls(e.target.value)} className={`${inputCls} !w-48`}>{["All", ...CLASSES].map((c) => <option key={c}>{c}</option>)}</select>
         </div>
-        <Table columns={["Seller", "Source", "Classification", "Since", "Risk index", "Tracked SKUs", "Listings", "Violations", "Notice contact"]}>
+        <Table columns={["Seller", "Source", "Classification", "Risk index", "Tracked SKUs", "Violations (90d)", "Repeat", "Avg depth", "Time to compliance", "Compliance", "Notice contact"]}>
           {list.map((m) => (
             <tr key={m.id} onClick={() => setSel(m.id)} className="hover:bg-brand-beige/20 cursor-pointer">
               <Td className="font-semibold"><span className="flex items-center gap-2"><Store className="w-4 h-4 text-brand-taupe" />{m.name}</span></Td>
               <Td className="text-brand-taupe">{m.source}</Td>
               <Td><Pill text={m.classification} tone={TONE[m.classification]} /></Td>
-              <Td className="text-brand-taupe">{formatDay(m.class_since)}</Td>
-              <Td className="text-brand-taupe" title="From Phase 3 violations">—</Td>
+              <Td><RiskCell value={m.risk} /></Td>
               <Td>{m.tracked}</Td>
-              <Td>{m.listings}</Td>
-              <Td className="text-brand-taupe" title="From Phase 3">—</Td>
+              <Td>{m.violations ? <Pill text={m.active ? `${m.violations} · ${m.active} open` : m.violations} tone={TONE.Open} /> : "0"}</Td>
+              <Td>{m.repeats ?? "—"}</Td>
+              <Td>{pct(m.avgDepthPct)}</Td>
+              <Td className="text-brand-taupe">{hours(m.ttcHours)}</Td>
+              <Td><span className={m.compliancePct === null || m.compliancePct === undefined ? "text-brand-taupe" : m.compliancePct >= 90 ? "text-emerald-700 font-bold" : "text-amber-700 font-bold"}>{pct(m.compliancePct)}</span></Td>
               <Td>{m.contacts ? <span className="text-emerald-700 text-xs font-semibold">✓ {m.contacts}</span> : <span className="text-amber-700 text-xs">Missing</span>}</Td>
             </tr>
           ))}
@@ -77,6 +97,8 @@ function SellerDrawer({ sellerId, sellers, onClose, onChanged }) {
   useEffect(() => { attempt(showToast, load); }, [load, showToast]);
   if (!s) return null;
   const writable = can("sellers.write");
+  const st = s.stats ?? {};
+  const openable = (s.violations ?? []).filter((v) => !v.episode_closed && !v.case_id);
   const after = async (msg) => {
     showToast(msg);
     setModal(null);
@@ -92,14 +114,32 @@ function SellerDrawer({ sellerId, sellers, onClose, onChanged }) {
         <SecondaryButton onClick={() => setModal("alias")}>Add alias</SecondaryButton>
         <SecondaryButton onClick={() => setModal("link")}>Link seller</SecondaryButton>
         <SecondaryButton onClick={() => setModal("contact")}>Add contact</SecondaryButton>
-        <PrimaryButton onClick={() => setModal("class")}>Change classification</PrimaryButton>
+        <SecondaryButton onClick={() => setModal("class")}>Change classification</SecondaryButton>
+        {can("cases.write") && <PrimaryButton onClick={() => setModal("case")} disabled={!openable.length}><Gavel className="w-4 h-4" /> Open case</PrimaryButton>}
       </>}>
       <div className="flex gap-4 flex-wrap mb-5">
-        <KPI label="Classification" value={s.classification} />
-        <KPI label="Listings" value={s.listings.length} sub={`${s.listings.filter((l) => l.state === "Included").length} included`} />
-        <KPI label="Risk index" value="—" sub="with Phase 3 violations" />
-        <KPI label="Time to compliance" value="—" sub="with Phase 4 cases" />
+        <KPI label="Risk index" value={st.risk ?? "—"} sub="frequency · depth · recurrence · response" />
+        <KPI label="Violations (90d)" value={st.violations ?? "—"} sub={`${st.repeats ?? 0} repeat · ${st.active ?? 0} open`} />
+        <KPI label="Avg discount depth" value={pct(st.avgDepthPct)} />
+        <KPI label="Time to compliance" value={hours(st.ttcHours)} sub="median, to the fixed price" />
+        <KPI label="Compliance" value={pct(st.compliancePct)} sub="observations at or above MAP" />
       </div>
+      {st.parts && (
+        <Card title="How the risk index is made" className="mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+            {[["Frequency", st.parts.frequency, `${st.violations} violation${st.violations === 1 ? "" : "s"} (5 = full)`, 35],
+              ["Depth", st.parts.depth, `${pct(st.avgDepthPct)} average (30% = full)`, 25],
+              ["Recurrence", st.parts.recurrence, `${st.repeats} repeat${st.repeats === 1 ? "" : "s"} (3 = full)`, 25],
+              ["Responsiveness", st.parts.responsiveness, st.noticesDue ? `${st.unanswered} of ${st.noticesDue} notices unanswered` : "no notice due yet: not counted", 15]].map(([k, v, why, w]) => (
+              <div key={k}>
+                <div className="flex justify-between mb-1"><span className="font-semibold">{k}</span><span className="text-brand-taupe">weight {w}</span></div>
+                {v === null ? <div className="h-2" /> : <Bar value={Math.round(v * 100)} max={100} tone={riskTone(v * 100)} />}
+                <div className="text-brand-taupe mt-1">{why}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card title="Classification history">
           <div className="space-y-3 text-xs relative pl-3.5 border-l border-brand-beige">
@@ -131,6 +171,27 @@ function SellerDrawer({ sellerId, sellers, onClose, onChanged }) {
           </div>
         </Card>
       </div>
+      {(s.violations ?? []).length > 0 && (
+        <Card title="Violations" className="mt-4">
+          <Table columns={["Violation", "Product", "Advertised", "MAP", "Deepest", "Status", "Since", "Case"]}>
+            {s.violations.map((v) => (
+              <tr key={v.id}>
+                <Td className="font-semibold text-brand-copper">{v.code}</Td>
+                <Td>{v.sku} — {v.product}</Td>
+                <Td>{money(v.last_price)}</Td>
+                <Td className="text-brand-taupe">{money(v.last_map)}</Td>
+                <Td>{pct(v.max_depth_pct === null ? null : Math.round(v.max_depth_pct * 10) / 10)}</Td>
+                <Td><Pill text={v.status} tone={TONE[v.status]} /></Td>
+                <Td className="text-brand-taupe">{formatDay(v.opened_at)}</Td>
+                <Td className="text-brand-taupe">{v.case_code ?? "—"}</Td>
+              </tr>
+            ))}
+          </Table>
+          {(s.cases ?? []).length > 0 && (
+            <div className="text-xs text-brand-taupe mt-3">Cases: {s.cases.map((c) => `${c.code} (${c.state})`).join(" · ")}</div>
+          )}
+        </Card>
+      )}
       <Card title="Listings" className="mt-4">
         {s.listings.length ? (
           <Table columns={["Product", "State", "URL"]}>
@@ -146,7 +207,45 @@ function SellerDrawer({ sellerId, sellers, onClose, onChanged }) {
         onSubmit={(v) => api.addSellerAlias(client, s.id, { alias: v.alias })} onDone={() => after("Alias added.")} />}
       {modal === "link" && <LinkModal seller={s} sellers={sellers} onClose={() => setModal(null)} onDone={() => after("Sellers linked.")} />}
       {modal === "contact" && <ContactModal seller={s} onClose={() => setModal(null)} onDone={() => after("Contact added.")} />}
+      {modal === "case" && <OpenCaseModal seller={s} violations={openable} onClose={() => setModal(null)} onDone={(code) => after(`Case ${code} opened. Draft the notice from Enforcement.`)} />}
     </Drawer>
+  );
+}
+
+function OpenCaseModal({ seller, violations, onClose, onDone }) {
+  const { client, showToast } = useWorkspace();
+  const [picked, setPicked] = useState(() => new Set(violations.map((v) => v.id)));
+  const toggle = (vid) => setPicked((p) => {
+    const n = new Set(p);
+    if (n.has(vid)) n.delete(vid); else n.add(vid);
+    return n;
+  });
+  const submit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const body = { violationIds: [...picked], responseDue: f.get("due") || undefined, note: f.get("note") || undefined };
+    const r = await attempt(showToast, () => api.openCase(client, body));
+    if (r) await onDone(r.code);
+  };
+  return (
+    <Modal open onClose={onClose} title={`Open a case — ${seller.name}`} width="w-[34rem]">
+      <form onSubmit={submit} className="space-y-3">
+        <div className="text-xs text-brand-taupe">Open violations of this seller that are not in a case yet:</div>
+        <div className="space-y-1.5 max-h-56 overflow-auto">
+          {violations.map((v) => (
+            <label key={v.id} className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={picked.has(v.id)} onChange={() => toggle(v.id)} />
+              <span className="font-semibold">{v.code}</span><span>{v.sku}</span>
+              <span className="text-brand-taupe">{money(v.last_price)} vs MAP {money(v.last_map)}</span>
+            </label>
+          ))}
+        </div>
+        <Field label="Response due (default: in 7 days)"><input name="due" type="date" className={inputCls} /></Field>
+        <Field label="Note"><input name="note" placeholder="e.g. Two gram laptops far below MAP" className={inputCls} /></Field>
+        <Note>The violations go Under notice when a notice is sent from the case.</Note>
+        <div className="flex justify-end gap-2 border-t border-brand-beige pt-3"><SecondaryButton onClick={onClose}>Cancel</SecondaryButton><PrimaryButton type="submit" disabled={!picked.size}>Open case</PrimaryButton></div>
+      </form>
+    </Modal>
   );
 }
 

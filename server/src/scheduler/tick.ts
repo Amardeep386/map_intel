@@ -91,12 +91,15 @@ export async function loadAccountWork(db: Db, accountId: string): Promise<Omit<E
   ).rows.map((t) => ({ id: t.id, groupId: t.group_id, type: t.type, value: t.value }));
 
   const listings = (
-    await db.query<{ id: string; source_id: string; url: string; state: ExpandInput['listings'][number]['state'] }>(
-      `SELECT l.id, l.source_id, l.url, m.state FROM listing_match m JOIN listing l ON l.id = m.listing_id
+    await db.query<{ id: string; source_id: string; url: string; state: ExpandInput['listings'][number]['state']; under_notice: boolean }>(
+      `SELECT l.id, l.source_id, l.url, m.state,
+              EXISTS (SELECT 1 FROM violation_current v
+                       WHERE v.account_id = m.account_id AND v.listing_id = l.id AND NOT v.episode_closed AND v.status = 'Under notice') AS under_notice
+         FROM listing_match m JOIN listing l ON l.id = m.listing_id
         WHERE m.account_id = $1 AND l.origin <> 'synthetic' ORDER BY l.source_id, l.url`,
       [accountId],
     )
-  ).rows.map((l) => ({ id: l.id, sourceId: l.source_id, url: l.url, state: l.state }));
+  ).rows.map((l) => ({ id: l.id, sourceId: l.source_id, url: l.url, state: l.state, underNotice: l.under_notice }));
 
   const settings = (await db.query<{ settings: Record<string, unknown> }>('SELECT settings FROM account WHERE id = $1', [accountId])).rows[0]?.settings ?? {};
   const budget = Number(settings.request_budget ?? DEFAULT_REQUEST_BUDGET) || DEFAULT_REQUEST_BUDGET;

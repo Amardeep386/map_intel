@@ -37,6 +37,9 @@ export const ACCOUNT_ACTIONS = [
   'reports.write', // define, schedule, run now
   'alerts.read',
   'alerts.write',
+  'cases.read', // enforcement cases, notices, communications
+  'cases.write', // open / move / assign cases, add violations, draft / send notices, log communications
+  'notices.approve', // brand approval of a notice: the brand's own people only
 ] as const;
 export type AccountAction = (typeof ACCOUNT_ACTIONS)[number];
 
@@ -67,16 +70,19 @@ const READ_ALL: AccountAction[] = [
   'rules.read',
   'reports.read',
   'alerts.read',
+  'cases.read',
 ];
 
 const GRANTS: Record<AccountRole, ReadonlySet<AccountAction>> = {
-  Administrator: new Set(ACCOUNT_ACTIONS),
+  // Everything except brand approval of notices, which only the brand's people give.
+  Administrator: new Set(ACCOUNT_ACTIONS.filter((a) => a !== 'notices.approve')),
   // Configures the account: settings, subscriptions, schedules, terms, users, credentials.
-  'Account manager': new Set(ACCOUNT_ACTIONS),
+  'Account manager': new Set(ACCOUNT_ACTIONS.filter((a) => a !== 'notices.approve')),
   // Cleanses and classifies: edits terms and the catalogue, reads everything else.
-  Analyst: new Set<AccountAction>([...READ_ALL, 'terms.write', 'catalogue.write', 'mapping.write', 'sellers.write', 'violations.write']),
-  // The brand's own people: read-only catalogue, prices, violations and reports; no configuration or audit screens.
-  'Brand user': new Set<AccountAction>(['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read']),
+  Analyst: new Set<AccountAction>([...READ_ALL, 'terms.write', 'catalogue.write', 'mapping.write', 'sellers.write', 'violations.write', 'cases.write']),
+  // The brand's own people: read-only catalogue, prices, violations, reports and cases; they approve
+  // notices. No configuration or audit screens.
+  'Brand user': new Set<AccountAction>(['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read', 'cases.read', 'notices.approve']),
 };
 
 export function can(role: string | null | undefined, action: AccountAction): boolean {

@@ -9,6 +9,7 @@ import {
   type ActiveEpisode, type Evaluation, type JudgeSettings, type ObservationFacts, type RuleVersion,
   type SellerClass, type ViolationStatus,
 } from './rules.js';
+import { resolveReverified } from './cases.js';
 import { closeUnwatched } from './violations.js';
 
 export interface ObservationRow {
@@ -215,6 +216,8 @@ export interface JudgeResult {
   opened: number;
   resolved: number;
   closedExcluded: number;
+  /** Enforcement cases resolved because a re-check saw a compliant price (Phase 4). */
+  casesResolved: number;
 }
 
 /**
@@ -236,7 +239,7 @@ export async function judgeAccount(
   const ctx = await loadContext(db, accountId, obs);
   const active = await activeEpisodes(db, accountId);
   let seq = (await db.query<{ n: number }>('SELECT coalesce(max(seq), 0)::int AS n FROM violation WHERE account_id = $1', [accountId])).rows[0].n;
-  const out: JudgeResult = { judgeRunId: run, observations: obs.length, verdicts: 0, opened: 0, resolved: 0, closedExcluded: 0 };
+  const out: JudgeResult = { judgeRunId: run, observations: obs.length, verdicts: 0, opened: 0, resolved: 0, closedExcluded: 0, casesResolved: 0 };
 
   for (const o of obs) {
     const j = judgeOne(ctx, o);
@@ -290,6 +293,8 @@ export async function judgeAccount(
 
   // Episodes of listings that are no longer Included end: we no longer watch them.
   out.closedExcluded = await closeUnwatched(db, accountId);
+  // A case whose violations have all ended on a compliant observation is re-verified: Resolved.
+  out.casesResolved = (await resolveReverified(db, accountId)).length;
 
   await db.query(
     'UPDATE judge_run SET finished_at = now(), observations = $2, verdicts = $3, opened = $4, resolved = $5 WHERE id = $1',

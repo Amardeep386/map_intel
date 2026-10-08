@@ -6,7 +6,7 @@
 // collected listing (ctx from loadMatchContext once per batch). Runs in the caller's transaction.
 import type { Db } from './db.js';
 import { decide, type MatchRule, type RuleCondition, type Suppression, suppressionHits } from './matchRules.js';
-import { proposeProduct, scoreCandidate, type CandidateInput, type PriorLabel, type ProductRef, type Thresholds } from './matching.js';
+import { MATCHER_VERSION, proposeProduct, scoreCandidate, type CandidateInput, type PriorLabel, type ProductRef, type Thresholds } from './matching.js';
 import { ensureClassification, resolveSeller } from './sellers.js';
 import { closeUnwatched } from './violations.js';
 
@@ -176,14 +176,14 @@ export async function stageCandidate(db: Db, ctx: MatchContext, c: StageInput): 
     await db.query<{ candidate_id: string }>(
       `WITH cand AS (
          INSERT INTO match_candidate (account_id, listing_id, product_id, title, price, currency, seller_name, seller_id, image_url, condition,
-                                      listing_format, found, confidence, band, origin)
-         VALUES ($1, $2, $3, $4, $5, 'USD', $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id)
+                                      listing_format, found, confidence, band, origin, matcher_version)
+         VALUES ($1, $2, $3, $4, $5, 'USD', $6, $7, $8, $9, $10, $11, $12, $13, $14, $16) RETURNING id)
        INSERT INTO match_signal (candidate_id, account_id, signal, score, weight, passed, detail)
        SELECT cand.id, $1, s.signal, s.score, s.weight, s.passed, s.detail
          FROM cand, jsonb_to_recordset($15::jsonb) AS s(signal text, score numeric, weight numeric, passed boolean, detail text)
        RETURNING candidate_id`,
       [ctx.accountId, c.listingId, result.productId, c.title, c.price, c.sellerName, c.sellerId, c.imageUrl, c.condition, c.format,
-        JSON.stringify(result.found), result.confidence, result.band, c.origin, JSON.stringify(result.signals)],
+        JSON.stringify(result.found), result.confidence, result.band, c.origin, JSON.stringify(result.signals), MATCHER_VERSION],
     )
   ).rows[0].candidate_id;
 

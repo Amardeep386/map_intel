@@ -8,6 +8,12 @@
 //   prior       earlier human decisions on the same URL or the same seller + product
 // Pure functions; lib/mapping.ts loads the inputs and stores the result.
 
+/**
+ * The matcher's version, stored on every candidate it scores (Phase 4 · M7). Raise it whenever the
+ * signals, weights or scoring change, so QA precision can be compared version by version.
+ */
+export const MATCHER_VERSION = 'm1';
+
 export const SIGNALS = ['identifier', 'title', 'image', 'price', 'attributes', 'prior'] as const;
 export type Signal = (typeof SIGNALS)[number];
 

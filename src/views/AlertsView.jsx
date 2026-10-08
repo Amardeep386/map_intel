@@ -17,6 +17,10 @@ const TRIGGER = {
   new_violating_seller: () => "A seller violates MAP for the first time",
   severe_violation: (c) => `A violation reaches ${c.severity ?? "Severe"} depth`,
   source_degraded_before_report: (c) => `A source is not healthy within ${c.hoursBefore ?? 24} h of a scheduled report`,
+  notice_awaiting_approval: () => "A notice is waiting for the brand's approval",
+  response_overdue: () => "A case's response date passes with no reply from the seller",
+  seller_reoffended: (c) => `A seller breaks MAP again within ${c.days ?? 60} days of a resolved case`,
+  case_resolved: () => "A case is resolved (re-checked compliant or closed by a person)",
 };
 
 export function AlertsView({ onUnreadChange }) {
@@ -93,11 +97,13 @@ function RuleModal({ rule, onClose, onSaved }) {
   const [email, setEmail] = useState(rule.email);
   const [severity, setSeverity] = useState(rule.config.severity ?? "Severe");
   const [hours, setHours] = useState(rule.config.hoursBefore ?? 24);
+  const [days, setDays] = useState(rule.config.days ?? 60);
   const save = async (e) => {
     e.preventDefault();
     const body = { email, recipients: recipients.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean) };
     if (rule.trigger === "severe_violation") body.severity = severity;
     if (rule.trigger === "source_degraded_before_report") body.hoursBefore = Number(hours);
+    if (rule.trigger === "seller_reoffended") body.days = Number(days);
     if (await attempt(showToast, () => api.updateAlertRule(client, rule.id, body))) { showToast(`${rule.code} saved.`); onSaved(); }
   };
   return (
@@ -110,6 +116,9 @@ function RuleModal({ rule, onClose, onSaved }) {
         )}
         {rule.trigger === "source_degraded_before_report" && (
           <Field label="Hours before a scheduled report"><input type="number" min="1" max="168" className={inputCls} value={hours} onChange={(e) => setHours(e.target.value)} /></Field>
+        )}
+        {rule.trigger === "seller_reoffended" && (
+          <Field label="Days after a resolved case"><input type="number" min="1" max="365" className={inputCls} value={days} onChange={(e) => setDays(e.target.value)} /></Field>
         )}
         <Field label="Recipients (emails, comma-separated)"><input className={inputCls} value={recipients} onChange={(e) => setRecipients(e.target.value)} placeholder="map-room@brand.com" /></Field>
         <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />Email the recipients (logged until a provider is set up)</label>

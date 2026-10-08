@@ -23,7 +23,7 @@ export interface NewLink {
   reportRunId?: string | null;
   days?: number;
   createdBy?: string | null;
-  via?: 'portal' | 'report' | 'alert' | 'test';
+  via?: 'portal' | 'report' | 'alert' | 'test' | 'notice' | 'ip_report';
   now?: Date;
 }
 

@@ -50,6 +50,12 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
+      # P4 · M7: this week's QA sample of automatic Mapping Center decisions (once per account per week).
+      - name: QA sample
+        run: npm run qa-sample -- --all
+      # P4 · M8: enforcement alerts (approvals waiting, responses overdue, re-offences, cases resolved); deduplicated.
+      - name: Alerts
+        run: npm run alerts -- --all
       - name: Anything to do?
         id: work
         run: |

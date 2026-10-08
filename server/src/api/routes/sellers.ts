@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { actorFrom, recordAudit, type AuditEntry } from '../../lib/audit.js';
 import { withTenant, type Db } from '../../lib/db.js';
+import { EMPTY_STATS, sellerStats } from '../../lib/sellerRisk.js';
 import { addAlias, ensureClassification, resolveSeller, SELLER_CLASSES } from '../../lib/sellers.js';
 import { HttpError } from '../app.js';
 import { parse, uuidOr404 } from '../validate.js';
@@ -77,7 +78,9 @@ export async function sellerRoutes(app: FastifyInstance): Promise<void> {
            ${CURRENT_CLASS}
           ORDER BY s.name, src.display_name`,
       );
-      return rows;
+      // Risk and enforcement figures over the last 90 days (Phase 4).
+      const stats = await sellerStats(db, req.params.accountId);
+      return rows.map((r) => ({ ...r, ...(stats.get(r.id) ?? EMPTY_STATS) }));
     }),
   );
 
@@ -111,7 +114,19 @@ export async function sellerRoutes(app: FastifyInstance): Promise<void> {
              FROM listing_match m JOIN listing l ON l.id = m.listing_id LEFT JOIN product p ON p.id = m.product_id
             WHERE l.seller_id = $1 ORDER BY m.state, p.product_code LIMIT 200`, [sellerId])).rows,
       ];
-      return { ...s, history, aliases, links, contacts, listings };
+      const stats = (await sellerStats(db, req.params.accountId, [sellerId])).get(sellerId) ?? EMPTY_STATS;
+      const violations = (await db.query(
+        `SELECT v.id, 'V-' || lpad(v.seq::text, 5, '0') AS code, v.status, v.severity, v.episode_closed, v.opened_at, v.last_seen,
+                v.last_price::float8 AS last_price, v.last_map::float8 AS last_map, v.max_depth_pct::float8 AS max_depth_pct,
+                p.product_code AS sku, p.name AS product, cv.case_id, 'C-' || lpad(c.seq::text, 5, '0') AS case_code
+           FROM violation_current v JOIN product p ON p.id = v.product_id
+           LEFT JOIN case_violation cv ON cv.violation_id = v.id LEFT JOIN enforcement_case c ON c.id = cv.case_id
+          WHERE v.seller_id = $1 AND (NOT v.episode_closed OR v.opened_at >= now() - interval '90 days')
+          ORDER BY v.episode_closed, v.opened_at DESC LIMIT 100`, [sellerId])).rows;
+      const cases = (await db.query(
+        `SELECT c.id, 'C-' || lpad(c.seq::text, 5, '0') AS code, c.state, c.closed, c.opened_at, to_char(c.response_due, 'YYYY-MM-DD') AS response_due, c.violations
+           FROM case_current c WHERE c.seller_id = $1 ORDER BY c.closed, c.opened_at DESC LIMIT 50`, [sellerId])).rows;
+      return { ...s, history, aliases, links, contacts, listings, stats, violations, cases };
     });
   });
 

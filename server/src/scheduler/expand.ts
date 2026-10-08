@@ -33,6 +33,8 @@ export interface ExpandListing {
   sourceId: string;
   url: string;
   state: 'Staged' | 'Included' | 'Excluded' | 'Retired';
+  /** An active violation of the listing is Under notice (a notice went out in its case). */
+  underNotice?: boolean;
 }
 
 export interface ExpandInput {
@@ -71,8 +73,6 @@ const LISTING_STATES: Record<FiringSchedule['listingScope'], ExpandListing['stat
 };
 
 function listingStates(f: FiringSchedule): ExpandListing['state'][] {
-  // Nothing is under notice before Phase 4 (cases), so an under-notice schedule has no listings yet.
-  if (f.takedownStatus === 'Under notice') return [];
   if (f.listingStatus === 'Inactive only') return ['Retired'];
   const states = LISTING_STATES[f.listingScope];
   return f.listingStatus === 'All' ? [...states, 'Retired'] : states;
@@ -82,16 +82,19 @@ export function expandFiring(input: ExpandInput): PlannedJob[] {
   const { firing } = input;
   const byId = new Map(input.sources.map((s) => [s.id, s]));
   // Which schedules compete for a piece of work. Discovery belongs to sweep schedules only: an
-  // "Under notice" schedule re-checks listings under notice, nothing else. Listings compete among
-  // the schedules whose takedown filter fits them; none is under notice before Phase 4 (cases).
-  // (Phase 4 adds the listings under notice, which go to the "Under notice" schedules.)
+  // "Under notice" schedule re-checks listings under notice, nothing else. Sweep schedules compete
+  // for every listing; the "Under notice" schedules compete among themselves for the listings under
+  // notice (Phase 4), which the sweep still collects too: a re-check on top of the daily cadence.
   // A monitoring-only schedule never takes discovery, and a discovery-only one never takes
   // listings: each piece of work goes to the schedules that run that kind of work.
+  const recheck = firing.takedownStatus === 'Under notice';
   const competing = input.schedules.filter((s) => s.takedownStatus !== 'Under notice');
   const discoverers = competing.filter(runsDiscovery);
-  const monitors = competing.filter(runsMonitoring);
-  const ownsTerm = (t: WorkTarget) => runsDiscovery(firing) && resolveSchedule(discoverers, t)?.id === firing.id;
+  const monitors = (recheck ? input.schedules.filter((s) => s.takedownStatus === 'Under notice') : competing).filter(runsMonitoring);
+  const ownsTerm = (t: WorkTarget) => !recheck && runsDiscovery(firing) && resolveSchedule(discoverers, t)?.id === firing.id;
   const ownsListing = (t: WorkTarget) => runsMonitoring(firing) && resolveSchedule(monitors, t)?.id === firing.id;
+  const takedownFits = (l: ExpandListing) =>
+    firing.takedownStatus === 'All' || (firing.takedownStatus === 'Under notice') === Boolean(l.underNotice);
   const target = (s: ExpandSource, termGroup: string | null, term: string | null): WorkTarget => ({
     source: s.code,
     category: s.category,
@@ -119,7 +122,7 @@ export function expandFiring(input: ExpandInput): PlannedJob[] {
   const states = new Set(listingStates(firing));
   for (const l of input.listings) {
     const s = byId.get(l.sourceId);
-    if (!s || s.subscription?.active !== true || !states.has(l.state) || !ownsListing(target(s, null, null))) continue;
+    if (!s || s.subscription?.active !== true || !states.has(l.state) || !takedownFits(l) || !ownsListing(target(s, null, null))) continue;
     collect.push(job(s, { listingId: l.id, url: l.url, skipReason: input.adapters[s.code] ? null : 'no_collector' }));
   }
 
