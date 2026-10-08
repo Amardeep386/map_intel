@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACCOUNT_ACTIONS, actionsFor, can, grantableRoles } from '../src/lib/permissions.js';
 
-test('Administrator and Account manager can do every account action', () => {
+test('Administrator and Account manager can do every account action except the brand’s approval of notices', () => {
   for (const a of ACCOUNT_ACTIONS) {
-    assert.ok(can('Administrator', a), a);
-    assert.ok(can('Account manager', a), a);
+    const expected = a !== 'notices.approve';
+    assert.equal(can('Administrator', a), expected, a);
+    assert.equal(can('Account manager', a), expected, a);
   }
 });
 
@@ -19,8 +20,8 @@ test('Analyst edits terms and catalogue, reads the rest, changes no configuratio
   }
 });
 
-test('Brand user is read-only (cases too) and sees no configuration or audit', () => {
-  assert.deepEqual(actionsFor('Brand user'), ['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read', 'cases.read']);
+test('Brand user is read-only (cases too), approves notices, and sees no configuration or audit', () => {
+  assert.deepEqual(actionsFor('Brand user'), ['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read', 'cases.read', 'notices.approve']);
   assert.equal(can('Brand user', 'audit.read'), false);
   assert.equal(can('Brand user', 'terms.read'), false);
 });

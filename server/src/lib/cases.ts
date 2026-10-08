@@ -263,7 +263,7 @@ async function addEvent(db: Db, accountId: string, caseId: string, state: CaseSt
 }
 
 /** The case's active Open / Needs review violations become Under notice (a Dismissed or promo one stays as it is). */
-async function markUnderNotice(db: Db, accountId: string, caseId: string, actor: string | null): Promise<number> {
+export async function markUnderNotice(db: Db, accountId: string, caseId: string, actor: string | null): Promise<number> {
   const { rowCount } = await db.query(
     `INSERT INTO violation_event (account_id, violation_id, status, reason, actor)
      SELECT $1, v.id, 'Under notice', 'Case ' || $3, $4
