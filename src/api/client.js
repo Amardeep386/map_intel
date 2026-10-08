@@ -72,6 +72,23 @@ async function request(path, { method = "GET", body } = {}) {
   return data;
 }
 
+/** Enforcement (P4) needs the API: in demo mode say so instead of pretending. */
+const P4 = (fn) => (USE_MOCK ? Promise.reject(new ApiError(501, "Enforcement needs the API: demo mode has no cases yet")) : fn());
+
+/** Fetch a file with the session token and hand it to the browser as a download. */
+async function download(path, fileName) {
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, data.error || `Download failed (${res.status})`);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement("a"), { href: url, download: fileName });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
+}
+
 function formatDate(isoDate) {
   if (!isoDate) return "";
   const d = new Date(`${isoDate}T00:00:00`);
@@ -458,11 +475,40 @@ export const api = {
     return USE_MOCK ? mockDetection.violation(client, violationId) : request(`/accounts/${client.id}/violations/${violationId}`);
   },
   // ---------------- Enforcement (P4) ----------------
+  // Cases, notices, the communications log, letter templates and IP reports work against the API;
+  // in demo mode the lists are empty and changes say they need the API.
   /** Open a case for one seller's active violations: { violationIds, owner?, responseDue?, note? }. */
-  openCase(client, body) {
-    if (USE_MOCK) return Promise.reject(new ApiError(501, "Cases need the API: demo mode has none yet"));
-    return request(`/accounts/${client.id}/cases`, { method: "POST", body });
+  openCase(client, body) { return P4(() => request(`/accounts/${client.id}/cases`, { method: "POST", body })); },
+  /** Filters: state (comma list), open, seller, owner, q. */
+  cases(client, filters = {}) {
+    return USE_MOCK ? Promise.resolve({ total: 0, rows: [], counts: {} }) : request(`/accounts/${client.id}/cases${qs(filters)}`);
   },
+  caseDetail(client, caseId) { return P4(() => request(`/accounts/${client.id}/cases/${caseId}`)); },
+  moveCase(client, caseId, body) { return P4(() => request(`/accounts/${client.id}/cases/${caseId}/state`, { method: "POST", body })); },
+  /** { owner?, responseDue?, ipIssue?, ipReason? } */
+  updateCase(client, caseId, body) { return P4(() => request(`/accounts/${client.id}/cases/${caseId}`, { method: "PATCH", body })); },
+  /** Filters: status (comma list), case. */
+  notices(client, filters = {}) { return USE_MOCK ? Promise.resolve([]) : request(`/accounts/${client.id}/notices${qs(filters)}`); },
+  draftNotice(client, caseId, body) { return P4(() => request(`/accounts/${client.id}/cases/${caseId}/notices`, { method: "POST", body })); },
+  editNotice(client, noticeId, body) { return P4(() => request(`/accounts/${client.id}/notices/${noticeId}`, { method: "PATCH", body })); },
+  /** action: submit | approve | reject | send | cancel; body: { note } for approve / reject, { channel } for send. */
+  noticeAction(client, noticeId, action, body = {}) {
+    return P4(() => request(`/accounts/${client.id}/notices/${noticeId}/${action}`, { method: "POST", body }));
+  },
+  downloadNotice(client, notice) { return P4(() => download(`/accounts/${client.id}/notices/${notice.id}/text`, `${notice.code}.txt`)); },
+  communications(client, filters = {}) { return USE_MOCK ? Promise.resolve([]) : request(`/accounts/${client.id}/communications${qs(filters)}`); },
+  /** { kind: response | contest | note, channel?, summary, body?, occurredAt? } */
+  logCommunication(client, caseId, body) { return P4(() => request(`/accounts/${client.id}/cases/${caseId}/communications`, { method: "POST", body })); },
+  noticeTemplates(client) { return USE_MOCK ? Promise.resolve([]) : request(`/accounts/${client.id}/notice-templates`); },
+  updateNoticeTemplate(client, templateId, body) { return P4(() => request(`/accounts/${client.id}/notice-templates/${templateId}`, { method: "PATCH", body })); },
+  createNoticeTemplate(client, body) { return P4(() => request(`/accounts/${client.id}/notice-templates`, { method: "POST", body })); },
+  ipReports(client, filters = {}) { return USE_MOCK ? Promise.resolve([]) : request(`/accounts/${client.id}/ip-reports${qs(filters)}`); },
+  /** { channel, ipBasis, reason } */
+  draftIpReport(client, caseId, body) { return P4(() => request(`/accounts/${client.id}/cases/${caseId}/ip-reports`, { method: "POST", body })); },
+  fileIpReport(client, reportId, body) { return P4(() => request(`/accounts/${client.id}/ip-reports/${reportId}/file`, { method: "POST", body })); },
+  /** { status: Accepted | Rejected | Withdrawn, note? } */
+  ipReportOutcome(client, reportId, body) { return P4(() => request(`/accounts/${client.id}/ip-reports/${reportId}/outcome`, { method: "POST", body })); },
+  downloadEvidencePack(client, report) { return P4(() => download(`/accounts/${client.id}/ip-reports/${report.id}/pack`, `${report.code}-evidence.txt`)); },
   setViolationStatus(client, violationId, body) {
     return USE_MOCK ? mockDetection.setViolationStatus(client, violationId, body) : request(`/accounts/${client.id}/violations/${violationId}/status`, { method: "POST", body });
   },

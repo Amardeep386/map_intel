@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
-  Eye, EyeOff, ShieldCheck, ArrowRight
+  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel
 } from "lucide-react";
 import lgLogo from "./assets/lg.png";
 import appleLogo from "./assets/apple.png";
@@ -12,7 +12,6 @@ import philipsLogo from "./assets/philips.png";
 import kawasakiLogo from "./assets/kawasaki.png";
 import mirethosMark from "./assets/mirethos-mark.png";
 import { api } from "./api/client.js";
-import { Card, PageHeader, Pill, PrimaryButton, Table } from "./ui.jsx";
 import { WorkspaceContext } from "./workspace.js";
 import { SourcesTermsView } from "./views/SourcesTermsView.jsx";
 import { MapPoliciesView, ProductSummaryView } from "./views/CatalogViews.jsx";
@@ -24,18 +23,8 @@ import { OverviewView } from "./views/OverviewView.jsx";
 import { RulesView } from "./views/RulesView.jsx";
 import { ReportsView } from "./views/ReportsView.jsx";
 import { AlertsView } from "./views/AlertsView.jsx";
+import { EnforcementView } from "./views/EnforcementView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
-
-const STATUS_BG = {
-  Active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Paused: "bg-slate-50 text-slate-700 border-slate-200",
-  Open: "bg-red-50 text-red-700 border-red-200",
-  Notified: "bg-orange-50 text-orange-700 border-orange-200",
-  Resolved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Scheduled: "bg-blue-50 text-blue-700 border-blue-200",
-  Delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Expired: "bg-slate-50 text-slate-700 border-slate-200",
-};
 
 // ---------- Small building blocks ----------
 function ClientLogo({ name, className }) {
@@ -65,32 +54,6 @@ function ClientLogo({ name, className }) {
   
   return <div className={`flex items-center justify-center font-bold text-on-accent bg-brand-copper ${className || "w-5 h-5 rounded-sm"}`}>{name.charAt(0)}</div>;
 }
-
-// ---------- Views ----------
-function EmailCenterView({ clientName }) {
-  const { shared } = React.useContext(DataContext);
-  return (
-    <div>
-      <PageHeader title={`Email Center — ${clientName} (Sandbox)`} action={<PrimaryButton><Mail className="w-4 h-4" /> Compose email</PrimaryButton>} />
-      <Card>
-        <Table columns={["Date", "Seller", "Violation Reference", "Template", "Status", "Opened", "Response"]}>
-          {shared.emails.map((e, i) => (
-            <tr key={i} className="border-b border-brand-beige hover:bg-brand-beige/20">
-              <td className="py-2 px-3 text-brand-taupe">{e.date}</td>
-              <td className="py-2 px-3 text-brand-charcoal font-semibold">{e.seller}</td>
-              <td className="py-2 px-3 text-brand-copper font-medium">{e.violation}</td>
-              <td className="py-2 px-3 text-brand-taupe">{e.template}</td>
-              <td className="py-2 px-3"><Pill text={e.status} tone={STATUS_BG.Delivered} /></td>
-              <td className="py-2 px-3 text-brand-taupe">{e.opened}</td>
-              <td className="py-2 px-3 text-brand-taupe">{e.response}</td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
 
 // ---------- Accept an invite (opened from an invite link) ----------
 function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
@@ -187,7 +150,7 @@ const NAV = [
   { id: "sources", label: "Sources & Terms", icon: Radar, needs: "sources.read", group: "Collection" },
   { id: "health", label: "Data Health", icon: Activity, needs: "health.read", group: "Collection" },
   { id: "rules", label: "Rules", icon: Scale, needs: "rules.read", group: "Collection" },
-  { id: "email", label: "Email Center", icon: Mail, group: "Enforcement" },
+  { id: "enforcement", label: "Enforcement", icon: Gavel, needs: "cases.read", group: "Enforcement" },
   { id: "settings", label: "Settings", icon: SettingsIcon, needs: "settings.read", group: "Admin" },
   { id: "users", label: "Users & Access", icon: Users, needs: "users.read", group: "Admin" },
   { id: "audit", label: "Audit Log", icon: ClipboardList, needs: "audit.read", group: "Admin" },
@@ -488,7 +451,7 @@ export default function App() {
       case "merchants": return <SellersView />;
       case "health": return <DataHealthView />;
       case "violations": return <ViolationsView />;
-      case "email": return <EmailCenterView clientName={client.name} />;
+      case "enforcement": return <EnforcementView />;
       case "reports": return <ReportsView />;
       case "rules": return <RulesView />;
       case "alerts": return <AlertsView onUnreadChange={setAlertUnread} />;
@@ -497,7 +460,7 @@ export default function App() {
       case "audit": return <AuditLogView />;
       default: return null;
     }
-  }, [currentView, client, workspace.skus]);
+  }, [currentView, workspace.skus]);
 
   // --------------------------------------------------------------------------
   // RENDER: WELCOME LOGIN

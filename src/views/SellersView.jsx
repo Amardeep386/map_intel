@@ -127,9 +127,9 @@ function SellerDrawer({ sellerId, sellers, onClose, onChanged }) {
       {st.parts && (
         <Card title="How the risk index is made" className="mb-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-            {[["Frequency", st.parts.frequency, `${st.violations} violations (5 = full)`, 35],
+            {[["Frequency", st.parts.frequency, `${st.violations} violation${st.violations === 1 ? "" : "s"} (5 = full)`, 35],
               ["Depth", st.parts.depth, `${pct(st.avgDepthPct)} average (30% = full)`, 25],
-              ["Recurrence", st.parts.recurrence, `${st.repeats} repeats (3 = full)`, 25],
+              ["Recurrence", st.parts.recurrence, `${st.repeats} repeat${st.repeats === 1 ? "" : "s"} (3 = full)`, 25],
               ["Responsiveness", st.parts.responsiveness, st.noticesDue ? `${st.unanswered} of ${st.noticesDue} notices unanswered` : "no notice due yet: not counted", 15]].map(([k, v, why, w]) => (
               <div key={k}>
                 <div className="flex justify-between mb-1"><span className="font-semibold">{k}</span><span className="text-brand-taupe">weight {w}</span></div>

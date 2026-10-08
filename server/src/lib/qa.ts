@@ -126,14 +126,17 @@ export async function qaStats(db: Db, accountId: string) {
             count(*) FILTER (WHERE q.verdict IS NULL)::int AS open
        FROM qa_sample q WHERE q.account_id = $1 AND q.week >= current_date - 84
       GROUP BY 1, 2, 3 ORDER BY 1 DESC, 2 DESC, 3`, [accountId])).rows;
+  // Overridden = a person later turned the automatic decision round (Included ↔ Excluded). Sending a
+  // listing back to review (Restore) is not a verdict on the matcher, so it does not count.
   const overrides = (await db.query<{ automatic: number; overridden: number }>(
     `WITH auto AS (
-       SELECT e.listing_id, e.created_at FROM listing_state_event e
+       SELECT e.listing_id, e.to_state, e.created_at FROM listing_state_event e
         WHERE e.account_id = $1 AND e.actor_type IN ('auto', 'rule', 'suppression') AND e.to_state IN ('Included', 'Excluded')
           AND e.created_at >= now() - interval '90 days')
      SELECT count(*)::int AS automatic,
             count(*) FILTER (WHERE EXISTS (SELECT 1 FROM listing_state_event u WHERE u.account_id = $1 AND u.listing_id = auto.listing_id
-                                             AND u.is_label AND u.created_at > auto.created_at))::int AS overridden
+                                             AND u.is_label AND u.created_at > auto.created_at
+                                             AND u.to_state IN ('Included', 'Excluded') AND u.to_state <> auto.to_state))::int AS overridden
        FROM auto`, [accountId])).rows[0];
   const pct = (a: number, b: number) => (b ? Math.round((1000 * a) / b) / 10 : null);
   const total = (state: string) => {
