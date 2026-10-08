@@ -219,7 +219,7 @@ export async function listNotices(db: Db, accountId: string, f: { caseId?: strin
   const p: unknown[] = [accountId];
   if (f.caseId) { p.push(f.caseId); c.push(`n.case_id = $${p.length}`); }
   if (f.status?.length) { p.push(f.status); c.push(`n.status = ANY($${p.length}::text[])`); }
-  const rows = (await db.query(`${NOTICE_SELECT} WHERE ${c.join(' AND ')} ORDER BY n.created_at DESC LIMIT 500`, p)).rows;
+  const rows = (await db.query(`${NOTICE_SELECT} WHERE ${c.join(' AND ')} ORDER BY n.created_at DESC, n.seq DESC LIMIT 500`, p)).rows;
   return rows.map((r) => ({ ...r, code: noticeCode(r.seq) }));
 }
 
