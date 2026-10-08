@@ -19,8 +19,8 @@ test('Analyst edits terms and catalogue, reads the rest, changes no configuratio
   }
 });
 
-test('Brand user is read-only and sees no configuration or audit', () => {
-  assert.deepEqual(actionsFor('Brand user'), ['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read']);
+test('Brand user is read-only (cases too) and sees no configuration or audit', () => {
+  assert.deepEqual(actionsFor('Brand user'), ['account.read', 'catalogue.read', 'observations.read', 'violations.read', 'reports.read', 'cases.read']);
   assert.equal(can('Brand user', 'audit.read'), false);
   assert.equal(can('Brand user', 'terms.read'), false);
 });

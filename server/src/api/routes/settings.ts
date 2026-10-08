@@ -17,6 +17,7 @@ export const SETTINGS_DEFAULTS = {
   match_review: 60,
   qa_sample_pct: 5,
   brand_approval_required: true,
+  case_response_days: 7,
   brand_users_see_needs_review: false,
   request_budget: DEFAULT_REQUEST_BUDGET,
 };
@@ -49,6 +50,7 @@ const settingsPatch = z
         matchReview: z.number().int().min(0).max(99),
         qaSamplePct: z.number().min(0).max(100),
         brandApprovalRequired: z.boolean(),
+        caseResponseDays: z.number().int().min(1).max(90),
         brandUsersSeeNeedsReview: z.boolean(),
         requestBudget: z.number().int().min(100).max(10_000_000),
       })
@@ -65,6 +67,7 @@ const toDb: Record<string, keyof Settings> = {
   matchReview: 'match_review',
   qaSamplePct: 'qa_sample_pct',
   brandApprovalRequired: 'brand_approval_required',
+  caseResponseDays: 'case_response_days',
   brandUsersSeeNeedsReview: 'brand_users_see_needs_review',
   requestBudget: 'request_budget',
 };
