@@ -19,6 +19,10 @@ export const TONE = {
   Open: RED, "Needs review": AMBER, "Under notice": "bg-orange-50 text-orange-700 border-orange-200", "Authorised promo": BLUE, Resolved: GREEN, Dismissed: GREY,
   Minor: GREY, Standard: AMBER, Severe: RED,
   Published: GREEN, Draft: AMBER, Closed: GREY,
+  // Cases, notices and IP reports (P4)
+  "Notice sent": "bg-orange-50 text-orange-700 border-orange-200", "Awaiting response": AMBER, Contested: "bg-purple-50 text-purple-700 border-purple-200",
+  Escalated: RED, Recurred: RED, "Awaiting approval": AMBER, Approved: BLUE, Rejected: RED, Sent: GREEN,
+  Filed: BLUE, Accepted: GREEN, Withdrawn: GREY,
 };
 
 /** $1,299 / $1,299.50; "—" when empty. */

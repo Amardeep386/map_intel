@@ -44,7 +44,7 @@ const ALL_ACTIONS = [
   "sources.read", "sources.write", "terms.read", "terms.write", "schedules.read", "schedules.write",
   "users.read", "users.manage", "audit.read", "credentials.read", "credentials.write",
   "mapping.read", "mapping.write", "sellers.read", "sellers.write", "health.read", "collection.run",
-  "violations.read", "violations.write", "rules.read", "rules.write", "reports.read", "reports.write", "alerts.read", "alerts.write",
+  "violations.read", "violations.write", "rules.read", "rules.write", "reports.read", "reports.write", "alerts.read", "alerts.write", "cases.read", "cases.write",
 ];
 
 const qs = (params) => {
@@ -441,6 +441,12 @@ export const api = {
   },
   violation(client, violationId) {
     return USE_MOCK ? mockDetection.violation(client, violationId) : request(`/accounts/${client.id}/violations/${violationId}`);
+  },
+  // ---------------- Enforcement (P4) ----------------
+  /** Open a case for one seller's active violations: { violationIds, owner?, responseDue?, note? }. */
+  openCase(client, body) {
+    if (USE_MOCK) return Promise.reject(new ApiError(501, "Cases need the API: demo mode has none yet"));
+    return request(`/accounts/${client.id}/cases`, { method: "POST", body });
   },
   setViolationStatus(client, violationId, body) {
     return USE_MOCK ? mockDetection.setViolationStatus(client, violationId, body) : request(`/accounts/${client.id}/violations/${violationId}/status`, { method: "POST", body });
