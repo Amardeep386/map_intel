@@ -93,6 +93,21 @@ test('expand: listing scope and under-notice schedules', () => {
   assert.equal(notice.filter((j) => j.kind === 'collect').length, 0);
 });
 
+test('expand: the under-notice re-check collects only Included listings under notice, no discovery; the sweep still collects them', () => {
+  const notice: FiringSchedule = { ...daily, id: 's-notice', name: 'Under-notice re-check', cadence: '0 */6 * * *', priority: 20, listingScope: 'Included only', takedownStatus: 'Under notice' };
+  const schedules = [daily, notice];
+  const listings = [
+    { id: 'l-inc', sourceId: 'id-amazon_us', url: 'https://www.amazon.com/dp/B0CVS4CYYF', state: 'Included' as const, underNotice: true },
+    { id: 'l-inc2', sourceId: 'id-walmart_us', url: 'https://www.walmart.com/ip/3', state: 'Included' as const, underNotice: false },
+    { id: 'l-staged', sourceId: 'id-walmart_us', url: 'https://www.walmart.com/ip/1', state: 'Staged' as const, underNotice: true },
+  ];
+  assert.deepEqual(describe(expandFiring(input({ firing: notice, schedules, listings }))), ['collect:amazon_us:l-inc:-:1:run']);
+  const sweep = expandFiring(input({ schedules, listings }));
+  assert.deepEqual(sweep.filter((j) => j.kind === 'collect').map((j) => j.listingId), ['l-inc', 'l-inc2', 'l-staged']);
+  const quiet = expandFiring(input({ firing: { ...daily, takedownStatus: 'Not under notice' }, schedules: [{ ...daily, takedownStatus: 'Not under notice' }], listings }));
+  assert.deepEqual(quiet.filter((j) => j.kind === 'collect').map((j) => j.listingId), ['l-inc2']);
+});
+
 test('expand: monitoring-only and discovery-only schedules split one source between them', () => {
   // The Amazon LG slice: daily monitoring of Amazon listings, discovery of one group by hand.
   const monitor: FiringSchedule = { ...daily, id: 's-mon', name: 'Amazon monitoring', selector: { sources: ['amazon_us'] }, priority: 40, kind: 'monitoring', listingScope: 'Included only', cadence: '0 9 * * *', timezone: 'Asia/Kolkata' };

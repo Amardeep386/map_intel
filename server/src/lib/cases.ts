@@ -273,3 +273,27 @@ export async function markUnderNotice(db: Db, accountId: string, caseId: string,
   );
   return rowCount ?? 0;
 }
+
+/**
+ * Re-verification (run by the judge after every pass): an open case is Resolved when every one of
+ * its violations has ended and at least one ended on a compliant (or authorised promo)
+ * observation, which is recorded as the proof. A case whose violations all ended otherwise (the
+ * listing excluded, a person closing it) waits for a person to close it with a reason.
+ */
+export async function resolveReverified(db: Db, accountId: string): Promise<{ code: string; id: string }[]> {
+  const rows = (await db.query<{ id: string; seq: number; verdict_id: string }>(
+    `SELECT c.id, c.seq,
+            (SELECT e.verdict_id FROM case_violation cv JOIN violation_event e ON e.violation_id = cv.violation_id
+              WHERE cv.case_id = c.id AND e.episode_closed AND e.verdict_id IS NOT NULL AND e.status IN ('Resolved', 'Authorised promo')
+              ORDER BY e.created_at DESC LIMIT 1) AS verdict_id
+       FROM case_current c
+      WHERE c.account_id = $1 AND NOT c.closed AND c.violations > 0
+        AND NOT EXISTS (SELECT 1 FROM case_violation cv JOIN violation_current v ON v.id = cv.violation_id
+                         WHERE cv.case_id = c.id AND NOT v.episode_closed)`,
+    [accountId],
+  )).rows.filter((r) => r.verdict_id);
+  for (const r of rows) {
+    await addEvent(db, accountId, r.id, 'Resolved', 'Re-checked: compliant price seen', null, r.verdict_id);
+  }
+  return rows.map((r) => ({ id: r.id, code: caseCode(r.seq) }));
+}
