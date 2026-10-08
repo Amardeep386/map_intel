@@ -18,6 +18,7 @@ import { violationRoutes } from './routes/violations.js';
 import { caseRoutes } from './routes/cases.js';
 import { noticeRoutes } from './routes/notices.js';
 import { ipReportRoutes } from './routes/ipReports.js';
+import { qaRoutes } from './routes/qa.js';
 import { evidenceLinkRoutes } from './routes/evidenceLinks.js';
 import { reportRoutes } from './routes/reports.js';
 import { alertRoutes } from './routes/alerts.js';
@@ -165,6 +166,7 @@ export async function buildApp() {
   await app.register(caseRoutes);
   await app.register(noticeRoutes);
   await app.register(ipReportRoutes);
+  await app.register(qaRoutes);
   await app.register(evidenceLinkRoutes);
   await app.register(reportRoutes);
   await app.register(alertRoutes);

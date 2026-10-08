@@ -412,6 +412,21 @@ export const api = {
   setMatchRule(client, ruleId, body) {
     return USE_MOCK ? mockCatalog.setRule(client, ruleId, body) : request(`/accounts/${client.id}/mapping/rules/${ruleId}`, { method: "PATCH", body });
   },
+  // Learning loop (P4): the weekly QA sample of automatic decisions and the precision it gives.
+  qaSamples(client, query = {}) {
+    return USE_MOCK ? Promise.resolve([]) : request(`/accounts/${client.id}/mapping/qa${qs(query)}`);
+  },
+  qaStats(client) {
+    return USE_MOCK
+      ? Promise.resolve({ included: { reviewed: 0, precision: null, open: 0 }, excluded: { reviewed: 0, precision: null, open: 0 }, bands: [], overrides: { automatic: 0, overridden: 0, rate: null } })
+      : request(`/accounts/${client.id}/mapping/qa/stats`);
+  },
+  qaDraw(client) {
+    return USE_MOCK ? Promise.resolve({ drawn: 0 }) : request(`/accounts/${client.id}/mapping/qa/draw`, { method: "POST", body: {} });
+  },
+  qaReview(client, sampleId, body) {
+    return USE_MOCK ? Promise.reject(new ApiError(501, "QA review needs the API")) : request(`/accounts/${client.id}/mapping/qa/${sampleId}/review`, { method: "POST", body });
+  },
   suppressions(client) {
     return USE_MOCK ? mockCatalog.suppressions(client) : request(`/accounts/${client.id}/mapping/suppressions`);
   },

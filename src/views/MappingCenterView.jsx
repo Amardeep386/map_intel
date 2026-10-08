@@ -53,6 +53,7 @@ export function MappingCenterView() {
     { id: "queue", label: "Review queue", count: st.Staged },
     ...STATES.map((s) => ({ id: s, label: s, count: st[s] })),
     { id: "suppress", label: "Suppressions", count: summary?.suppressions },
+    { id: "qa", label: "QA sample" },
   ];
   return (
     <div>
@@ -88,6 +89,7 @@ export function MappingCenterView() {
             }} />
         )}
         {tab === "suppress" && <Suppressions key={version} writable={writable} onChanged={() => setVersion((v) => v + 1)} />}
+        {tab === "qa" && <QaSample key={version} writable={writable} onChanged={() => setVersion((v) => v + 1)} onOpen={setDetail} />}
       </Card>
 
       {excl && summary && <ExcludeModal items={excl} summary={summary} onClose={() => setExcl(null)}
@@ -292,6 +294,101 @@ function Suppressions({ writable, onChanged }) {
       {!rows.length && <div className="text-center py-8 text-sm text-brand-taupe">No suppressions yet. Excluding with a scope wider than the listing creates one.</div>}
       <div className="mt-3"><Note>Scoped exclusions become suppressions, so the same wrong listing is never reviewed twice — and every one stays visible and revocable. Revoking does not bring back listings already excluded.</Note></div>
     </>
+  );
+}
+
+// ---------------- QA sample (P4 learning loop) ----------------
+const pctText = (p) => (p === null || p === undefined ? "—" : `${p}%`);
+
+function QaSample({ writable, onChanged, onOpen }) {
+  const { client, showToast } = useWorkspace();
+  const [rows, setRows] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [wrong, setWrong] = useState(null); // sample being marked wrong
+  useEffect(() => {
+    attempt(showToast, () => api.qaSamples(client)).then((r) => setRows(r ?? []));
+    attempt(showToast, () => api.qaStats(client)).then((s) => s && setStats(s));
+  }, [client, showToast]);
+  const review = async (s, verdict, note) => {
+    const r = await attempt(showToast, () => api.qaReview(client, s.id, { verdict, note }));
+    if (!r) return false;
+    showToast(verdict === "correct" ? "Marked correct." : r.corrected === "Excluded" ? "Marked wrong: the listing is excluded (saved as a label)." : r.corrected === "Staged" ? "Marked wrong: the listing is back in review." : "Marked wrong.");
+    onChanged();
+    return true;
+  };
+  const draw = async () => {
+    const r = await attempt(showToast, () => api.qaDraw(client));
+    if (r) {
+      showToast(r.drawn ? `Drew ${r.drawn} automatic decisions from last week.` : "This week's sample is already drawn (or there was nothing automatic last week).");
+      onChanged();
+    }
+  };
+  const open = (rows ?? []).filter((r) => !r.verdict).length;
+  return (
+    <>
+      <div className="flex gap-4 flex-wrap mb-4">
+        <KPI label="Auto-include precision" value={pctText(stats?.included.precision)} sub={`${stats?.included.reviewed ?? 0} checked (12 weeks)`} />
+        <KPI label="Auto-exclude accuracy" value={pctText(stats?.excluded.precision)} sub={`${stats?.excluded.reviewed ?? 0} checked (12 weeks)`} />
+        <KPI label="Overridden by people" value={pctText(stats?.overrides.rate)} sub={`${stats?.overrides.overridden ?? 0} of ${stats?.overrides.automatic ?? 0} automatic decisions (90 days)`} />
+        <KPI label="Waiting for a check" value={rows ? open : "—"} sub="in the samples below" subTone={open ? "text-amber-700" : undefined} />
+      </div>
+      {stats?.bands?.length > 0 && (
+        <div className="mb-4">
+          <Table compact columns={["Decision", "Confidence band", "Matcher", "Checked", "Correct", "Precision", "Waiting"]}>
+            {stats.bands.map((b) => (
+              <tr key={`${b.state}-${b.band}-${b.matcher_version}`}>
+                <Td><Pill text={b.state} tone={TONE[b.state]} /></Td><Td>{b.band}</Td><Td className="text-brand-taupe">{b.matcher_version ?? "—"}</Td>
+                <Td>{b.reviewed}</Td><Td>{b.correct}</Td>
+                <Td><span className={b.precision === null ? "text-brand-taupe" : b.precision >= 95 ? "text-emerald-700 font-bold" : "text-amber-700 font-bold"}>{pctText(b.precision)}</span></Td>
+                <Td className="text-brand-taupe">{b.open}</Td>
+              </tr>
+            ))}
+          </Table>
+        </div>
+      )}
+      <Table columns={["Week", "Listing", "Product", "Automatic decision", "Confidence", "Now", "Check"]}>
+        {(rows ?? []).map((s) => (
+          <tr key={s.id}>
+            <Td className="text-brand-taupe whitespace-nowrap">{formatDay(s.week)}</Td>
+            <Td><button onClick={() => onOpen(s.listing_id)} className="text-left cursor-pointer hover:underline max-w-xs truncate block">{s.title ?? s.url}</button>
+              <div className="text-[11px] text-brand-taupe">{s.source}{s.seller ? ` · ${s.seller}` : ""}{s.price ? ` · ${money(s.price)}` : ""}</div></Td>
+            <Td>{s.sku ? `${s.sku} — ${s.product}` : "—"}</Td>
+            <Td><Pill text={s.state} tone={TONE[s.state]} /> <span className="text-[11px] text-brand-taupe">{s.decided_by}</span></Td>
+            <Td>{s.confidence ?? "—"}</Td>
+            <Td><Pill text={s.state_now ?? "—"} tone={TONE[s.state_now]} /></Td>
+            <Td>{s.verdict
+              ? <span className={`text-xs font-semibold ${s.verdict === "correct" ? "text-emerald-700" : "text-red-600"}`} title={s.note ?? ""}>{s.verdict === "correct" ? "✓ Correct" : "✗ Wrong"} · {s.reviewed_by}</span>
+              : writable && <span className="flex gap-1.5">
+                <SecondaryButton onClick={() => review(s, "correct")}><Check className="w-3.5 h-3.5" /> Correct</SecondaryButton>
+                <SecondaryButton onClick={() => setWrong(s)}><Ban className="w-3.5 h-3.5" /> Wrong</SecondaryButton>
+              </span>}</Td>
+          </tr>
+        ))}
+      </Table>
+      {rows && !rows.length && <div className="text-center py-8 text-sm text-brand-taupe">No sample yet. Each Monday a share of last week's automatic decisions is drawn here (QA sample % in Settings).</div>}
+      <div className="mt-3 flex justify-between items-start gap-3 flex-wrap">
+        <Note>A person checks a random share of the matcher's automatic decisions every week. “Wrong” fixes the listing at once (a wrong include is excluded, a wrong exclude goes back to review) and is saved as a training label.</Note>
+        {writable && <SecondaryButton onClick={draw}><Sparkles className="w-3.5 h-3.5" /> Draw this week's sample</SecondaryButton>}
+      </div>
+      {wrong && <WrongModal sample={wrong} onClose={() => setWrong(null)} onSubmit={async (note) => { if (await review(wrong, "wrong", note)) setWrong(null); }} />}
+    </>
+  );
+}
+
+function WrongModal({ sample, onClose, onSubmit }) {
+  const submit = (e) => {
+    e.preventDefault();
+    onSubmit(String(new FormData(e.target).get("note") ?? "").trim());
+  };
+  return (
+    <Modal open onClose={onClose} title="Automatic decision was wrong">
+      <form onSubmit={submit} className="space-y-3">
+        <div className="text-xs text-brand-taupe">{sample.title ?? sample.url}</div>
+        <Field label="What was wrong *"><input name="note" required placeholder={sample.state === "Included" ? "e.g. 15-inch model, not the 16-inch SKU" : "e.g. It is the right product"} className={inputCls} /></Field>
+        <Note>{sample.state === "Included" ? "The listing will be excluded with this reason." : "The listing goes back to the review queue."}</Note>
+        <div className="flex justify-end gap-2 border-t border-brand-beige pt-3"><SecondaryButton onClick={onClose}>Cancel</SecondaryButton><PrimaryButton type="submit">Mark wrong</PrimaryButton></div>
+      </form>
+    </Modal>
   );
 }
 
