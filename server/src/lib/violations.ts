@@ -6,6 +6,24 @@ import type { ViolationStatus } from './rules.js';
 export const STATUSES: ViolationStatus[] = ['Open', 'Needs review', 'Under notice', 'Authorised promo', 'Resolved', 'Dismissed'];
 export const SEVERITIES = ['Minor', 'Standard', 'Severe'] as const;
 
+/**
+ * Episodes of listings that are no longer Included end: we no longer watch them. The judge runs
+ * this after each pass, and Mapping Center runs it straight after an exclude / restore / retire so
+ * the violation leaves the open list at once. Returns how many episodes it closed.
+ */
+export async function closeUnwatched(db: Db, accountId: string): Promise<number> {
+  const { rowCount } = await db.query(
+    `INSERT INTO violation_event (account_id, violation_id, status, episode_closed, reason)
+     SELECT v.account_id, v.id, 'Dismissed', true, 'Listing no longer included'
+       FROM violation v
+      WHERE v.account_id = $1
+        AND NOT EXISTS (SELECT 1 FROM violation_event c WHERE c.violation_id = v.id AND c.episode_closed)
+        AND NOT EXISTS (SELECT 1 FROM listing_match m WHERE m.account_id = v.account_id AND m.listing_id = v.listing_id AND m.state = 'Included')`,
+    [accountId],
+  );
+  return rowCount ?? 0;
+}
+
 export interface ViolationFilter {
   status?: string[];
   severity?: string[];

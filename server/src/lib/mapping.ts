@@ -8,6 +8,7 @@ import type { Db } from './db.js';
 import { decide, type MatchRule, type RuleCondition, type Suppression, suppressionHits } from './matchRules.js';
 import { proposeProduct, scoreCandidate, type CandidateInput, type PriorLabel, type ProductRef, type Thresholds } from './matching.js';
 import { ensureClassification, resolveSeller } from './sellers.js';
+import { closeUnwatched } from './violations.js';
 
 export const LISTING_STATES = ['Staged', 'Included', 'Excluded', 'Retired'] as const;
 export type ListingState = (typeof LISTING_STATES)[number];
@@ -264,6 +265,7 @@ export interface DecisionInput {
 export interface DecisionResult {
   updated: number;
   suppression: { id: string; code: string; alsoExcluded: number } | null;
+  violationsClosed: number;
 }
 
 /**
@@ -300,7 +302,9 @@ export async function decideListings(db: Db, accountId: string, d: DecisionInput
   } else {
     for (const r of rows) await setState(db, accountId, r, 'Retired', r.product_id, actor, d.reason ?? 'Retired by an analyst', null);
   }
-  return { updated: rows.length, suppression };
+  // A listing that left Included is no longer watched: end its violation now, not at the next judge run.
+  const violationsClosed = d.action === 'include' ? 0 : await closeUnwatched(db, accountId);
+  return { updated: rows.length, suppression, violationsClosed };
 }
 
 export class MappingError extends Error {

@@ -10,6 +10,7 @@ import {
   applyRules, decideListings, EXCLUSION_REASONS, EXCLUSION_SCOPES, LISTING_STATES, loadMatchContext, MappingError, revokeSuppression,
   stageCandidate, upsertListing, type Actor,
 } from '../../lib/mapping.js';
+import { closeUnwatched } from '../../lib/violations.js';
 import { HttpError } from '../app.js';
 import { parse, uuidOr404 } from '../validate.js';
 import { importCode } from './catalogue.js';
@@ -292,7 +293,7 @@ export async function mappingRoutes(app: FastifyInstance): Promise<void> {
         action: `mapping.${verb.toLowerCase()}`,
         entityType: 'listing',
         entityId: b.listingIds.length === 1 ? b.listingIds[0] : null,
-        summary: `${verb} ${result.updated} listing${result.updated === 1 ? '' : 's'}${detail}${result.suppression ? ` → suppression ${result.suppression.code}${result.suppression.alsoExcluded ? `, ${result.suppression.alsoExcluded} more excluded` : ''}` : ''}`,
+        summary: `${verb} ${result.updated} listing${result.updated === 1 ? '' : 's'}${detail}${result.suppression ? ` → suppression ${result.suppression.code}${result.suppression.alsoExcluded ? `, ${result.suppression.alsoExcluded} more excluded` : ''}` : ''}${result.violationsClosed ? `; ${result.violationsClosed} violation${result.violationsClosed === 1 ? '' : 's'} closed` : ''}`,
         after: { ...b, suppression: result.suppression },
       });
       return result;
@@ -404,6 +405,7 @@ export async function mappingRoutes(app: FastifyInstance): Promise<void> {
         });
         outcome[r.state]++;
       }
+      const violationsClosed = await closeUnwatched(db, accountId);
       const seq = (await db.query<{ n: number }>('SELECT coalesce(max(seq), 0) + 1 AS n FROM catalogue_import')).rows[0].n;
       const importId = (
         await db.query<{ id: string }>(
@@ -415,8 +417,8 @@ export async function mappingRoutes(app: FastifyInstance): Promise<void> {
         action: 'listings.imported',
         entityType: 'catalogue_import',
         entityId: importId,
-        summary: `Import ${importCode(seq)} (${b.fileName}): ${plan.changes.length} listings → ${outcome.Included} included, ${outcome.Excluded} excluded, ${outcome.Staged} to review`,
-        after: { ...summary, outcome },
+        summary: `Import ${importCode(seq)} (${b.fileName}): ${plan.changes.length} listings → ${outcome.Included} included, ${outcome.Excluded} excluded, ${outcome.Staged} to review${violationsClosed ? `; ${violationsClosed} violation${violationsClosed === 1 ? '' : 's'} closed` : ''}`,
+        after: { ...summary, outcome, violationsClosed },
       });
       return { ...result, importId, importCode: importCode(seq), outcome };
     });

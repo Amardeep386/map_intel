@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { after, before, test } from 'node:test';
 import { closeDb, pool, type Db } from '../../src/lib/db.js';
 import { judgeAccount } from '../../src/lib/judge.js';
+import { decideListings } from '../../src/lib/mapping.js';
 import { dryRun, publish, replay } from '../../src/lib/ruleAdmin.js';
 import { contentHash } from '../../src/lib/rules.js';
 import { changeStatus, listViolations, violationDetail } from '../../src/lib/violations.js';
@@ -162,6 +163,25 @@ test('judge: promotion windows, Brand Direct, grace period, and episodes of list
     const r = await judgeAccount(db, w.account, { trigger: 'test' });
     assert.equal(r.closedExcluded, 1);
     assert.deepEqual((await statuses(db, w))[0], { seq: 1, status: 'Dismissed', closed: true, observations: 3 });
+  });
+});
+
+test('excluding a listing in Mapping Center ends its open violation at once; including does not', async () => {
+  await scratch(async (db) => {
+    const w = await world(db, 'exclude-now');
+    await db.query("INSERT INTO map_price (account_id, product_id, amount, effective_from) VALUES ($1, $2, 1000, $3)", [w.account, w.product, d('09-01T00:00:00')]);
+    await observe(db, w, d('10-02T00:00:00'), 700);
+    await judgeAccount(db, w.account, { trigger: 'test' });
+    assert.equal((await statuses(db, w))[0].closed, false);
+
+    const actor = { type: 'user' as const, id: u.analyst.id, label: 'det-analyst' };
+    const inc = await decideListings(db, w.account, { listingIds: [w.listing], action: 'include' }, actor);
+    assert.equal(inc.violationsClosed, 0);
+    const exc = await decideListings(db, w.account, { listingIds: [w.listing], action: 'exclude', reason: 'For parts' }, actor);
+    assert.equal(exc.violationsClosed, 1);
+    assert.deepEqual((await statuses(db, w))[0], { seq: 1, status: 'Dismissed', closed: true, observations: 1 });
+    // The judge finds nothing left to close.
+    assert.equal((await judgeAccount(db, w.account, { trigger: 'test' })).closedExcluded, 0);
   });
 });
 

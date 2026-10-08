@@ -9,6 +9,7 @@ import {
   type ActiveEpisode, type Evaluation, type JudgeSettings, type ObservationFacts, type RuleVersion,
   type SellerClass, type ViolationStatus,
 } from './rules.js';
+import { closeUnwatched } from './violations.js';
 
 export interface ObservationRow {
   id: string;
@@ -288,16 +289,7 @@ export async function judgeAccount(
   }
 
   // Episodes of listings that are no longer Included end: we no longer watch them.
-  const { rowCount } = await db.query(
-    `INSERT INTO violation_event (account_id, violation_id, status, episode_closed, reason)
-     SELECT v.account_id, v.id, 'Dismissed', true, 'Listing no longer included'
-       FROM violation v
-      WHERE v.account_id = $1
-        AND NOT EXISTS (SELECT 1 FROM violation_event c WHERE c.violation_id = v.id AND c.episode_closed)
-        AND NOT EXISTS (SELECT 1 FROM listing_match m WHERE m.account_id = v.account_id AND m.listing_id = v.listing_id AND m.state = 'Included')`,
-    [accountId],
-  );
-  out.closedExcluded = rowCount ?? 0;
+  out.closedExcluded = await closeUnwatched(db, accountId);
 
   await db.query(
     'UPDATE judge_run SET finished_at = now(), observations = $2, verdicts = $3, opened = $4, resolved = $5 WHERE id = $1',
