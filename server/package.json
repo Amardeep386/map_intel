@@ -27,6 +27,7 @@
     "scheduler": "tsx src/scripts/scheduler.ts",
     "under-notice": "tsx src/scripts/under-notice.ts",
     "qa-sample": "tsx src/scripts/qa-sample.ts",
+    "alerts": "tsx src/scripts/alerts.ts",
     "judge": "tsx src/scripts/judge.ts",
     "reports": "tsx src/scripts/reports.ts",
     "browsers:install": "playwright install chromium",

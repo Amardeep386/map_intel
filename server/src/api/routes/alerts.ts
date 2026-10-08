@@ -58,6 +58,7 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
       recipients: z.array(z.string().trim().email()).max(50).optional(),
       severity: z.enum(['Standard', 'Severe']).optional(),
       hoursBefore: z.number().int().min(1).max(168).optional(),
+      days: z.number().int().min(1).max(365).optional(),
     }).strict(), req.body);
     return withTenant(req.params.accountId, async (db) => {
       const cur = (await db.query('SELECT * FROM alert_rule WHERE id = $1', [id])).rows[0];
@@ -65,6 +66,7 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
       const config = { ...cur.config };
       if (b.severity && cur.trigger === 'severe_violation') config.severity = b.severity;
       if (b.hoursBefore && cur.trigger === 'source_degraded_before_report') config.hoursBefore = b.hoursBefore;
+      if (b.days && cur.trigger === 'seller_reoffended') config.days = b.days;
       const r = (await db.query(
         'UPDATE alert_rule SET active = $2, email = $3, recipients = $4, config = $5 WHERE id = $1 RETURNING *',
         [id, b.active ?? cur.active, b.email ?? cur.email, b.recipients ?? cur.recipients, JSON.stringify(config)],

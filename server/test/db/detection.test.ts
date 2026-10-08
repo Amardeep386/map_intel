@@ -557,12 +557,12 @@ test('alerts: one per change (new seller once, severe once per violation, degrad
     await observe(db, w, at(50), 960); // Minor: seller alert only
     await judgeAccount(db, w.account, { trigger: 'test' });
     let r = await evaluateAlerts(db, w.account, now);
-    assert.deepEqual(r.byRule, { 'A-01': 1, 'A-02': 0, 'A-03': 0 });
+    assert.deepEqual(r.byRule, { 'A-01': 1, 'A-02': 0, 'A-03': 0, 'A-04': 0, 'A-05': 0, 'A-06': 0, 'A-07': 0 });
 
     await observe(db, w, at(40), 700); // the same violation turns Severe
     await judgeAccount(db, w.account, { trigger: 'test' });
     r = await evaluateAlerts(db, w.account, now);
-    assert.deepEqual(r.byRule, { 'A-01': 0, 'A-02': 1, 'A-03': 0 });
+    assert.deepEqual(r.byRule, { 'A-01': 0, 'A-02': 1, 'A-03': 0, 'A-04': 0, 'A-05': 0, 'A-06': 0, 'A-07': 0 });
     r = await evaluateAlerts(db, w.account, now); // nothing changed: nothing new
     assert.equal(r.raised, 0);
 
@@ -575,7 +575,7 @@ test('alerts: one per change (new seller once, severe once per violation, degrad
     await db.query("INSERT INTO report_definition (account_id, name, template_id, cadence, timezone) VALUES ($1, 'Weekly', $2, $3, 'UTC')",
       [w.account, tpl, `${soon.getUTCMinutes()} ${soon.getUTCHours()} * * *`]);
     r = await evaluateAlerts(db, w.account, now);
-    assert.deepEqual(r.byRule, { 'A-01': 0, 'A-02': 0, 'A-03': 1 });
+    assert.deepEqual(r.byRule, { 'A-01': 0, 'A-02': 0, 'A-03': 1, 'A-04': 0, 'A-05': 0, 'A-06': 0, 'A-07': 0 });
     assert.equal((await evaluateAlerts(db, w.account, new Date(now.getTime() + 60_000))).raised, 0); // same slot: once
 
     const events = (await db.query<{ level: string; title: string }>('SELECT level, title FROM alert_event WHERE account_id = $1 ORDER BY created_at, level', [w.account])).rows;
@@ -594,7 +594,7 @@ test('routes: alert inbox and rules; recipients validated; Brand users see no al
   assert.equal(inbox.json().unread, 0);
   assert.equal((await call(app, u.brand, 'GET', `${base}/events`)).statusCode, 403);
   const rules = (await call(app, u.analyst, 'GET', `${base}/rules`)).json();
-  assert.deepEqual(rules.map((r: { code: string }) => r.code), ['A-01', 'A-02', 'A-03']);
+  assert.deepEqual(rules.map((r: { code: string }) => r.code), ['A-01', 'A-02', 'A-03', 'A-04', 'A-05', 'A-06', 'A-07']);
   assert.equal((await call(app, u.analyst, 'PATCH', `${base}/rules/${rules[1].id}`, { active: false })).statusCode, 403);
   assert.equal((await call(app, u.manager, 'PATCH', `${base}/rules/${rules[1].id}`, { recipients: ['not-an-email'] })).statusCode, 400);
   const ok = await call(app, u.manager, 'PATCH', `${base}/rules/${rules[1].id}`, { recipients: ['map-room@example.com'], severity: 'Standard' });

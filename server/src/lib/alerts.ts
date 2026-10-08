@@ -1,6 +1,8 @@
-// Alerts (Phase 3): evaluated after every judging and by the reports runner. Each rule turns facts
-// into events with a dedup key, so a change alerts once: a seller the first time it violates, a
-// violation the first time it is severe, a degraded source once per upcoming report slot.
+// Alerts (Phase 3, enforcement alerts Phase 4): evaluated after every judging and every hour. Each
+// rule turns facts into events with a dedup key, so a change alerts once: a seller the first time it
+// violates, a violation the first time it is severe, a degraded source once per upcoming report
+// slot, a notice once while it waits for approval, a case once per missed response date, a
+// re-offence once per violation, a case once when it resolves.
 import cronParser from 'cron-parser';
 import { dataQuality } from './dataQuality.js';
 import type { Db } from './db.js';
@@ -9,7 +11,10 @@ import { isManual } from './schedules.js';
 import { violationCode } from './violations.js';
 
 interface Rule { id: string; code: string; name: string; trigger: string; config: Record<string, unknown>; email: boolean; recipients: string[] }
-interface Candidate { key: string; level: 'Severe' | 'Standard' | 'Health' | 'Info'; title: string; body: string; violationId?: string | null; sellerId?: string | null; sourceId?: string | null }
+interface Candidate { key: string; level: 'Severe' | 'Standard' | 'Health' | 'Info'; title: string; body: string; violationId?: string | null; sellerId?: string | null; sourceId?: string | null; caseId?: string | null }
+
+const caseCode = (seq: number) => `C-${String(seq).padStart(5, '0')}`;
+const day = (d: string | Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
 const money = (n: number) => `$${Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 
@@ -71,6 +76,70 @@ async function degradedBeforeReport(db: Db, accountId: string, hoursBefore: numb
   return out;
 }
 
+async function noticesAwaitingApproval(db: Db, accountId: string): Promise<Candidate[]> {
+  const rows = (await db.query(
+    `SELECT n.id, n.seq, n.subject, c.id AS case_id, c.seq AS case_seq, c.seller_id, c.source_id, coalesce(se.name, 'Unknown seller') AS seller
+       FROM notice n JOIN enforcement_case c ON c.id = n.case_id LEFT JOIN seller se ON se.id = c.seller_id
+      WHERE n.account_id = $1 AND n.status = 'Awaiting approval'`, [accountId])).rows;
+  return rows.map((r) => ({
+    key: `notice:${r.id}`, level: 'Info', caseId: r.case_id, sellerId: r.seller_id, sourceId: r.source_id,
+    title: `Notice N-${String(r.seq).padStart(5, '0')} for ${r.seller} waits for brand approval`,
+    body: `“${r.subject}” (${caseCode(r.case_seq)}) is waiting for a Brand user to approve or reject it in Enforcement.`,
+  }));
+}
+
+async function responsesOverdue(db: Db, accountId: string): Promise<Candidate[]> {
+  const rows = (await db.query(
+    `SELECT c.id, c.seq, c.seller_id, c.source_id, to_char(c.response_due, 'YYYY-MM-DD') AS due, c.state, coalesce(se.name, 'Unknown seller') AS seller,
+            (SELECT max(n.sent_at) FROM notice n WHERE n.case_id = c.id AND n.status = 'Sent') AS last_sent
+       FROM case_current c LEFT JOIN seller se ON se.id = c.seller_id
+      WHERE c.account_id = $1 AND NOT c.closed AND c.state IN ('Notice sent', 'Awaiting response') AND c.response_due < current_date
+        AND NOT EXISTS (SELECT 1 FROM communication m WHERE m.case_id = c.id AND m.direction = 'inbound'
+                         AND m.occurred_at >= coalesce((SELECT max(n.sent_at) FROM notice n WHERE n.case_id = c.id AND n.status = 'Sent'), c.opened_at))`,
+    [accountId])).rows;
+  return rows.map((r) => ({
+    key: `case:${r.id}:due:${r.due}`, level: 'Standard', caseId: r.id, sellerId: r.seller_id, sourceId: r.source_id,
+    title: `${caseCode(r.seq)}: ${r.seller} has not responded (due ${day(`${r.due}T00:00:00Z`)})`,
+    body: `${caseCode(r.seq)} is ${r.state} and the response date ${day(`${r.due}T00:00:00Z`)} has passed with no reply logged${r.last_sent ? ` since the notice of ${day(r.last_sent)}` : ''}. Consider a final notice or escalation.`,
+  }));
+}
+
+async function sellersReoffended(db: Db, accountId: string, days: number): Promise<Candidate[]> {
+  const rows = (await db.query(
+    `SELECT v.id, v.seq, v.seller_id, v.source_id, se.name AS seller, p.product_code AS sku, v.last_price::float8 AS price, v.last_map::float8 AS map,
+            r.id AS case_id, r.seq AS case_seq
+       FROM violation_current v JOIN seller se ON se.id = v.seller_id JOIN product p ON p.id = v.product_id
+       JOIN LATERAL (SELECT c.id, c.seq, rs.at FROM case_current c
+                       JOIN LATERAL (SELECT e.created_at AS at FROM case_event e WHERE e.case_id = c.id AND e.state = 'Resolved'
+                                      ORDER BY e.created_at DESC LIMIT 1) rs ON true
+                      WHERE c.account_id = v.account_id AND c.seller_id = v.seller_id AND c.state IN ('Resolved', 'Recurred')
+                        AND rs.at BETWEEN v.opened_at - make_interval(days => $2) AND v.opened_at
+                      ORDER BY rs.at DESC LIMIT 1) r ON true
+      WHERE v.account_id = $1 AND NOT v.episode_closed AND v.status <> 'Dismissed'`,
+    [accountId, days])).rows;
+  return rows.map((r) => ({
+    key: `violation:${r.id}`, level: 'Severe', violationId: r.id, caseId: r.case_id, sellerId: r.seller_id, sourceId: r.source_id,
+    title: `${r.seller} re-offended: ${violationCode(r.seq)} after ${caseCode(r.case_seq)}`,
+    body: `${r.seller} advertised ${r.sku} at ${money(r.price)} (MAP ${money(r.map)}) within ${days} days of ${caseCode(r.case_seq)} being resolved. Opening a case for it marks ${caseCode(r.case_seq)} Recurred; consider the final-notice template.`,
+  }));
+}
+
+async function casesResolved(db: Db, accountId: string): Promise<Candidate[]> {
+  const rows = (await db.query(
+    `SELECT c.id, c.seq, c.seller_id, c.source_id, coalesce(se.name, 'Unknown seller') AS seller, e.reason, e.verdict_id, vd.observed_at
+       FROM case_current c LEFT JOIN seller se ON se.id = c.seller_id
+       JOIN LATERAL (SELECT x.reason, x.verdict_id FROM case_event x WHERE x.case_id = c.id AND x.state = 'Resolved' ORDER BY x.created_at DESC LIMIT 1) e ON true
+       LEFT JOIN verdict vd ON vd.id = e.verdict_id
+      WHERE c.account_id = $1 AND c.state = 'Resolved'`, [accountId])).rows;
+  return rows.map((r) => ({
+    key: `case:${r.id}`, level: 'Info', caseId: r.id, sellerId: r.seller_id, sourceId: r.source_id,
+    title: `${caseCode(r.seq)} resolved: ${r.seller}`,
+    body: r.verdict_id
+      ? `A re-check on ${day(r.observed_at)} saw a compliant price for every listing in ${caseCode(r.seq)}.`
+      : `${caseCode(r.seq)} was closed by a person: ${r.reason}.`,
+  }));
+}
+
 export interface AlertResult { raised: number; emailed: number; byRule: Record<string, number> }
 
 export async function evaluateAlerts(db: Db, accountId: string, now = new Date()): Promise<AlertResult> {
@@ -80,13 +149,17 @@ export async function evaluateAlerts(db: Db, accountId: string, now = new Date()
     const candidates =
       r.trigger === 'new_violating_seller' ? await newViolatingSellers(db, accountId)
         : r.trigger === 'severe_violation' ? await severeViolations(db, accountId, String(r.config.severity ?? 'Severe'))
-          : await degradedBeforeReport(db, accountId, Number(r.config.hoursBefore ?? 24), now);
+          : r.trigger === 'notice_awaiting_approval' ? await noticesAwaitingApproval(db, accountId)
+            : r.trigger === 'response_overdue' ? await responsesOverdue(db, accountId)
+              : r.trigger === 'seller_reoffended' ? await sellersReoffended(db, accountId, Number(r.config.days ?? 60))
+                : r.trigger === 'case_resolved' ? await casesResolved(db, accountId)
+                  : await degradedBeforeReport(db, accountId, Number(r.config.hoursBefore ?? 24), now);
     let n = 0;
     for (const c of candidates) {
       const ev = (await db.query<{ id: string }>(
-        `INSERT INTO alert_event (account_id, alert_rule_id, dedup_key, level, title, body, violation_id, seller_id, source_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (account_id, alert_rule_id, dedup_key) DO NOTHING RETURNING id`,
-        [accountId, r.id, c.key, c.level, c.title, c.body, c.violationId ?? null, c.sellerId ?? null, c.sourceId ?? null, now],
+        `INSERT INTO alert_event (account_id, alert_rule_id, dedup_key, level, title, body, violation_id, seller_id, source_id, case_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (account_id, alert_rule_id, dedup_key) DO NOTHING RETURNING id`,
+        [accountId, r.id, c.key, c.level, c.title, c.body, c.violationId ?? null, c.sellerId ?? null, c.sourceId ?? null, c.caseId ?? null, now],
       )).rows[0];
       if (!ev) continue;
       n++;
