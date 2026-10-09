@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
-  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel
+  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus
 } from "lucide-react";
 import lgLogo from "./assets/lg.png";
 import appleLogo from "./assets/apple.png";
@@ -25,6 +25,7 @@ import { ReportsView } from "./views/ReportsView.jsx";
 import { AlertsView } from "./views/AlertsView.jsx";
 import { EnforcementView } from "./views/EnforcementView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
+import { NewAccountModal, OnboardingView } from "./views/OnboardingView.jsx";
 
 // ---------- Small building blocks ----------
 function ClientLogo({ name, className }) {
@@ -139,6 +140,8 @@ function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
 // ---------- Navigation layout menu ----------
 // Grouped as the work flows: watch, catalogue, collection, enforcement, administration.
 const NAV = [
+  // Only while the account is in Onboarding (P5 guided flow).
+  { id: "onboarding", label: "Onboarding", icon: ListChecks, needs: "settings.read", group: "", onboardingOnly: true },
   { id: "overview", label: "Overview", icon: LayoutDashboard, group: "" },
   { id: "violations", label: "Violations", icon: AlertTriangle, needs: "violations.read", group: "Monitor" },
   { id: "alerts", label: "Alerts", icon: Bell, needs: "alerts.read", group: "Monitor" },
@@ -377,7 +380,10 @@ export default function App() {
     return () => { live = false; };
   }, [screen, client, canAlerts, view]);
   const navBadges = { violations: openViolations, alerts: alertUnread };
-  const nav = useMemo(() => NAV.filter((n) => !n.needs || actions.includes(n.needs)), [actions]);
+  const nav = useMemo(
+    () => NAV.filter((n) => (!n.needs || actions.includes(n.needs)) && (!n.onboardingOnly || client.status === "Onboarding")),
+    [actions, client.status],
+  );
   const accountRole = currentUser?.accounts?.find((a) => a.id === client.id)?.role;
   // Switching to an account where the current screen isn't allowed shows the Overview instead.
   const currentView = nav.some((n) => n.id === view) ? view : "overview";
@@ -435,14 +441,47 @@ export default function App() {
   };
 
   const handleSelectClient = (clientName) => {
+    const c = clients.find((x) => x.name === clientName);
     setActiveClient(clientName);
     setScreen('app');
-    setView('overview');
-    showToast(`Loaded ${clientName} portal sandbox.`, "success");
+    setView(c?.status === "Onboarding" ? 'onboarding' : 'overview');
+    showToast(`Opened ${clientName}.`, "success");
+  };
+
+  const attemptToast = async (fn) => {
+    try { return await fn(); } catch (err) { showToast(err.message || "Something went wrong.", "info"); return undefined; }
+  };
+
+  // After an account is created or goes live: reload the accounts and the user's roles in them.
+  const refreshAccounts = async () => {
+    const [user, list] = await Promise.all([api.me(), api.listClients()]);
+    const missing = list.filter((c) => !db[c.name]);
+    const workspaces = await Promise.all(missing.map((c) => api.loadWorkspace(c)));
+    setDb((prev) => ({ ...prev, ...Object.fromEntries(missing.map((c, i) => [c.name, workspaces[i]])) }));
+    setClients(list);
+    setCurrentUser(user);
+    return list;
+  };
+
+  // Stable for the memoised screen list: always calls the latest refreshAccounts.
+  const refreshOnLive = React.useRef(null);
+  useEffect(() => { refreshOnLive.current = () => attemptToast(refreshAccounts); });
+
+  const [newAccountOpen, setNewAccountOpen] = useState(false);
+  const handleAccountCreated = async (created) => {
+    setNewAccountOpen(false);
+    const list = await attemptToast(refreshAccounts);
+    const c = list?.find((x) => x.id === created.id);
+    if (!c) return;
+    setActiveClient(c.name);
+    setScreen('app');
+    setView('onboarding');
+    showToast(`${c.name} created. Work through the steps, then go live.`, "success");
   };
 
   const mainContent = useMemo(() => {
     switch (currentView) {
+      case "onboarding": return <OnboardingView key={client.id} onLive={() => refreshOnLive.current?.()} />;
       case "overview": return <OverviewView />;
       case "product": return <ProductSummaryView />;
       case "mapping": return <MappingCenterView />;
@@ -460,7 +499,7 @@ export default function App() {
       case "audit": return <AuditLogView />;
       default: return null;
     }
-  }, [currentView, workspace.skus]);
+  }, [currentView, workspace.skus, client.id]);
 
   // --------------------------------------------------------------------------
   // RENDER: WELCOME LOGIN
@@ -523,7 +562,7 @@ export default function App() {
                     <ClientLogo name={c.name} className="w-11 h-11 rounded-lg border border-brand-beige" />
                     <div className="min-w-0 flex-1">
                       <div className="text-[15px] font-semibold">{c.name}</div>
-                      <div className="text-xs text-brand-taupe mt-0.5">{c.status === "Sandbox" ? "Sandbox workspace" : "Live workspace"}</div>
+                      <div className="text-xs text-brand-taupe mt-0.5">{c.status === "Sandbox" ? "Sandbox workspace" : c.status === "Onboarding" ? "Onboarding: set-up in progress" : "Live workspace"}</div>
                     </div>
                     <ArrowRight className="w-4 h-4 text-brand-taupe transition group-hover:translate-x-0.5 group-hover:text-brand-charcoal" />
                   </div>
@@ -534,8 +573,27 @@ export default function App() {
                 </button>
               );
             })}
+            {currentUser?.role === "admin" && (
+              <button onClick={() => setNewAccountOpen(true)}
+                className="text-left border border-dashed border-line-strong rounded-xl p-5 hover:bg-brand-white hover:border-brand-copper transition cursor-pointer flex items-center gap-3.5 min-h-[150px]">
+                <span className="w-11 h-11 rounded-lg border border-brand-beige bg-brand-white inline-flex items-center justify-center"><Plus className="w-5 h-5 text-brand-taupe" /></span>
+                <span>
+                  <span className="block text-[15px] font-semibold">New account</span>
+                  <span className="block text-xs text-brand-taupe mt-0.5">Set up a brand through the guided flow</span>
+                </span>
+              </button>
+            )}
           </div>
         </main>
+        <NewAccountModal open={newAccountOpen} onClose={() => setNewAccountOpen(false)} onCreated={handleAccountCreated} showToast={showToast} />
+        <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
+          {toasts.map(t => (
+            <div key={t.id} className="bg-[#17120F] text-[#F3EDE6] border border-white/10 pl-3 pr-4 py-2.5 rounded-lg shadow-[var(--shadow-3)] text-[13px] flex items-center gap-2.5 animate-fade-in max-w-md">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.type === "info" ? "#DA9066" : "#6FBF8B" }} />
+              <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

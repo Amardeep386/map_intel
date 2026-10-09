@@ -74,6 +74,8 @@ async function request(path, { method = "GET", body } = {}) {
 
 /** Enforcement (P4) needs the API: in demo mode say so instead of pretending. */
 const P4 = (fn) => (USE_MOCK ? Promise.reject(new ApiError(501, "Enforcement needs the API: demo mode has no cases yet")) : fn());
+/** Guided onboarding (P5) writes real configuration: it needs the API too. */
+const P5 = (fn) => (USE_MOCK ? Promise.reject(new ApiError(501, "Onboarding needs the API: demo mode cannot create accounts")) : fn());
 
 /** Fetch a file with the session token and hand it to the browser as a download. */
 async function download(path, fileName) {
@@ -179,7 +181,9 @@ export const api = {
     const accounts = await request("/accounts");
     return accounts.map((a) => ({
       id: a.id,
+      slug: a.slug,
       name: a.name,
+      brand: a.brand,
       status: a.status,
       skus: a.skus,
       merchants: a.merchants,
@@ -580,6 +584,12 @@ export const api = {
   markAlertsRead(client, body) { return USE_MOCK ? mockDetection.markAlertsRead(client, body) : request(`/accounts/${client.id}/alerts/events/read`, { method: "POST", body }); },
   alertRules(client) { return USE_MOCK ? mockDetection.alertRules(client) : request(`/accounts/${client.id}/alerts/rules`); },
   updateAlertRule(client, id, body) { return USE_MOCK ? mockDetection.updateAlertRule(client, id, body) : request(`/accounts/${client.id}/alerts/rules/${id}`, { method: "PATCH", body }); },
+
+  // ---------------- Guided onboarding (P5, needs the API) ----------------
+  createAccount(body) { return P5(() => request("/accounts", { method: "POST", body })); },
+  onboarding(client) { return P5(() => request(`/accounts/${client.id}/onboarding`)); },
+  setOnboardingStep(client, currentStep) { return P5(() => request(`/accounts/${client.id}/onboarding`, { method: "PATCH", body: { currentStep } })); },
+  goLive(client) { return P5(() => request(`/accounts/${client.id}/onboarding/go-live`, { method: "POST" })); },
 
   // ---------------- Evidence (real when the backend is on) ----------------
   async getEvidence(evidenceId) {
