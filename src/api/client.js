@@ -126,6 +126,11 @@ function toSkuRow(p) {
   };
 }
 
+function keepToken(t) {
+  token = t;
+  try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+}
+
 export const api = {
   isMock: USE_MOCK,
 
@@ -136,10 +141,37 @@ export const api = {
       return { id: "mock", email, name: "Fenil Dholaviya", role: "admin" };
     }
     const data = await request("/auth/login", { method: "POST", body: { email, password } });
-    token = data.token;
-    try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+    // A second step (P5 MFA): { mfa: "code" | "setup", challenge } and no session yet.
+    if (data.mfa) return { mfa: data.mfa, challenge: data.challenge, user: data.user };
+    keepToken(data.token);
     return data.user;
   },
+
+  // ---------------- Multi-factor sign-in (P5) ----------------
+  async mfaVerify(challenge, code) {
+    const data = await request("/auth/mfa/verify", { method: "POST", body: { challenge, code } });
+    keepToken(data.token);
+    return data;
+  },
+  mfaSetup(challenge) { return request("/auth/mfa/setup", { method: "POST", body: { challenge } }); },
+  async mfaSetupConfirm(challenge, code) {
+    const data = await request("/auth/mfa/setup/confirm", { method: "POST", body: { challenge, code } });
+    keepToken(data.token);
+    return data;
+  },
+  mfaStatus() { return P5(() => request("/auth/mfa")); },
+  mfaEnrol() { return P5(() => request("/auth/mfa/enrol", { method: "POST", body: {} })); },
+  /** Confirms set-up; the new session counts as MFA, so it replaces the current one. */
+  mfaEnrolConfirm(code) {
+    return P5(async () => {
+      const data = await request("/auth/mfa/enrol/confirm", { method: "POST", body: { code } });
+      keepToken(data.token);
+      return data;
+    });
+  },
+  mfaDisable(code) { return P5(() => request("/auth/mfa/disable", { method: "POST", body: { code } })); },
+  mfaRecoveryCodes(code) { return P5(() => request("/auth/mfa/recovery-codes", { method: "POST", body: { code } })); },
+  resetUserMfa(client, userId) { return P5(() => request(`/accounts/${client.id}/users/${userId}/mfa/reset`, { method: "POST" })); },
 
   /** Start the API early (the free host sleeps when idle) so it is awake by the time the user signs in. */
   wake() {
@@ -165,8 +197,8 @@ export const api = {
 
   async acceptInvite(inviteToken, password, name) {
     const data = await request("/auth/accept-invite", { method: "POST", body: { token: inviteToken, password, name: name || undefined } });
-    token = data.token;
-    try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+    if (data.mfa) return { mfa: data.mfa, challenge: data.challenge, user: data.user };
+    keepToken(data.token);
     return data.user;
   },
 

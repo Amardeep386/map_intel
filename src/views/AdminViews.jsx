@@ -108,6 +108,15 @@ export function SettingsView() {
             <Note>The subscription matrix on Sources & Terms shows the projected requests against this budget.</Note>
           </div>
         </Card>
+        <Card title="Sign-in security">
+          <div className="space-y-3 text-xs">
+            <div className="flex justify-between items-center gap-4">
+              <span className="text-brand-taupe">Require multi-factor sign-in (authenticator app) for everyone in this account, Mirethos staff included</span>
+              <Toggle on={!!s.mfaRequired} disabled={!canEdit} onChange={(v) => setS("mfaRequired", v)} />
+            </div>
+            <Note>When it is on, sessions without a code from an authenticator app cannot open this account. People without MFA are walked through setting it up at their next sign-in. Turn it on for yourself first (Security in the user menu).</Note>
+          </div>
+        </Card>
         <Card title="Data retention">
           <div className="space-y-3 text-xs">
             <div className="grid grid-cols-3 gap-3">
@@ -218,6 +227,13 @@ export function UsersView() {
       await load();
     }
   };
+  const resetMfa = async (m) => {
+    if (!window.confirm(`Reset multi-factor sign-in for ${m.email}? They set it up again at their next sign-in if an account requires it.`)) return;
+    if (await attempt(showToast, () => api.resetUserMfa(client, m.userId))) {
+      showToast(`Multi-factor sign-in reset for ${m.email}.`);
+      await load();
+    }
+  };
   const revoke = async (i) => {
     if ((await attempt(showToast, async () => (await api.revokeInvite(client, i.id)) ?? true)) !== undefined) await load();
   };
@@ -226,7 +242,7 @@ export function UsersView() {
     <div>
       <PageHeader title={`Users & Access — ${client.name} (${client.status})`} action={canManage && <PrimaryButton onClick={() => setInviting(true)}><Plus className="w-4 h-4" /> Invite user</PrimaryButton>} />
       <Card>
-        <Table columns={["User", "Role", "Can", "Last active", "Status", ""]}>
+        <Table columns={["User", "Role", "Can", "Last active", "Status", "MFA", ""]}>
           {(data?.members ?? []).map((m) => (
             <tr key={m.userId}>
               <Td className="font-semibold">{m.name}<div className="text-[11px] text-brand-taupe font-normal">{m.email}</div></Td>
@@ -243,6 +259,14 @@ export function UsersView() {
               <Td className="text-brand-taupe whitespace-nowrap">{m.lastLoginAt ? formatWhen(m.lastLoginAt) : "Never"}</Td>
               <Td><Pill text={m.status} tone={m.status === "Active" ? ACTIVE_TONE : MUTED_TONE} /></Td>
               <Td>
+                <span className="inline-flex items-center gap-2">
+                  <Pill text={m.mfaEnabled ? "On" : "Off"} tone={m.mfaEnabled ? ACTIVE_TONE : MUTED_TONE} />
+                  {canManage && m.mfaEnabled && data.grantableRoles.includes(m.role) && (
+                    <button onClick={() => resetMfa(m)} className="text-xs text-brand-copper hover:underline cursor-pointer" title="For someone who lost their phone">Reset</button>
+                  )}
+                </span>
+              </Td>
+              <Td>
                 {canManage && data.grantableRoles.includes(m.role) && (
                   <button onClick={() => remove(m)} className="text-brand-taupe hover:text-red-600 cursor-pointer" title="Remove from account"><Trash2 className="w-4 h-4" /></button>
                 )}
@@ -256,6 +280,7 @@ export function UsersView() {
               <Td className="text-brand-taupe">{ROLE_CAN[i.role]}</Td>
               <Td className="text-brand-taupe whitespace-nowrap">Invite expires {formatWhen(i.expiresAt)}</Td>
               <Td><Pill text="Invited" tone="bg-blue-50 text-blue-700 border-blue-200" /></Td>
+              <Td className="text-brand-taupe">—</Td>
               <Td>{canManage && <button onClick={() => revoke(i)} className="text-xs text-brand-copper hover:underline cursor-pointer">Revoke</button>}</Td>
             </tr>
           ))}

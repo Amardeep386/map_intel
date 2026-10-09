@@ -27,6 +27,7 @@ import { EnforcementView } from "./views/EnforcementView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 import { NewAccountModal, OnboardingView } from "./views/OnboardingView.jsx";
 import { PlatformScreen } from "./views/PlatformView.jsx";
+import { MfaSignInScreen, SecurityModal } from "./views/MfaViews.jsx";
 
 // ---------- Small building blocks ----------
 function ClientLogo({ name, className }) {
@@ -436,7 +437,12 @@ export default function App() {
     setIsLoggingIn(true);
     const slowTimer = setTimeout(() => setSlowLogin(true), 5000);
     try {
-      await api.login(loginEmail, loginPassword);
+      const r = await api.login(loginEmail, loginPassword);
+      if (r?.mfa) {
+        setMfaStep(r);
+        setScreen('mfa');
+        return;
+      }
       await enterPortal();
       showToast("Credentials authorized.", "success");
     } catch (err) {
@@ -482,6 +488,13 @@ export default function App() {
   useEffect(() => { refreshOnLive.current = () => attemptToast(refreshAccounts); });
 
   const [newAccountOpen, setNewAccountOpen] = useState(false);
+  // P5 MFA: the second sign-in step, and the Security dialog.
+  const [mfaStep, setMfaStep] = useState(null);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const security = securityOpen && (
+    <SecurityModal onClose={() => setSecurityOpen(false)} showToast={showToast}
+      onChanged={async () => setCurrentUser(await api.me())} />
+  );
   const [platformTab, setPlatformTab] = useState("tickets");
   const handleAccountCreated = async (created) => {
     setNewAccountOpen(false);
@@ -523,14 +536,30 @@ export default function App() {
     return (
       <InviteAcceptScreen
         inviteToken={inviteToken}
-        onAccepted={async () => {
+        onAccepted={async (r) => {
           window.history.replaceState(null, '', window.location.pathname);
+          if (r?.mfa) {
+            setMfaStep(r);
+            setScreen('mfa');
+            return;
+          }
           await enterPortal();
           showToast("Welcome! Your account is ready.", "success");
         }}
         onCancel={() => { window.history.replaceState(null, '', window.location.pathname); setScreen('login'); }}
         showToast={showToast}
       />
+    );
+  }
+
+  if (screen === 'mfa' && mfaStep) {
+    return (
+      <>
+        <MfaSignInScreen step={mfaStep} showToast={showToast}
+          onSignedIn={async () => { await enterPortal(); setMfaStep(null); showToast("Signed in.", "success"); }}
+          onCancel={() => { setMfaStep(null); setScreen('login'); }} />
+        <Toasts toasts={toasts} />
+      </>
     );
   }
 
@@ -580,6 +609,11 @@ export default function App() {
                 </button>
               </>
             )}
+            {!api.isMock && (
+              <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setSecurityOpen(true)}>
+                <ShieldCheck className="w-4 h-4" /> Security
+              </button>
+            )}
             <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
           </div>
         </header>
@@ -599,6 +633,9 @@ export default function App() {
                     <div className="min-w-0 flex-1">
                       <div className="text-[15px] font-semibold">{c.name}</div>
                       <div className="text-xs text-brand-taupe mt-0.5">{c.status === "Sandbox" ? "Sandbox workspace" : c.status === "Onboarding" ? "Onboarding: set-up in progress" : "Live workspace"}</div>
+                      {currentUser?.accounts?.find((a) => a.id === c.id)?.mfaRequired && !currentUser?.mfa?.session && (
+                        <div className="text-[11px] text-amber-700 mt-1 inline-flex items-center gap-1"><Lock className="w-3 h-3" /> Needs multi-factor sign-in: turn it on under Security, then sign in again</div>
+                      )}
                     </div>
                     <ArrowRight className="w-4 h-4 text-brand-taupe transition group-hover:translate-x-0.5 group-hover:text-brand-charcoal" />
                   </div>
@@ -621,6 +658,7 @@ export default function App() {
             )}
           </div>
         </main>
+        {security}
         <NewAccountModal open={newAccountOpen} onClose={() => setNewAccountOpen(false)} onCreated={handleAccountCreated} showToast={showToast} />
         <Toasts toasts={toasts} />
       </div>
@@ -745,6 +783,7 @@ export default function App() {
                   <div className="text-[12.5px] font-medium truncate">{currentUser?.email || userName}</div>
                 </div>
                 <button onClick={() => { setUserOpen(false); setScreen('client-select'); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-3 cursor-pointer">Switch workspace</button>
+                {!api.isMock && <button onClick={() => { setUserOpen(false); setSecurityOpen(true); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-3 cursor-pointer">Security</button>}
                 <button onClick={() => { setUserOpen(false); handleLogout(); }} className="w-full text-left px-3 py-2 text-[13px] text-red-700 hover:bg-surface-3 cursor-pointer">Sign out</button>
               </div>
             )}
@@ -755,6 +794,7 @@ export default function App() {
         </main>
       </div>
 
+      {security}
       {/* Toasts */}
       <Toasts toasts={toasts} />
 

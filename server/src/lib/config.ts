@@ -38,6 +38,11 @@ const schema = z.object({
 
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_TTL_HOURS: int(12),
+  // MFA (Phase 5): key that seals authenticator secrets (32 bytes, base64). Without it a key is derived
+  // from JWT_SECRET, so changing JWT_SECRET would then make every user set MFA up again.
+  MFA_KEY: z.string().optional(),
+  // Require MFA of every Mirethos platform administrator (on top of each account's own setting).
+  PLATFORM_MFA_REQUIRED: bool(false),
 
   // Credential vault: comma-separated `id:base64key` pairs (32-byte keys) and the id used for new secrets.
   // Old keys stay listed so existing secrets still decrypt after a key change.

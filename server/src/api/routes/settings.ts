@@ -25,6 +25,7 @@ export const SETTINGS_DEFAULTS = {
   retention_observation_days: RETENTION_DEFAULTS.observations,
   retention_evidence_days: RETENTION_DEFAULTS.evidence,
   retention_audit_days: RETENTION_DEFAULTS.audit,
+  mfa_required: false,
 };
 type Settings = typeof SETTINGS_DEFAULTS;
 
@@ -61,6 +62,7 @@ const settingsPatch = z
         retentionObservationDays: z.number().int().min(90).max(3650),
         retentionEvidenceDays: z.number().int().min(90).max(3650),
         retentionAuditDays: z.number().int().min(365).max(3650),
+        mfaRequired: z.boolean(),
       })
       .partial(),
   })
@@ -81,6 +83,7 @@ const toDb: Record<string, keyof Settings> = {
   retentionObservationDays: 'retention_observation_days',
   retentionEvidenceDays: 'retention_evidence_days',
   retentionAuditDays: 'retention_audit_days',
+  mfaRequired: 'mfa_required',
 };
 
 interface AccountRow {
@@ -142,6 +145,10 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       if (b.seats !== undefined) settings.seats = b.seats;
       const merged = { ...SETTINGS_DEFAULTS, ...settings } as Settings;
       if (merged.match_review >= merged.match_include) throw new HttpError(400, 'the review threshold must be below the auto-include threshold');
+      // Switching MFA on from a session without it would shut the caller out at once.
+      if (merged.mfa_required && !before.settings.mfa_required && !req.user!.mfa) {
+        throw new HttpError(409, 'turn on multi-factor sign-in for yourself first (Security), sign in again, then require it for the account');
+      }
       const keep = retentionProblem(retentionOf(merged), config.S3_OBJECT_LOCK_DAYS);
       if (keep) throw new HttpError(400, keep);
       const contractFrom = b.contractFrom !== undefined ? b.contractFrom : before.contract_from;

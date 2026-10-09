@@ -57,6 +57,9 @@ export class HttpError extends Error {
   }
 }
 
+/** The message the portal recognises to offer MFA set-up. */
+export const MFA_NEEDED = 'this account requires multi-factor sign-in: turn it on under Security, then sign in again';
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -65,14 +68,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export async function accountRoleFor(user: TokenClaims, accountId: string): Promise<string> {
   if (!UUID.test(accountId)) throw new HttpError(404, 'account not found');
-  const { exists, role } = await withApi(async (db) => {
-    const { rows } = await db.query<{ exists: boolean; role: string | null }>(
-      'SELECT EXISTS (SELECT 1 FROM account WHERE id = $1) AS exists, app_account_role($1, $2) AS role',
+  const { exists, role, mfa_required } = await withApi(async (db) => {
+    const { rows } = await db.query<{ exists: boolean; role: string | null; mfa_required: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM account WHERE id = $1) AS exists, app_account_role($1, $2) AS role,
+              coalesce((SELECT (settings->>'mfa_required')::boolean FROM account WHERE id = $1), false) AS mfa_required`,
       [accountId, user.sub],
     );
     return rows[0];
   });
   if (!exists) throw new HttpError(404, 'account not found');
+  // Phase 5 · M7: an account that requires MFA opens only for sessions that used a second factor.
+  if (mfa_required && !user.mfa && (role || user.role === 'admin')) throw new HttpError(403, MFA_NEEDED);
   if (user.role === 'admin') return 'Administrator';
   if (!role) throw new HttpError(403, 'no access to this account');
   return role;
@@ -131,6 +137,7 @@ export async function buildApp() {
     if (permission === 'user') return undefined;
     if (permission === 'platform') {
       if (req.user.role !== 'admin') return reply.code(403).send({ error: 'Mirethos administrators only' });
+      if (config.PLATFORM_MFA_REQUIRED && !req.user.mfa) return reply.code(403).send({ error: 'platform screens require multi-factor sign-in: turn it on under Security, then sign in again' });
       return undefined;
     }
     const accountId = (req.params as { accountId?: string } | undefined)?.accountId;
