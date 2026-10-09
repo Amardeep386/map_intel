@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
-  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus, Gauge, Ticket as TicketIcon
+  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus, Gauge, Ticket as TicketIcon, Database
 } from "lucide-react";
 import lgLogo from "./assets/lg.png";
 import appleLogo from "./assets/apple.png";
@@ -28,6 +28,7 @@ import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 import { NewAccountModal, OnboardingView } from "./views/OnboardingView.jsx";
 import { PlatformScreen } from "./views/PlatformView.jsx";
 import { MfaSignInScreen, SecurityModal } from "./views/MfaViews.jsx";
+import { DataApiView } from "./views/DataApiView.jsx";
 
 // ---------- Small building blocks ----------
 function ClientLogo({ name, className }) {
@@ -159,6 +160,7 @@ const NAV = [
   { id: "settings", label: "Settings", icon: SettingsIcon, needs: "settings.read", group: "Admin" },
   { id: "users", label: "Users & Access", icon: Users, needs: "users.read", group: "Admin" },
   { id: "audit", label: "Audit Log", icon: ClipboardList, needs: "audit.read", group: "Admin" },
+  { id: "data", label: "Data & API", icon: Database, needs: "account.read", group: "Admin" },
 ];
 
 export const DataContext = React.createContext(null);
@@ -586,6 +588,7 @@ export default function App() {
       case "settings": return <SettingsView />;
       case "users": return <UsersView />;
       case "audit": return <AuditLogView />;
+      case "data": return <DataApiView />;
       default: return null;
     }
   }, [currentView, workspace.skus, client.id]);

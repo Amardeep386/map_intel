@@ -80,6 +80,7 @@ export interface RetentionCounts {
   observations: number;
   audit: Record<string, number>; // per chain (account id or 'platform')
   protectedObservations: number;
+  apiRequestLog: number; // public API call log entries past 90 days (Phase 5 · M9)
 }
 
 async function evidenceCandidates(db: Db, now: Date, limit: number): Promise<EvidenceRow[]> {
@@ -149,13 +150,15 @@ export type DeleteFile = (uri: string) => Promise<unknown>;
 export async function runRetention(db: Db, opts: { apply: boolean; now?: Date; deleteFile: DeleteFile; limits?: typeof LIMITS }): Promise<RetentionCounts> {
   const now = opts.now ?? new Date();
   const limits = opts.limits ?? LIMITS;
-  const counts: RetentionCounts = { evidence: 0, evidenceFiles: 0, evidenceSkipped: 0, observations: 0, audit: {}, protectedObservations: 0 };
+  const counts: RetentionCounts = { evidence: 0, evidenceFiles: 0, evidenceSkipped: 0, observations: 0, audit: {}, protectedObservations: 0, apiRequestLog: 0 };
   counts.protectedObservations = Number((await db.query(`WITH ${PROTECTED} SELECT count(*) FROM protected`)).rows[0].count);
 
   const evidence = await evidenceCandidates(db, now, limits.evidence);
   const observations = await observationCandidates(db, now, limits.observations);
   const audit = await auditCutoffs(db, now);
+  const API_LOG_OLD = "at < $1::timestamptz - interval '90 days'";
   if (!opts.apply) {
+    counts.apiRequestLog = Number((await db.query(`SELECT count(*) FROM api_request_log WHERE ${API_LOG_OLD}`, [now])).rows[0].count);
     counts.evidence = evidence.length;
     counts.evidenceFiles = evidence.reduce((n, e) => n + e.uris.length, 0);
     counts.observations = observations.length;
@@ -163,6 +166,7 @@ export async function runRetention(db: Db, opts: { apply: boolean; now?: Date; d
     return counts;
   }
 
+  counts.apiRequestLog = (await db.query(`DELETE FROM api_request_log WHERE ${API_LOG_OLD}`, [now])).rowCount ?? 0;
   await db.query("SELECT set_config('app.purging', 'on', true)");
   try {
     const gone: string[] = [];

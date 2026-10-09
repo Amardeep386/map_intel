@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { verifyToken, type TokenClaims } from '../lib/auth.js';
 import { config } from '../lib/config.js';
+import { authenticateKey, type ApiKeyAuth } from '../lib/apiKeys.js';
 import { parseOrigins } from '../lib/cors.js';
 import { apiPool, withApi } from '../lib/db.js';
 import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
@@ -9,6 +10,8 @@ import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { platformRoutes } from './routes/platform.js';
+import { publicApiRoutes } from './routes/publicApi.js';
+import { apiKeyRoutes } from './routes/apiKeys.js';
 import { settingsRoutes } from './routes/settings.js';
 import { userRoutes } from './routes/users.js';
 import { auditRoutes } from './routes/audit.js';
@@ -42,6 +45,8 @@ declare module 'fastify' {
     /** Set for routes with an account action: the :accountId and the caller's role in it. */
     accountId: string | null;
     accountRole: string | null;
+    /** Phase 5 · M9: set when the request carries an API key (only /v1 routes accept it). */
+    apiKey: ApiKeyAuth | null;
   }
   interface FastifyContextConfig {
     permission?: RoutePermission;
@@ -113,9 +118,15 @@ export async function buildApp() {
   app.decorateRequest('user', null);
   app.decorateRequest('accountId', null);
   app.decorateRequest('accountRole', null);
+  app.decorateRequest('apiKey', null);
 
   app.addHook('onRequest', async (req) => {
     const header = req.headers.authorization;
+    // An API key (Phase 5 · M9) is never a session: it only opens the /v1 routes.
+    if (header?.startsWith('Bearer mik_')) {
+      req.apiKey = await withApi((db) => authenticateKey(db, header.slice(7))).catch(() => null);
+      return;
+    }
     if (header?.startsWith('Bearer ')) {
       try {
         const claims = await verifyToken(header.slice(7));
@@ -133,6 +144,10 @@ export async function buildApp() {
   app.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
     const permission = req.routeOptions.config?.permission;
     if (!permission || permission === 'public') return undefined;
+    if (permission === 'apikey') {
+      if (!req.apiKey) return reply.code(401).send({ error: 'a valid API key is required (Authorization: Bearer mik_...)' });
+      return undefined;
+    }
     if (!req.user) return reply.code(401).send({ error: 'sign in required' });
     if (permission === 'user') return undefined;
     if (permission === 'platform') {
@@ -167,6 +182,8 @@ export async function buildApp() {
   await app.register(accountRoutes);
   await app.register(onboardingRoutes);
   await app.register(platformRoutes);
+  await app.register(apiKeyRoutes);
+  await app.register(publicApiRoutes);
   await app.register(auditRoutes);
   await app.register(catalogueRoutes);
   await app.register(policyRoutes);

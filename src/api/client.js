@@ -147,6 +147,16 @@ export const api = {
     return data.user;
   },
 
+  // ---------------- Data exports and API keys (P5) ----------------
+  apiKeys(client) { return P5(() => request(`/accounts/${client.id}/api-keys`)); },
+  createApiKey(client, body) { return P5(() => request(`/accounts/${client.id}/api-keys`, { method: "POST", body })); },
+  revokeApiKey(client, keyId) { return P5(() => request(`/accounts/${client.id}/api-keys/${keyId}`, { method: "DELETE" })); },
+  apiKeyLog(client, keyId) { return P5(() => request(`/accounts/${client.id}/api-keys/${keyId}/log`)); },
+  exportData(client, dataset, query) {
+    return P5(() => download(`/accounts/${client.id}/exports/${dataset}${qs(query)}`, `${dataset}-${new Date().toLocaleDateString("en-CA")}.${query.format || "csv"}`));
+  },
+  apiBaseUrl() { return API_URL; },
+
   // ---------------- Single sign-on (P5) ----------------
   /** Providers the API offers (none in demo mode or before client ids are set). */
   async ssoProviders() {
