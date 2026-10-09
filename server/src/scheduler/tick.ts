@@ -221,7 +221,46 @@ export function summarizePlan(jobs: PlannedJob[]): Record<string, { run: number;
   return out;
 }
 
-/** One scheduler tick: fire every due schedule. */
+/**
+ * Baseline crawls (Phase 5 · M1): an account that went live through guided onboarding gets one
+ * manual run of each active schedule, once. Onboarding accounts are not crawled before that.
+ */
+export async function fireBaselines(now: Date = new Date(), opts: { enqueue?: boolean } = {}): Promise<FiredRun[]> {
+  const due = await withSystem(
+    async (db) =>
+      (
+        await db.query<{ account_id: string; schedule_ids: string[] }>(
+          `SELECT o.account_id, coalesce(array_agg(s.id ORDER BY s.priority DESC) FILTER (WHERE s.id IS NOT NULL), '{}') AS schedule_ids
+             FROM account_onboarding o
+             JOIN account a ON a.id = o.account_id AND a.status = 'Active'
+             LEFT JOIN schedule s ON s.account_id = o.account_id AND s.active
+            WHERE o.baseline_requested_at IS NOT NULL AND o.baseline_fired_at IS NULL
+            GROUP BY o.account_id`,
+        )
+      ).rows,
+  );
+  const fired: FiredRun[] = [];
+  for (const d of due) {
+    const runIds: string[] = [];
+    for (const id of d.schedule_ids) {
+      try {
+        const r = await fireSchedule(id, now, 'manual', opts);
+        if (r) {
+          fired.push(r);
+          runIds.push(r.crawlRunId);
+        }
+      } catch (err) {
+        console.error(`[scheduler] baseline ${id} (${d.account_id}) failed to fire: ${(err as Error).message}`);
+      }
+    }
+    await withSystem((db) =>
+      db.query('UPDATE account_onboarding SET baseline_fired_at = now(), baseline_run_ids = baseline_run_ids || $2::uuid[] WHERE account_id = $1', [d.account_id, runIds]),
+    );
+  }
+  return fired;
+}
+
+/** One scheduler tick: fire the baseline crawls asked for at go-live, then every due schedule. */
 export async function schedulerTick(now: Date = new Date()): Promise<FiredRun[]> {
   const schedules = await withSystem(
     async (db) =>
@@ -230,11 +269,11 @@ export async function schedulerTick(now: Date = new Date()): Promise<FiredRun[]>
           `SELECT s.id, s.account_id, s.name, s.selector, s.priority, s.active, s.cadence, s.timezone, s.kind, s.listing_scope,
                   s.listing_status, s.takedown_status, (SELECT max(fired_for) FROM crawl_run r WHERE r.schedule_id = s.id AND r.trigger = 'schedule') AS last_fired
              FROM schedule s JOIN account a ON a.id = s.account_id
-            WHERE s.active AND a.status <> 'Suspended'`,
+            WHERE s.active AND a.status IN ('Sandbox', 'Active')`,
         )
       ).rows,
   );
-  const fired: FiredRun[] = [];
+  const fired: FiredRun[] = await fireBaselines(now);
   for (const s of schedules) {
     const slot = dueSlot(s.cadence, s.timezone, now, s.last_fired);
     if (!slot) continue;

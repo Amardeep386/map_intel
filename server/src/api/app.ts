@@ -7,6 +7,7 @@ import { apiPool, withApi } from '../lib/db.js';
 import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
 import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
+import { onboardingRoutes } from './routes/onboarding.js';
 import { settingsRoutes } from './routes/settings.js';
 import { userRoutes } from './routes/users.js';
 import { auditRoutes } from './routes/audit.js';
@@ -156,6 +157,7 @@ export async function buildApp() {
   await app.register(ebayRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(accountRoutes);
+  await app.register(onboardingRoutes);
   await app.register(auditRoutes);
   await app.register(catalogueRoutes);
   await app.register(policyRoutes);
