@@ -600,6 +600,8 @@ export const api = {
   updateTicket(id, body) { return P5(() => request(`/platform/tickets/${id}`, { method: "PATCH", body })); },
   ticketAssignees() { return P5(() => request("/platform/assignees")); },
   sourceList() { return P5(() => request("/sources")); },
+  platformReplays() { return P5(() => request("/platform/replays")); },
+  startPlatformReplay(body) { return P5(() => request("/platform/replays", { method: "POST", body })); },
 
   // ---------------- Evidence (real when the backend is on) ----------------
   async getEvidence(evidenceId) {

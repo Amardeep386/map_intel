@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { api } from "../api/client.js";
 import { Bar, Card, Field, inputCls, KPI, Modal, Note, PageHeader, Pill, PrimaryButton, SecondaryButton, Table, Td } from "../ui.jsx";
 import { attempt } from "../workspace.js";
+import { ReplaysView } from "./ReplaysView.jsx";
 import { TicketsView } from "./TicketsView.jsx";
 
 const fmt = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-US"));
@@ -140,14 +141,16 @@ export function PlatformScreen({ tab, onTab, onBack, accounts, showToast }) {
         <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer"><ArrowLeft className="w-4 h-4" /> Workspaces</button>
         <span className="text-[11px] uppercase tracking-[0.18em] text-rail-ink-2">Platform</span>
         <nav className="ml-4 flex items-center gap-1">
-          {[["tickets", "Tickets"], ["budget", "Crawl budget"]].map(([id, label]) => (
+          {[["tickets", "Tickets"], ["budget", "Crawl budget"], ["replays", "Replays"]].map(([id, label]) => (
             <button key={id} onClick={() => onTab(id)}
               className={`h-8 px-3 rounded-md text-[13px] cursor-pointer ${tab === id ? "bg-white/[0.08] text-rail-ink font-medium" : "text-rail-ink-2 hover:text-rail-ink"}`}>{label}</button>
           ))}
         </nav>
       </header>
       <main className="max-w-[1400px] mx-auto px-8 py-7">
-        {tab === "tickets" ? <TicketsView accounts={accounts} showToast={showToast} /> : <CrawlBudgetView showToast={showToast} />}
+        {tab === "tickets" ? <TicketsView accounts={accounts} showToast={showToast} />
+          : tab === "replays" ? <ReplaysView accounts={accounts} showToast={showToast} />
+          : <CrawlBudgetView showToast={showToast} />}
       </main>
     </div>
   );

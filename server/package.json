@@ -29,6 +29,7 @@
     "qa-sample": "tsx src/scripts/qa-sample.ts",
     "alerts": "tsx src/scripts/alerts.ts",
     "tickets": "tsx src/scripts/tickets.ts",
+    "replays": "tsx src/scripts/replays.ts",
     "judge": "tsx src/scripts/judge.ts",
     "reports": "tsx src/scripts/reports.ts",
     "browsers:install": "playwright install chromium",

@@ -59,6 +59,9 @@ jobs:
       # P5 · M4: internal tickets for failing / blocked sources and Mapping Center backlogs; deduplicated.
       - name: Tickets
         run: npm run tickets
+      # P5 · M5: finish replay runs the API left unfinished (restart or sleep); each resumes from its cursor.
+      - name: Replays
+        run: npm run replays
       - name: Anything to do?
         id: work
         run: |

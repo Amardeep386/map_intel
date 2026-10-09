@@ -4,7 +4,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
+import { randomUUID } from 'node:crypto';
 import { forecastAccount, loadCaps, loadUsage, utcDay } from '../../lib/crawlBudget.js';
+import { runReplay, startReplay } from '../../lib/replay.js';
+import { RuleError } from '../../lib/ruleAdmin.js';
 import { withApi, withTenant } from '../../lib/db.js';
 import { createTicket, KINDS, listTickets, PRIORITIES, STATUSES, TicketError, ticketDetail, updateTicket } from '../../lib/tickets.js';
 import { HttpError } from '../app.js';
@@ -226,5 +229,51 @@ export async function platformRoutes(app: FastifyInstance): Promise<void> {
       }
       return ticketDetail(db, id);
     });
+  });
+
+  // ---------------------------------------------------------------- replay at scale (M5)
+  // Re-judge each chosen account's rule set over a range and compare with the stored verdicts.
+  app.post('/platform/replays', { config: { permission: 'platform' } }, async (req, reply) => {
+    const b = parse(
+      z.object({ accountIds: z.union([z.literal('all'), z.array(z.string().uuid()).min(1).max(200)]), from: z.coerce.date(), to: z.coerce.date() }),
+      req.body,
+    );
+    if (!(b.to > b.from)) throw new HttpError(400, 'the range must end after it starts');
+    if (b.to.getTime() - b.from.getTime() > 400 * DAY_MS) throw new HttpError(400, 'replay at most 400 days at a time');
+    const accounts = (await withApi((db) => db.query<{ id: string; name: string; status: string }>('SELECT id, name, status FROM app_accounts_for_user($1, true)', [req.user!.sub]))).rows
+      .filter((a) => a.status !== 'Closed' && (b.accountIds === 'all' || b.accountIds.includes(a.id)));
+    if (b.accountIds !== 'all' && accounts.length !== b.accountIds.length) throw new HttpError(404, 'account not found');
+    const batchId = randomUUID();
+    const runs: { id: string; accountId: string; account: string; total: number }[] = [];
+    for (const a of accounts) {
+      const r = await withTenant(a.id, async (db) => {
+        const started = await startReplay(db, a.id, { mode: 'ruleset' }, b.from, b.to, req.user!.sub, batchId).catch((err) => {
+          if (err instanceof RuleError) throw new HttpError(err.statusCode, err.message);
+          throw err;
+        });
+        await recordAudit(db, {
+          accountId: a.id, actor: actorFrom(req), requestId: req.id, action: 'rules.replayed', entityType: 'replay_run', entityId: started.id,
+          summary: `Rule set replay queued by Mirethos (${started.total} observations)`, after: { batchId, from: b.from, to: b.to, total: started.total },
+        });
+        return started;
+      });
+      runs.push({ id: r.id, accountId: a.id, account: a.name, total: r.total });
+    }
+    // One account after another, in the background; the hourly job resumes anything left.
+    void (async () => {
+      for (const r of runs) await runReplay(r.id, (fn) => withTenant(r.accountId, fn));
+    })().catch((err) => req.log.error({ err, batchId }, 'replay batch failed'));
+    return reply.code(202).send({ batchId, runs });
+  });
+
+  app.get('/platform/replays', { config: { permission: 'platform' } }, async () => {
+    const rows = (await withApi((db) => db.query('SELECT * FROM app_replay_batches(20)'))).rows;
+    const batches = new Map<string, { batchId: string; from: Date; to: Date; createdAt: Date; runs: unknown[] }>();
+    for (const r of rows) {
+      const b = batches.get(r.batch_id) ?? { batchId: r.batch_id, from: r.range_from, to: r.range_to, createdAt: r.created_at, runs: [] as unknown[] };
+      b.runs.push({ id: r.run_id, accountId: r.account_id, account: r.account, status: r.status, total: r.total, processed: r.processed, summary: r.summary, error: r.error, finishedAt: r.finished_at });
+      batches.set(r.batch_id, b);
+    }
+    return [...batches.values()];
   });
 }
