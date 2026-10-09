@@ -318,16 +318,8 @@ function Toasts({ toasts }) {
   );
 }
 
-/** Small provider marks for the sign-in buttons (plain shapes, no external images). */
+/** The provider mark on the sign-in button (inline, no external images). */
 function ProviderMark({ id }) {
-  if (id === "microsoft") {
-    return (
-      <svg viewBox="0 0 16 16" className="w-4 h-4" aria-hidden="true">
-        <rect x="0" y="0" width="7.5" height="7.5" fill="#F25022" /><rect x="8.5" y="0" width="7.5" height="7.5" fill="#7FBA00" />
-        <rect x="0" y="8.5" width="7.5" height="7.5" fill="#00A4EF" /><rect x="8.5" y="8.5" width="7.5" height="7.5" fill="#FFB900" />
-      </svg>
-    );
-  }
   if (id === "google") {
     // Google's standard "G" (their sign-in branding asks for this mark on a white button).
     return (

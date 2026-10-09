@@ -65,7 +65,7 @@ const settingsPatch = z
         retentionEvidenceDays: z.number().int().min(90).max(3650),
         retentionAuditDays: z.number().int().min(365).max(3650),
         mfaRequired: z.boolean(),
-        // SSO (Phase 5 · M8): people signing in with Google / Microsoft from these domains join the
+        // SSO (Phase 5 · M8): people signing in with Google from these domains join the
         // account with ssoDefaultRole. Public email domains are refused (anyone could join).
         ssoDomains: z
           .array(z.string().trim().toLowerCase().regex(/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z]{2,}$/, 'a domain such as lg.com'))

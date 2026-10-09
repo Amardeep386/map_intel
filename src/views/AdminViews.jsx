@@ -116,7 +116,7 @@ export function SettingsView() {
             </div>
             <Note>When it is on, sessions without a code from an authenticator app cannot open this account. People without MFA are walked through setting it up at their next sign-in. Turn it on for yourself first (Security in the user menu).</Note>
             <div className="grid grid-cols-[1fr_160px] gap-3 pt-1">
-              <Field label="Sign in with Google / Microsoft: allowed email domains">
+              <Field label="Sign in with Google: allowed email domains">
                 <input className={inputCls} placeholder="e.g. lg.com, lge.com" value={Array.isArray(s.ssoDomains) ? s.ssoDomains.join(", ") : s.ssoDomains ?? ""}
                   onChange={(e) => setS("ssoDomains", e.target.value.split(/[\s,]+/).filter(Boolean))} />
               </Field>
@@ -126,7 +126,7 @@ export function SettingsView() {
                 </select>
               </Field>
             </div>
-            <p className="text-brand-taupe">People with an email on these domains can sign in with Google or Microsoft and join this account without an invite. Leave empty to allow invited people only. Public domains (gmail.com, outlook.com…) are not allowed.</p>
+            <p className="text-brand-taupe">People with an email on these domains can sign in with Google and join this account without an invite. Leave empty to allow invited people only. Public domains (gmail.com, outlook.com…) are not allowed.</p>
           </div>
         </Card>
         <Card title="Data retention">

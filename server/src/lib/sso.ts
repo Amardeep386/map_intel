@@ -1,11 +1,8 @@
-// Single sign-on (Phase 5 · M8): OpenID Connect authorization-code flow with PKCE, for Google and
-// Microsoft (work or school accounts). The API checks the ID token itself: signature (the
-// provider's published keys), issuer, audience, expiry and the one-time nonce.
-//   Google:    the email, only when the provider says it is verified.
-//   Microsoft: the sign-in name (preferred_username), which the organisation controls and must be on
-//              one of its verified domains; the editable email claim is not trusted. Personal
-//              Microsoft accounts are refused. The stable id is tenant id + object id.
-// Other providers can be registered in tests (registerProvider) against a local mock.
+// Single sign-on (Phase 5 · M8): OpenID Connect authorization-code flow with PKCE, for Google
+// (decision 44: Google only). The API checks the ID token itself: signature (the provider's
+// published keys), issuer, audience, expiry and the one-time nonce, and takes the email only when
+// Google says it is verified. Other providers can be registered in tests (registerProvider) against
+// a local mock; adding one later is a Provider entry here.
 import { createHash, randomBytes } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { config } from './config.js';
@@ -29,7 +26,6 @@ export interface Provider {
 
 export class SsoError extends Error {}
 
-const MS_CONSUMER_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad';
 const looksLikeEmail = (s: unknown): s is string => typeof s === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 
 /** Pure: Google's verified claims → identity. */
@@ -37,16 +33,6 @@ export function googleIdentity(c: JWTPayload): Identity {
   if (c.iss !== 'https://accounts.google.com' && c.iss !== 'accounts.google.com') throw new SsoError('unexpected issuer');
   if (c.email_verified !== true || !looksLikeEmail(c.email)) throw new SsoError('Google did not confirm this email address');
   return { subject: String(c.sub), email: c.email.toLowerCase(), name: typeof c.name === 'string' ? c.name : null };
-}
-
-/** Pure: Microsoft's verified claims → identity (work or school accounts; sign-in name, not email). */
-export function microsoftIdentity(c: JWTPayload, tenantSetting: string): Identity {
-  const tid = typeof c.tid === 'string' ? c.tid : '';
-  if (!tid || c.iss !== `https://login.microsoftonline.com/${tid}/v2.0`) throw new SsoError('unexpected issuer');
-  if (tid === MS_CONSUMER_TENANT) throw new SsoError('use a work or school Microsoft account');
-  if (!/^(organizations|common)$/.test(tenantSetting) && tid !== tenantSetting) throw new SsoError('this organisation is not allowed');
-  if (typeof c.oid !== 'string' || !looksLikeEmail(c.preferred_username)) throw new SsoError('Microsoft did not return a sign-in name');
-  return { subject: `${tid}:${c.oid}`, email: c.preferred_username.toLowerCase(), name: typeof c.name === 'string' ? c.name : null };
 }
 
 const google = (): Provider | null =>
@@ -62,19 +48,6 @@ const google = (): Provider | null =>
       }
     : null;
 
-const microsoft = (): Provider | null =>
-  config.MICROSOFT_CLIENT_ID && config.MICROSOFT_CLIENT_SECRET
-    ? {
-        id: 'microsoft',
-        name: 'Microsoft',
-        discoveryUrl: `https://login.microsoftonline.com/${encodeURIComponent(config.MICROSOFT_TENANT)}/v2.0/.well-known/openid-configuration`,
-        clientId: config.MICROSOFT_CLIENT_ID,
-        clientSecret: config.MICROSOFT_CLIENT_SECRET,
-        scope: 'openid email profile',
-        identity: (c) => microsoftIdentity(c, config.MICROSOFT_TENANT),
-      }
-    : null;
-
 const extra = new Map<string, Provider>();
 /** Tests only: a provider backed by a local mock. */
 export function registerProvider(p: Provider): void {
@@ -82,7 +55,7 @@ export function registerProvider(p: Provider): void {
 }
 
 export function providers(): Provider[] {
-  return [google(), microsoft(), ...extra.values()].filter((p): p is Provider => p !== null);
+  return [google(), ...extra.values()].filter((p): p is Provider => p !== null);
 }
 
 export function provider(id: string): Provider | null {
