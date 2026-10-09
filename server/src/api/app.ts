@@ -8,6 +8,7 @@ import { can, type AccountAction, type RoutePermission } from '../lib/permission
 import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
 import { onboardingRoutes } from './routes/onboarding.js';
+import { platformRoutes } from './routes/platform.js';
 import { settingsRoutes } from './routes/settings.js';
 import { userRoutes } from './routes/users.js';
 import { auditRoutes } from './routes/audit.js';
@@ -158,6 +159,7 @@ export async function buildApp() {
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(accountRoutes);
   await app.register(onboardingRoutes);
+  await app.register(platformRoutes);
   await app.register(auditRoutes);
   await app.register(catalogueRoutes);
   await app.register(policyRoutes);

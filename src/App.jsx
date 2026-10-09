@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
-  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus
+  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus, Gauge
 } from "lucide-react";
 import lgLogo from "./assets/lg.png";
 import appleLogo from "./assets/apple.png";
@@ -26,6 +26,7 @@ import { AlertsView } from "./views/AlertsView.jsx";
 import { EnforcementView } from "./views/EnforcementView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
 import { NewAccountModal, OnboardingView } from "./views/OnboardingView.jsx";
+import { PlatformScreen } from "./views/PlatformView.jsx";
 
 // ---------- Small building blocks ----------
 function ClientLogo({ name, className }) {
@@ -287,6 +288,19 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
   );
 }
 
+function Toasts({ toasts }) {
+  return (
+    <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
+      {toasts.map(t => (
+        <div key={t.id} className="bg-[#17120F] text-[#F3EDE6] border border-white/10 pl-3 pr-4 py-2.5 rounded-lg shadow-[var(--shadow-3)] text-[13px] flex items-center gap-2.5 animate-fade-in max-w-md">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.type === "info" ? "#DA9066" : "#6FBF8B" }} />
+          <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** White or dark text, whichever reads better on a hex colour (WCAG relative luminance). */
 function textOn(hex) {
   const n = parseInt(String(hex).replace("#", ""), 16);
@@ -533,6 +547,15 @@ export default function App() {
   // --------------------------------------------------------------------------
   // RENDER: CLIENT SELECTION
   // --------------------------------------------------------------------------
+  if (screen === 'platform') {
+    return (
+      <>
+        <PlatformScreen onBack={() => setScreen('client-select')} showToast={showToast} />
+        <Toasts toasts={toasts} />
+      </>
+    );
+  }
+
   if (screen === 'client-select') {
     const firstName = (currentUser?.name || "").split(" ")[0];
     return (
@@ -545,7 +568,14 @@ export default function App() {
               <div className="mt-1 text-[9.5px] uppercase tracking-[0.22em] text-rail-ink-2">MAP Intelligence</div>
             </div>
           </div>
-          <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
+          <div className="flex items-center gap-5">
+            {currentUser?.role === "admin" && (
+              <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('platform')}>
+                <Gauge className="w-4 h-4" /> Crawl budget
+              </button>
+            )}
+            <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
+          </div>
         </header>
         <main className="flex-1 w-full max-w-4xl mx-auto px-6 py-14">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-copper-500">Workspaces</div>
@@ -586,14 +616,7 @@ export default function App() {
           </div>
         </main>
         <NewAccountModal open={newAccountOpen} onClose={() => setNewAccountOpen(false)} onCreated={handleAccountCreated} showToast={showToast} />
-        <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
-          {toasts.map(t => (
-            <div key={t.id} className="bg-[#17120F] text-[#F3EDE6] border border-white/10 pl-3 pr-4 py-2.5 rounded-lg shadow-[var(--shadow-3)] text-[13px] flex items-center gap-2.5 animate-fade-in max-w-md">
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.type === "info" ? "#DA9066" : "#6FBF8B" }} />
-              <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
-            </div>
-          ))}
-        </div>
+        <Toasts toasts={toasts} />
       </div>
     );
   }
@@ -727,14 +750,7 @@ export default function App() {
       </div>
 
       {/* Toasts */}
-      <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
-        {toasts.map(t => (
-          <div key={t.id} className="bg-[#17120F] text-[#F3EDE6] border border-white/10 pl-3 pr-4 py-2.5 rounded-lg shadow-[var(--shadow-3)] text-[13px] flex items-center gap-2.5 animate-fade-in max-w-md">
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.type === "info" ? "#DA9066" : "#6FBF8B" }} />
-            <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
-          </div>
-        ))}
-      </div>
+      <Toasts toasts={toasts} />
 
     </div>
     </WorkspaceContext.Provider>

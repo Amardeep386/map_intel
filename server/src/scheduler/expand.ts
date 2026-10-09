@@ -3,7 +3,8 @@
 //   and belongs to this firing only if this schedule is the one that resolves for (term, source).
 //   Listings: re-collect the account's listings in the schedule's listing scope.
 // Collect jobs come first (monitoring known listings matters most), then discovery; jobs beyond
-// the account's request budget are kept as skipped ('budget') so Data Health shows them.
+// the account's request budget are kept as skipped ('budget') so Data Health shows them, and so
+// are jobs beyond what is left today of the org-wide daily caps ('org_budget', Phase 5).
 import type { SourceCategory, TermType } from '../collector/catalogue.js';
 import { planTerm } from '../collector/discovery.js';
 import type { SourceAdapter } from '../collector/types.js';
@@ -47,9 +48,17 @@ export interface ExpandInput {
   listings: ExpandListing[];
   budget: number;
   adapters: Record<string, SourceAdapter>;
+  /** Requests left today under the org-wide caps (lib/crawlBudget.ts); absent = no caps. */
+  dailyRemaining?: DailyRemaining;
 }
 
-export type SkipReason = 'robots' | 'budget' | 'no_collector' | 'not_executable' | 'not_carried' | 'cancelled';
+/** null = no cap. */
+export interface DailyRemaining {
+  org: number | null;
+  sources: Record<string, number>;
+}
+
+export type SkipReason = 'robots' | 'budget' | 'org_budget' | 'no_collector' | 'not_executable' | 'not_carried' | 'cancelled';
 
 export interface PlannedJob {
   kind: 'discover' | 'collect';
@@ -159,12 +168,24 @@ export function expandFiring(input: ExpandInput): PlannedJob[] {
     return true;
   });
 
-  // 4. Budget, in order.
+  // 4. Budget, in order: the account's per-run budget, then what is left today of the org-wide caps.
   let used = 0;
+  let org = input.dailyRemaining?.org ?? null;
+  const left = { ...(input.dailyRemaining?.sources ?? {}) };
   for (const j of unique) {
     if (j.skipReason) continue;
-    if (used + j.cost > input.budget) j.skipReason = 'budget';
-    else used += j.cost;
+    if (used + j.cost > input.budget) {
+      j.skipReason = 'budget';
+      continue;
+    }
+    const src = left[j.sourceId];
+    if ((org !== null && j.cost > org) || (src !== undefined && j.cost > src)) {
+      j.skipReason = 'org_budget';
+      continue;
+    }
+    used += j.cost;
+    if (org !== null) org -= j.cost;
+    if (src !== undefined) left[j.sourceId] = src - j.cost;
   }
   return unique;
 }
