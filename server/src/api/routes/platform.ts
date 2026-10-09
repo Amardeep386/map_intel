@@ -1,12 +1,14 @@
 // Platform screens for Mirethos administrators (Phase 5): the org-wide crawl budget across every
-// account. Caps are audited (no account: they are organisation settings).
+// account (M3) and internal tickets (M4). Changes are audited with no account: they are
+// organisation settings and Mirethos's own work, never shown to the brands.
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { forecastAccount, loadCaps, loadUsage, utcDay } from '../../lib/crawlBudget.js';
 import { withApi, withTenant } from '../../lib/db.js';
+import { createTicket, KINDS, listTickets, PRIORITIES, STATUSES, TicketError, ticketDetail, updateTicket } from '../../lib/tickets.js';
 import { HttpError } from '../app.js';
-import { parse } from '../validate.js';
+import { parse, uuidOr404 } from '../validate.js';
 
 const DAY_MS = 86_400_000;
 
@@ -143,6 +145,86 @@ export async function platformRoutes(app: FastifyInstance): Promise<void> {
         after: b.dailyRequests === null ? null : { daily_requests: b.dailyRequests, note: b.note ?? null },
       });
       return loadCaps(db);
+    });
+  });
+
+  // ---------------------------------------------------------------- internal tickets
+  const fail = (err: unknown): never => {
+    if (err instanceof TicketError) throw new HttpError(err.statusCode, err.message);
+    throw err;
+  };
+
+  app.get<{ Querystring: Record<string, string | undefined> }>('/platform/tickets', { config: { permission: 'platform' } }, async (req) => {
+    const q = parse(
+      z.object({
+        status: z.enum(['active', ...STATUSES]).optional(),
+        kind: z.enum(KINDS).optional(),
+        accountId: z.string().uuid().optional(),
+        assignee: z.enum(['me', 'none']).optional(),
+      }),
+      req.query,
+    );
+    return withApi((db) => listTickets(db, q, req.user!.sub));
+  });
+
+  // Who tickets can be assigned to: Mirethos platform administrators.
+  app.get('/platform/assignees', { config: { permission: 'platform' } }, async () =>
+    withApi(async (db) => (await db.query("SELECT id, full_name AS name, email FROM app_user WHERE platform_role = 'admin' AND status = 'Active' ORDER BY full_name")).rows),
+  );
+
+  app.get<{ Params: { ticketId: string } }>('/platform/tickets/:ticketId', { config: { permission: 'platform' } }, async (req) => {
+    const id = uuidOr404(req.params.ticketId, 'ticket');
+    const t = await withApi((db) => ticketDetail(db, id));
+    if (!t) throw new HttpError(404, 'ticket not found');
+    return t;
+  });
+
+  app.post('/platform/tickets', { config: { permission: 'platform' } }, async (req, reply) => {
+    const b = parse(
+      z.object({
+        title: z.string().trim().min(3).max(200),
+        description: z.string().max(5000).optional(),
+        kind: z.enum(KINDS),
+        priority: z.enum(PRIORITIES).optional(),
+        accountId: z.string().uuid().nullable().optional(),
+        sourceId: z.string().uuid().nullable().optional(),
+        assigneeId: z.string().uuid().nullable().optional(),
+      }),
+      req.body,
+    );
+    const t = await withApi(async (db) => {
+      const created = await createTicket(db, b, req.user!.sub).catch(fail);
+      await recordAudit(db, {
+        accountId: null, actor: actorFrom(req), requestId: req.id, action: 'ticket.opened', entityType: 'ticket', entityId: created.id,
+        summary: `Opened ${created.code}: ${b.title}`, after: b,
+      });
+      return ticketDetail(db, created.id);
+    });
+    return reply.code(201).send(t);
+  });
+
+  app.patch<{ Params: { ticketId: string } }>('/platform/tickets/:ticketId', { config: { permission: 'platform' } }, async (req) => {
+    const id = uuidOr404(req.params.ticketId, 'ticket');
+    const b = parse(
+      z.object({
+        status: z.enum(STATUSES).optional(),
+        priority: z.enum(PRIORITIES).optional(),
+        assigneeId: z.string().uuid().nullable().optional(),
+        note: z.string().max(5000).optional(),
+      }),
+      req.body,
+    );
+    return withApi(async (db) => {
+      const r = await updateTicket(db, id, b, req.user!.sub).catch(fail);
+      if (r.changes.length) {
+        await recordAudit(db, {
+          accountId: null, actor: actorFrom(req), requestId: req.id, action: 'ticket.updated', entityType: 'ticket', entityId: id,
+          summary: `${r.code}: ${r.changes.map((c) => `${c.kind} ${String(c.before ?? 'none')} → ${String(c.after ?? 'none')}`).join(', ')}`,
+          before: Object.fromEntries(r.changes.map((c) => [c.kind, c.before])),
+          after: Object.fromEntries(r.changes.map((c) => [c.kind, c.after])),
+        });
+      }
+      return ticketDetail(db, id);
     });
   });
 }

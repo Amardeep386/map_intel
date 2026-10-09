@@ -594,6 +594,12 @@ export const api = {
   // ---------------- Platform (Mirethos administrators, P5) ----------------
   crawlBudget(days = 14) { return P5(() => request(`/platform/crawl-budget${qs({ days })}`)); },
   setCrawlBudget(body) { return P5(() => request("/platform/crawl-budget", { method: "PUT", body })); },
+  tickets(filters = {}) { return P5(() => request(`/platform/tickets${qs(filters)}`)); },
+  ticket(id) { return P5(() => request(`/platform/tickets/${id}`)); },
+  createTicket(body) { return P5(() => request("/platform/tickets", { method: "POST", body })); },
+  updateTicket(id, body) { return P5(() => request(`/platform/tickets/${id}`, { method: "PATCH", body })); },
+  ticketAssignees() { return P5(() => request("/platform/assignees")); },
+  sourceList() { return P5(() => request("/sources")); },
 
   // ---------------- Evidence (real when the backend is on) ----------------
   async getEvidence(evidenceId) {

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
-  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus, Gauge
+  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus, Gauge, Ticket as TicketIcon
 } from "lucide-react";
 import lgLogo from "./assets/lg.png";
 import appleLogo from "./assets/apple.png";
@@ -482,6 +482,7 @@ export default function App() {
   useEffect(() => { refreshOnLive.current = () => attemptToast(refreshAccounts); });
 
   const [newAccountOpen, setNewAccountOpen] = useState(false);
+  const [platformTab, setPlatformTab] = useState("tickets");
   const handleAccountCreated = async (created) => {
     setNewAccountOpen(false);
     const list = await attemptToast(refreshAccounts);
@@ -550,7 +551,7 @@ export default function App() {
   if (screen === 'platform') {
     return (
       <>
-        <PlatformScreen onBack={() => setScreen('client-select')} showToast={showToast} />
+        <PlatformScreen tab={platformTab} onTab={setPlatformTab} onBack={() => setScreen('client-select')} accounts={clients} showToast={showToast} />
         <Toasts toasts={toasts} />
       </>
     );
@@ -570,9 +571,14 @@ export default function App() {
           </div>
           <div className="flex items-center gap-5">
             {currentUser?.role === "admin" && (
-              <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('platform')}>
-                <Gauge className="w-4 h-4" /> Crawl budget
-              </button>
+              <>
+                <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => { setPlatformTab("tickets"); setScreen('platform'); }}>
+                  <TicketIcon className="w-4 h-4" /> Tickets
+                </button>
+                <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => { setPlatformTab("budget"); setScreen('platform'); }}>
+                  <Gauge className="w-4 h-4" /> Crawl budget
+                </button>
+              </>
             )}
             <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
           </div>
