@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   GetObjectLockConfigurationCommand,
   GetObjectRetentionCommand,
   HeadBucketCommand,
+  ListObjectVersionsCommand,
   PutObjectCommand,
   S3Client,
   type PutObjectCommandInput,
@@ -120,6 +122,19 @@ export async function evidenceLockStatus(): Promise<LockStatus> {
       ? 'S3_OBJECT_LOCK_DAYS is 0 and the bucket has no default retention'
       : null;
   return { bucketEnabled, defaultRule, retentionDays, problem };
+}
+
+/**
+ * Delete a stored file for good (retention, Phase 5). The bucket is versioned (Object Lock needs
+ * it), so a plain delete only hides the file behind a delete marker: every version is removed
+ * instead. S3 refuses while a version's Object Lock retention has not passed.
+ */
+export async function deleteObjectForGood(uri: string): Promise<number> {
+  const Key = keyFromUri(uri);
+  const listed = await s3.send(new ListObjectVersionsCommand({ Bucket: config.S3_BUCKET, Prefix: Key }));
+  const versions = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])].filter((v) => v.Key === Key);
+  for (const v of versions) await s3.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key, VersionId: v.VersionId }));
+  return versions.length;
 }
 
 /** A stored object's bytes (report files on their way to SFTP). */

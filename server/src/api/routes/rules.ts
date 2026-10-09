@@ -4,7 +4,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { actorFrom, recordAudit, type AuditEntry } from '../../lib/audit.js';
 import { withTenant, type Db } from '../../lib/db.js';
-import { dryRun, publish, replay, RuleError } from '../../lib/ruleAdmin.js';
+import { runReplay, startReplay } from '../../lib/replay.js';
+import { dryRun, publish, RuleError } from '../../lib/ruleAdmin.js';
 import { contentHash } from '../../lib/rules.js';
 import { HttpError } from '../app.js';
 import { parse, uuidOr404 } from '../validate.js';
@@ -76,7 +77,7 @@ export async function ruleRoutes(app: FastifyInstance): Promise<void> {
         [ruleId],
       )).rows;
       const replays = (await db.query(
-        `SELECT rr.id, rr.rule_version_id, rv.version, rr.range_from, rr.range_to, rr.status, rr.summary, rr.created_at
+        `SELECT rr.id, rr.rule_version_id, rv.version, rr.range_from, rr.range_to, rr.status, rr.total, rr.processed, rr.error, rr.summary, rr.created_at
            FROM replay_run rr JOIN rule_version rv ON rv.id = rr.rule_version_id
           WHERE rv.rule_id = $1 ORDER BY rr.created_at DESC LIMIT 20`,
         [ruleId],
@@ -171,14 +172,30 @@ export async function ruleRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post<{ Params: Params & { versionId: string } }>(`${base}/versions/:versionId/replay`, { config: { permission: 'rules.write' } }, async (req) => {
+  // Queued and worked in the background in batches (lib/replay.ts); the portal polls the run.
+  app.post<{ Params: Params & { versionId: string } }>(`${base}/versions/:versionId/replay`, { config: { permission: 'rules.write' } }, async (req, reply) => {
     const versionId = uuidOr404(req.params.versionId, 'rule version');
     const b = parse(rangeBody, req.body);
-    return withTenant(req.params.accountId, async (db) => {
-      const r = await replay(db, req.params.accountId, versionId, b.from, b.to, req.user?.sub ?? null).catch(mapRuleError);
-      await audit(db, req, { action: 'rule.replayed', entityType: 'rule_version', entityId: versionId, summary: 'Replayed into a shadow result set', after: r.summary });
+    const { accountId } = req.params;
+    const run = await withTenant(accountId, async (db) => {
+      const r = await startReplay(db, accountId, { mode: 'version', versionId }, b.from, b.to, req.user?.sub ?? null).catch(mapRuleError);
+      await audit(db, req, {
+        action: 'rule.replayed', entityType: 'rule_version', entityId: versionId,
+        summary: `Replay queued into a shadow result set (${r.total} observations)`, after: { runId: r.id, from: b.from, to: b.to, total: r.total },
+      });
       return r;
     });
+    void runReplay(run.id, (fn) => withTenant(accountId, fn)).catch((err) => req.log.error({ err, runId: run.id }, 'replay failed'));
+    return reply.code(202).send({ id: run.id, status: 'queued', total: run.total });
+  });
+
+  app.get<{ Params: Params & { runId: string } }>(`${base}/replays/:runId`, { config: { permission: 'rules.read' } }, async (req) => {
+    const runId = uuidOr404(req.params.runId, 'replay');
+    const r = await withTenant(req.params.accountId, async (db) => (await db.query(
+      `SELECT id, mode, rule_version_id, range_from, range_to, status, total, processed, summary, error, created_at, started_at, finished_at
+         FROM replay_run WHERE id = $1`, [runId])).rows[0]);
+    if (!r) throw new HttpError(404, 'replay not found');
+    return r;
   });
 }
 

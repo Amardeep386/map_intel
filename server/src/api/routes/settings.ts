@@ -3,7 +3,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
+import { config } from '../../lib/config.js';
 import { DEFAULT_REQUEST_BUDGET } from '../../lib/cost.js';
+import { RETENTION_DEFAULTS, retentionOf, retentionProblem } from '../../lib/retention.js';
 import { withTenant, type Db } from '../../lib/db.js';
 import { HttpError } from '../app.js';
 import { parse } from '../validate.js';
@@ -20,6 +22,12 @@ export const SETTINGS_DEFAULTS = {
   case_response_days: 7,
   brand_users_see_needs_review: false,
   request_budget: DEFAULT_REQUEST_BUDGET,
+  retention_observation_days: RETENTION_DEFAULTS.observations,
+  retention_evidence_days: RETENTION_DEFAULTS.evidence,
+  retention_audit_days: RETENTION_DEFAULTS.audit,
+  mfa_required: false,
+  sso_domains: [] as string[],
+  sso_default_role: 'Brand user' as 'Brand user' | 'Analyst',
 };
 type Settings = typeof SETTINGS_DEFAULTS;
 
@@ -53,6 +61,17 @@ const settingsPatch = z
         caseResponseDays: z.number().int().min(1).max(90),
         brandUsersSeeNeedsReview: z.boolean(),
         requestBudget: z.number().int().min(100).max(10_000_000),
+        retentionObservationDays: z.number().int().min(90).max(3650),
+        retentionEvidenceDays: z.number().int().min(90).max(3650),
+        retentionAuditDays: z.number().int().min(365).max(3650),
+        mfaRequired: z.boolean(),
+        // SSO (Phase 5 · M8): people signing in with Google / Microsoft from these domains join the
+        // account with ssoDefaultRole. Public email domains are refused (anyone could join).
+        ssoDomains: z
+          .array(z.string().trim().toLowerCase().regex(/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z]{2,}$/, 'a domain such as lg.com'))
+          .max(20)
+          .refine((d) => !d.some((x) => PUBLIC_EMAIL_DOMAINS.has(x)), 'public email domains (gmail.com, outlook.com, …) cannot be allowed: invite those people instead'),
+        ssoDefaultRole: z.enum(['Brand user', 'Analyst']),
       })
       .partial(),
   })
@@ -70,7 +89,18 @@ const toDb: Record<string, keyof Settings> = {
   caseResponseDays: 'case_response_days',
   brandUsersSeeNeedsReview: 'brand_users_see_needs_review',
   requestBudget: 'request_budget',
+  retentionObservationDays: 'retention_observation_days',
+  retentionEvidenceDays: 'retention_evidence_days',
+  retentionAuditDays: 'retention_audit_days',
+  mfaRequired: 'mfa_required',
+  ssoDomains: 'sso_domains',
+  ssoDefaultRole: 'sso_default_role',
 };
+
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'ymail.com', 'icloud.com',
+  'me.com', 'aol.com', 'proton.me', 'protonmail.com', 'gmx.com', 'mail.com', 'zoho.com', 'yandex.com', 'rediffmail.com',
+]);
 
 interface AccountRow {
   id: string;
@@ -131,6 +161,12 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       if (b.seats !== undefined) settings.seats = b.seats;
       const merged = { ...SETTINGS_DEFAULTS, ...settings } as Settings;
       if (merged.match_review >= merged.match_include) throw new HttpError(400, 'the review threshold must be below the auto-include threshold');
+      // Switching MFA on from a session without it would shut the caller out at once.
+      if (merged.mfa_required && !before.settings.mfa_required && !req.user!.mfa) {
+        throw new HttpError(409, 'turn on multi-factor sign-in for yourself first (Security), sign in again, then require it for the account');
+      }
+      const keep = retentionProblem(retentionOf(merged), config.S3_OBJECT_LOCK_DAYS);
+      if (keep) throw new HttpError(400, keep);
       const contractFrom = b.contractFrom !== undefined ? b.contractFrom : before.contract_from;
       const contractTo = b.contractTo !== undefined ? b.contractTo : before.contract_to;
       if (contractFrom && contractTo && contractTo < contractFrom) throw new HttpError(400, 'the contract end must be after its start');

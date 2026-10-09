@@ -1,6 +1,6 @@
 // Settings, Users & Access and Audit Log (docs/reference/prototype-src/views_admin.jsx).
 import React, { useCallback, useEffect, useState } from "react";
-import { Check, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Download, KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { api } from "../api/client.js";
 import { Card, Field, KV, Modal, Note, PageHeader, Pill, PrimaryButton, SearchBox, SecondaryButton, Table, Td, Toggle, inputCls } from "../ui.jsx";
 import { attempt, formatWhen, useWorkspace } from "../workspace.js";
@@ -108,6 +108,37 @@ export function SettingsView() {
             <Note>The subscription matrix on Sources & Terms shows the projected requests against this budget.</Note>
           </div>
         </Card>
+        <Card title="Sign-in security">
+          <div className="space-y-3 text-xs">
+            <div className="flex justify-between items-center gap-4">
+              <span className="text-brand-taupe">Require multi-factor sign-in (authenticator app) for everyone in this account, Mirethos staff included</span>
+              <Toggle on={!!s.mfaRequired} disabled={!canEdit} onChange={(v) => setS("mfaRequired", v)} />
+            </div>
+            <Note>When it is on, sessions without a code from an authenticator app cannot open this account. People without MFA are walked through setting it up at their next sign-in. Turn it on for yourself first (Security in the user menu).</Note>
+            <div className="grid grid-cols-[1fr_160px] gap-3 pt-1">
+              <Field label="Sign in with Google / Microsoft: allowed email domains">
+                <input className={inputCls} placeholder="e.g. lg.com, lge.com" value={Array.isArray(s.ssoDomains) ? s.ssoDomains.join(", ") : s.ssoDomains ?? ""}
+                  onChange={(e) => setS("ssoDomains", e.target.value.split(/[\s,]+/).filter(Boolean))} />
+              </Field>
+              <Field label="They join as">
+                <select className={inputCls} value={s.ssoDefaultRole ?? "Brand user"} onChange={(e) => setS("ssoDefaultRole", e.target.value)}>
+                  <option>Brand user</option><option>Analyst</option>
+                </select>
+              </Field>
+            </div>
+            <p className="text-brand-taupe">People with an email on these domains can sign in with Google or Microsoft and join this account without an invite. Leave empty to allow invited people only. Public domains (gmail.com, outlook.com…) are not allowed.</p>
+          </div>
+        </Card>
+        <Card title="Data retention">
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Observations (days)"><input type="number" min="90" max="3650" className={inputCls} value={s.retentionObservationDays ?? ""} onChange={(e) => setS("retentionObservationDays", num(e.target.value))} /></Field>
+              <Field label="Evidence files (days)"><input type="number" min="90" max="3650" className={inputCls} value={s.retentionEvidenceDays ?? ""} onChange={(e) => setS("retentionEvidenceDays", num(e.target.value))} /></Field>
+              <Field label="Audit log (days)"><input type="number" min="365" max="3650" className={inputCls} value={s.retentionAuditDays ?? ""} onChange={(e) => setS("retentionAuditDays", num(e.target.value))} /></Field>
+            </div>
+            <Note>Older data is deleted once a day. Nothing behind an open violation or an unresolved case is deleted, and verdicts and violations are always kept. Prices seen on a listing other brands also monitor are kept for the longest period among them. Evidence files cannot be deleted before their storage lock ends.</Note>
+          </div>
+        </Card>
       </fieldset>
       {can("credentials.read") && <CredentialsCard />}
     </div>
@@ -208,6 +239,13 @@ export function UsersView() {
       await load();
     }
   };
+  const resetMfa = async (m) => {
+    if (!window.confirm(`Reset multi-factor sign-in for ${m.email}? They set it up again at their next sign-in if an account requires it.`)) return;
+    if (await attempt(showToast, () => api.resetUserMfa(client, m.userId))) {
+      showToast(`Multi-factor sign-in reset for ${m.email}.`);
+      await load();
+    }
+  };
   const revoke = async (i) => {
     if ((await attempt(showToast, async () => (await api.revokeInvite(client, i.id)) ?? true)) !== undefined) await load();
   };
@@ -216,7 +254,7 @@ export function UsersView() {
     <div>
       <PageHeader title={`Users & Access — ${client.name} (${client.status})`} action={canManage && <PrimaryButton onClick={() => setInviting(true)}><Plus className="w-4 h-4" /> Invite user</PrimaryButton>} />
       <Card>
-        <Table columns={["User", "Role", "Can", "Last active", "Status", ""]}>
+        <Table columns={["User", "Role", "Can", "Last active", "Status", "MFA", ""]}>
           {(data?.members ?? []).map((m) => (
             <tr key={m.userId}>
               <Td className="font-semibold">{m.name}<div className="text-[11px] text-brand-taupe font-normal">{m.email}</div></Td>
@@ -233,6 +271,14 @@ export function UsersView() {
               <Td className="text-brand-taupe whitespace-nowrap">{m.lastLoginAt ? formatWhen(m.lastLoginAt) : "Never"}</Td>
               <Td><Pill text={m.status} tone={m.status === "Active" ? ACTIVE_TONE : MUTED_TONE} /></Td>
               <Td>
+                <span className="inline-flex items-center gap-2">
+                  <Pill text={m.mfaEnabled ? "On" : "Off"} tone={m.mfaEnabled ? ACTIVE_TONE : MUTED_TONE} />
+                  {canManage && m.mfaEnabled && data.grantableRoles.includes(m.role) && (
+                    <button onClick={() => resetMfa(m)} className="text-xs text-brand-copper hover:underline cursor-pointer" title="For someone who lost their phone">Reset</button>
+                  )}
+                </span>
+              </Td>
+              <Td>
                 {canManage && data.grantableRoles.includes(m.role) && (
                   <button onClick={() => remove(m)} className="text-brand-taupe hover:text-red-600 cursor-pointer" title="Remove from account"><Trash2 className="w-4 h-4" /></button>
                 )}
@@ -246,6 +292,7 @@ export function UsersView() {
               <Td className="text-brand-taupe">{ROLE_CAN[i.role]}</Td>
               <Td className="text-brand-taupe whitespace-nowrap">Invite expires {formatWhen(i.expiresAt)}</Td>
               <Td><Pill text="Invited" tone="bg-blue-50 text-blue-700 border-blue-200" /></Td>
+              <Td className="text-brand-taupe">—</Td>
               <Td>{canManage && <button onClick={() => revoke(i)} className="text-xs text-brand-copper hover:underline cursor-pointer">Revoke</button>}</Td>
             </tr>
           ))}
@@ -350,9 +397,34 @@ export function AuditLogView() {
     }
   };
 
+  const [check, setCheck] = useState(null);
+  const verify = async () => {
+    const r = await attempt(showToast, () => api.verifyAudit(client));
+    if (r) setCheck(r);
+  };
+  const exportCsv = () => attempt(showToast, () => api.exportAudit(client));
+
   return (
     <div>
-      <PageHeader title={`Audit Log — ${client.name} (${client.status})`} subtitle="Append-only. Every change records who (person, rule or model version), when, and before → after." />
+      <PageHeader
+        title={`Audit Log — ${client.name} (${client.status})`}
+        subtitle="Append-only and tamper-evident: every change records who (person, rule or model version), when, and before → after, chained by a hash to the change before it."
+        action={<>
+          <SecondaryButton onClick={verify}><ShieldCheck className="w-4 h-4" /> Verify integrity</SecondaryButton>
+          <SecondaryButton onClick={exportCsv}><Download className="w-4 h-4" /> Export CSV</SecondaryButton>
+        </>}
+      />
+      {check && (
+        <div className="mb-4">
+          <Note tone={check.ok ? "text-emerald-800 bg-emerald-50 border-emerald-200" : "text-red-800 bg-red-50 border-red-200"}>
+            {check.ok
+              ? `Intact: ${check.checked.toLocaleString("en-US")} events checked, each hash matches its content and the event before it.`
+              : `Broken at event #${check.broken.seq}: ${check.broken.reason}. Raise this with Mirethos.`}
+            {check.purged ? ` Events before ${formatWhen(check.purged.before)} were deleted under the retention setting (${check.purged.count.toLocaleString("en-US")}); the chain is checked from there.` : ""}
+            {check.lastHash ? <span className="block mt-1 font-mono text-[11px] break-all opacity-80">Latest hash {check.lastHash}</span> : null}
+          </Note>
+        </div>
+      )}
       <Card>
         <div className="flex gap-2 mb-3 flex-wrap">
           <SearchBox placeholder="Filter by person (email)..." value={actor} onChange={setActor} />

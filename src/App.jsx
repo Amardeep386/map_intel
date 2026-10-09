@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Shuffle, DollarSign, Store, AlertTriangle,
   Mail, FileText, Bell, Settings as SettingsIcon, Users, ClipboardList,
   ChevronDown, Scale, Lock, Moon, Sun, Radar, Loader2, Activity, PanelLeftClose, PanelLeftOpen,
-  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel
+  Eye, EyeOff, ShieldCheck, ArrowRight, Gavel, ListChecks, Plus, Gauge, Ticket as TicketIcon, Database
 } from "lucide-react";
 import lgLogo from "./assets/lg.png";
 import appleLogo from "./assets/apple.png";
@@ -25,6 +25,10 @@ import { ReportsView } from "./views/ReportsView.jsx";
 import { AlertsView } from "./views/AlertsView.jsx";
 import { EnforcementView } from "./views/EnforcementView.jsx";
 import { AuditLogView, SettingsView, UsersView } from "./views/AdminViews.jsx";
+import { NewAccountModal, OnboardingView } from "./views/OnboardingView.jsx";
+import { PlatformScreen } from "./views/PlatformView.jsx";
+import { MfaSignInScreen, SecurityModal } from "./views/MfaViews.jsx";
+import { DataApiView } from "./views/DataApiView.jsx";
 
 // ---------- Small building blocks ----------
 function ClientLogo({ name, className }) {
@@ -139,6 +143,8 @@ function InviteAcceptScreen({ inviteToken, onAccepted, onCancel, showToast }) {
 // ---------- Navigation layout menu ----------
 // Grouped as the work flows: watch, catalogue, collection, enforcement, administration.
 const NAV = [
+  // Only while the account is in Onboarding (P5 guided flow).
+  { id: "onboarding", label: "Onboarding", icon: ListChecks, needs: "settings.read", group: "", onboardingOnly: true },
   { id: "overview", label: "Overview", icon: LayoutDashboard, group: "" },
   { id: "violations", label: "Violations", icon: AlertTriangle, needs: "violations.read", group: "Monitor" },
   { id: "alerts", label: "Alerts", icon: Bell, needs: "alerts.read", group: "Monitor" },
@@ -154,6 +160,7 @@ const NAV = [
   { id: "settings", label: "Settings", icon: SettingsIcon, needs: "settings.read", group: "Admin" },
   { id: "users", label: "Users & Access", icon: Users, needs: "users.read", group: "Admin" },
   { id: "audit", label: "Audit Log", icon: ClipboardList, needs: "audit.read", group: "Admin" },
+  { id: "data", label: "Data & API", icon: Database, needs: "account.read", group: "Admin" },
 ];
 
 export const DataContext = React.createContext(null);
@@ -184,7 +191,7 @@ const LOGIN_POINTS = [
   { icon: Activity, title: "From detection to notice", text: "Spot below-MAP sellers, review the proof and act from one place." },
 ];
 
-function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, slow, onForgot }) {
+function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, slow, onForgot, providers = [] }) {
   const [showPw, setShowPw] = useState(false);
   const field = "w-full h-11 pl-10 pr-3 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal placeholder:text-brand-taupe/70 shadow-sm transition focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
   return (
@@ -275,6 +282,20 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
             )}
           </form>
 
+          {providers.length > 0 && (
+            <div className="mt-6">
+              <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-brand-taupe"><span className="flex-1 border-t border-brand-beige" />or<span className="flex-1 border-t border-brand-beige" /></div>
+              <div className="mt-4 space-y-2.5">
+                {providers.map((p) => (
+                  <a key={p.id} href={api.ssoStartUrl(p.id)}
+                    className="w-full h-11 rounded-xl border border-brand-beige bg-brand-white text-sm font-medium flex items-center justify-center gap-2.5 hover:bg-surface-3 transition">
+                    <ProviderMark id={p.id} /> Continue with {p.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mt-10 pt-6 border-t border-brand-beige flex items-center gap-2 text-xs text-brand-taupe">
             <ShieldCheck className="w-4 h-4 text-brand-copper" /> Encrypted connection · access is limited to invited users
           </div>
@@ -282,6 +303,35 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
       </main>
     </div>
   );
+}
+
+function Toasts({ toasts }) {
+  return (
+    <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
+      {toasts.map(t => (
+        <div key={t.id} className="bg-[#17120F] text-[#F3EDE6] border border-white/10 pl-3 pr-4 py-2.5 rounded-lg shadow-[var(--shadow-3)] text-[13px] flex items-center gap-2.5 animate-fade-in max-w-md">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.type === "info" ? "#DA9066" : "#6FBF8B" }} />
+          <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Small provider marks for the sign-in buttons (plain shapes, no external images). */
+function ProviderMark({ id }) {
+  if (id === "microsoft") {
+    return (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" aria-hidden="true">
+        <rect x="0" y="0" width="7.5" height="7.5" fill="#F25022" /><rect x="8.5" y="0" width="7.5" height="7.5" fill="#7FBA00" />
+        <rect x="0" y="8.5" width="7.5" height="7.5" fill="#00A4EF" /><rect x="8.5" y="8.5" width="7.5" height="7.5" fill="#FFB900" />
+      </svg>
+    );
+  }
+  if (id === "google") {
+    return <span className="w-4 h-4 rounded-full border-2 border-[#4285F4] inline-flex items-center justify-center text-[9px] font-bold text-[#4285F4]">G</span>;
+  }
+  return <ShieldCheck className="w-4 h-4" />;
 }
 
 /** White or dark text, whichever reads better on a hex colour (WCAG relative luminance). */
@@ -377,7 +427,10 @@ export default function App() {
     return () => { live = false; };
   }, [screen, client, canAlerts, view]);
   const navBadges = { violations: openViolations, alerts: alertUnread };
-  const nav = useMemo(() => NAV.filter((n) => !n.needs || actions.includes(n.needs)), [actions]);
+  const nav = useMemo(
+    () => NAV.filter((n) => (!n.needs || actions.includes(n.needs)) && (!n.onboardingOnly || client.status === "Onboarding")),
+    [actions, client.status],
+  );
   const accountRole = currentUser?.accounts?.find((a) => a.id === client.id)?.role;
   // Switching to an account where the current screen isn't allowed shows the Overview instead.
   const currentView = nav.some((n) => n.id === view) ? view : "overview";
@@ -395,6 +448,37 @@ export default function App() {
 
   // Wake the API while the user is still typing (the free host sleeps when idle).
   useEffect(() => { api.wake(); }, []);
+
+  // P5 SSO: the providers to offer, and the return from a provider (?sso=<code> or ?sso_error=...).
+  const [ssoProviders, setSsoProviders] = useState([]);
+  useEffect(() => { api.ssoProviders().then(setSsoProviders); }, []);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const code = q.get("sso");
+    const error = q.get("sso_error");
+    if (!code && !error) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    if (error) {
+      showToast(error, "info", 8000);
+      return;
+    }
+    (async () => {
+      try {
+        const r = await api.ssoExchange(code);
+        if (r?.mfa) {
+          setMfaStep(r);
+          setScreen('mfa');
+          return;
+        }
+        await enterPortal();
+        showToast("Signed in.", "success");
+      } catch (err) {
+        showToast(err.message || "Sign-in failed.", "info");
+      }
+    })();
+    // Runs once, on the page load that comes back from the provider.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // After sign-in (or accepting an invite): load the user, accounts and shared data together,
   // then each account's workspace, and open the client picker.
@@ -416,7 +500,12 @@ export default function App() {
     setIsLoggingIn(true);
     const slowTimer = setTimeout(() => setSlowLogin(true), 5000);
     try {
-      await api.login(loginEmail, loginPassword);
+      const r = await api.login(loginEmail, loginPassword);
+      if (r?.mfa) {
+        setMfaStep(r);
+        setScreen('mfa');
+        return;
+      }
       await enterPortal();
       showToast("Credentials authorized.", "success");
     } catch (err) {
@@ -435,14 +524,55 @@ export default function App() {
   };
 
   const handleSelectClient = (clientName) => {
+    const c = clients.find((x) => x.name === clientName);
     setActiveClient(clientName);
     setScreen('app');
-    setView('overview');
-    showToast(`Loaded ${clientName} portal sandbox.`, "success");
+    setView(c?.status === "Onboarding" ? 'onboarding' : 'overview');
+    showToast(`Opened ${clientName}.`, "success");
+  };
+
+  const attemptToast = async (fn) => {
+    try { return await fn(); } catch (err) { showToast(err.message || "Something went wrong.", "info"); return undefined; }
+  };
+
+  // After an account is created or goes live: reload the accounts and the user's roles in them.
+  const refreshAccounts = async () => {
+    const [user, list] = await Promise.all([api.me(), api.listClients()]);
+    const missing = list.filter((c) => !db[c.name]);
+    const workspaces = await Promise.all(missing.map((c) => api.loadWorkspace(c)));
+    setDb((prev) => ({ ...prev, ...Object.fromEntries(missing.map((c, i) => [c.name, workspaces[i]])) }));
+    setClients(list);
+    setCurrentUser(user);
+    return list;
+  };
+
+  // Stable for the memoised screen list: always calls the latest refreshAccounts.
+  const refreshOnLive = React.useRef(null);
+  useEffect(() => { refreshOnLive.current = () => attemptToast(refreshAccounts); });
+
+  const [newAccountOpen, setNewAccountOpen] = useState(false);
+  // P5 MFA: the second sign-in step, and the Security dialog.
+  const [mfaStep, setMfaStep] = useState(null);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const security = securityOpen && (
+    <SecurityModal onClose={() => setSecurityOpen(false)} showToast={showToast}
+      onChanged={async () => setCurrentUser(await api.me())} />
+  );
+  const [platformTab, setPlatformTab] = useState("tickets");
+  const handleAccountCreated = async (created) => {
+    setNewAccountOpen(false);
+    const list = await attemptToast(refreshAccounts);
+    const c = list?.find((x) => x.id === created.id);
+    if (!c) return;
+    setActiveClient(c.name);
+    setScreen('app');
+    setView('onboarding');
+    showToast(`${c.name} created. Work through the steps, then go live.`, "success");
   };
 
   const mainContent = useMemo(() => {
     switch (currentView) {
+      case "onboarding": return <OnboardingView key={client.id} onLive={() => refreshOnLive.current?.()} />;
       case "overview": return <OverviewView />;
       case "product": return <ProductSummaryView />;
       case "mapping": return <MappingCenterView />;
@@ -458,42 +588,75 @@ export default function App() {
       case "settings": return <SettingsView />;
       case "users": return <UsersView />;
       case "audit": return <AuditLogView />;
+      case "data": return <DataApiView />;
       default: return null;
     }
-  }, [currentView, workspace.skus]);
+  }, [currentView, workspace.skus, client.id]);
 
   // --------------------------------------------------------------------------
   // RENDER: WELCOME LOGIN
   // --------------------------------------------------------------------------
   if (screen === 'invite') {
     return (
+      <>
       <InviteAcceptScreen
         inviteToken={inviteToken}
-        onAccepted={async () => {
+        onAccepted={async (r) => {
           window.history.replaceState(null, '', window.location.pathname);
+          if (r?.mfa) {
+            setMfaStep(r);
+            setScreen('mfa');
+            return;
+          }
           await enterPortal();
           showToast("Welcome! Your account is ready.", "success");
         }}
         onCancel={() => { window.history.replaceState(null, '', window.location.pathname); setScreen('login'); }}
         showToast={showToast}
       />
+      <Toasts toasts={toasts} />
+      </>
+    );
+  }
+
+  if (screen === 'mfa' && mfaStep) {
+    return (
+      <>
+        <MfaSignInScreen step={mfaStep} showToast={showToast}
+          onSignedIn={async () => { await enterPortal(); setMfaStep(null); showToast("Signed in.", "success"); }}
+          onCancel={() => { setMfaStep(null); setScreen('login'); }} />
+        <Toasts toasts={toasts} />
+      </>
     );
   }
 
   if (screen === 'login') {
     return (
-      <LoginScreen
-        email={loginEmail} setEmail={setLoginEmail}
-        password={loginPassword} setPassword={setLoginPassword}
-        onSubmit={handleLoginSubmit} busy={isLoggingIn} slow={slowLogin}
-        onForgot={() => showToast("Recovery portal loaded.", "info")}
-      />
+      <>
+        <LoginScreen
+          email={loginEmail} setEmail={setLoginEmail}
+          password={loginPassword} setPassword={setLoginPassword}
+          onSubmit={handleLoginSubmit} busy={isLoggingIn} slow={slowLogin}
+          onForgot={() => showToast("Recovery portal loaded.", "info")}
+          providers={ssoProviders}
+        />
+        <Toasts toasts={toasts} />
+      </>
     );
   }
 
   // --------------------------------------------------------------------------
   // RENDER: CLIENT SELECTION
   // --------------------------------------------------------------------------
+  if (screen === 'platform') {
+    return (
+      <>
+        <PlatformScreen tab={platformTab} onTab={setPlatformTab} onBack={() => setScreen('client-select')} accounts={clients} showToast={showToast} />
+        <Toasts toasts={toasts} />
+      </>
+    );
+  }
+
   if (screen === 'client-select') {
     const firstName = (currentUser?.name || "").split(" ")[0];
     return (
@@ -506,7 +669,24 @@ export default function App() {
               <div className="mt-1 text-[9.5px] uppercase tracking-[0.22em] text-rail-ink-2">MAP Intelligence</div>
             </div>
           </div>
-          <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
+          <div className="flex items-center gap-5">
+            {currentUser?.role === "admin" && (
+              <>
+                <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => { setPlatformTab("tickets"); setScreen('platform'); }}>
+                  <TicketIcon className="w-4 h-4" /> Tickets
+                </button>
+                <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => { setPlatformTab("budget"); setScreen('platform'); }}>
+                  <Gauge className="w-4 h-4" /> Crawl budget
+                </button>
+              </>
+            )}
+            {!api.isMock && (
+              <button className="inline-flex items-center gap-1.5 text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setSecurityOpen(true)}>
+                <ShieldCheck className="w-4 h-4" /> Security
+              </button>
+            )}
+            <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
+          </div>
         </header>
         <main className="flex-1 w-full max-w-4xl mx-auto px-6 py-14">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-copper-500">Workspaces</div>
@@ -523,7 +703,10 @@ export default function App() {
                     <ClientLogo name={c.name} className="w-11 h-11 rounded-lg border border-brand-beige" />
                     <div className="min-w-0 flex-1">
                       <div className="text-[15px] font-semibold">{c.name}</div>
-                      <div className="text-xs text-brand-taupe mt-0.5">{c.status === "Sandbox" ? "Sandbox workspace" : "Live workspace"}</div>
+                      <div className="text-xs text-brand-taupe mt-0.5">{c.status === "Sandbox" ? "Sandbox workspace" : c.status === "Onboarding" ? "Onboarding: set-up in progress" : "Live workspace"}</div>
+                      {currentUser?.accounts?.find((a) => a.id === c.id)?.mfaRequired && !currentUser?.mfa?.session && (
+                        <div className="text-[11px] text-amber-700 mt-1 inline-flex items-center gap-1"><Lock className="w-3 h-3" /> Needs multi-factor sign-in: turn it on under Security, then sign in again</div>
+                      )}
                     </div>
                     <ArrowRight className="w-4 h-4 text-brand-taupe transition group-hover:translate-x-0.5 group-hover:text-brand-charcoal" />
                   </div>
@@ -534,8 +717,21 @@ export default function App() {
                 </button>
               );
             })}
+            {currentUser?.role === "admin" && (
+              <button onClick={() => setNewAccountOpen(true)}
+                className="text-left border border-dashed border-line-strong rounded-xl p-5 hover:bg-brand-white hover:border-brand-copper transition cursor-pointer flex items-center gap-3.5 min-h-[150px]">
+                <span className="w-11 h-11 rounded-lg border border-brand-beige bg-brand-white inline-flex items-center justify-center"><Plus className="w-5 h-5 text-brand-taupe" /></span>
+                <span>
+                  <span className="block text-[15px] font-semibold">New account</span>
+                  <span className="block text-xs text-brand-taupe mt-0.5">Set up a brand through the guided flow</span>
+                </span>
+              </button>
+            )}
           </div>
         </main>
+        {security}
+        <NewAccountModal open={newAccountOpen} onClose={() => setNewAccountOpen(false)} onCreated={handleAccountCreated} showToast={showToast} />
+        <Toasts toasts={toasts} />
       </div>
     );
   }
@@ -658,6 +854,7 @@ export default function App() {
                   <div className="text-[12.5px] font-medium truncate">{currentUser?.email || userName}</div>
                 </div>
                 <button onClick={() => { setUserOpen(false); setScreen('client-select'); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-3 cursor-pointer">Switch workspace</button>
+                {!api.isMock && <button onClick={() => { setUserOpen(false); setSecurityOpen(true); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-3 cursor-pointer">Security</button>}
                 <button onClick={() => { setUserOpen(false); handleLogout(); }} className="w-full text-left px-3 py-2 text-[13px] text-red-700 hover:bg-surface-3 cursor-pointer">Sign out</button>
               </div>
             )}
@@ -668,15 +865,9 @@ export default function App() {
         </main>
       </div>
 
+      {security}
       {/* Toasts */}
-      <div className="toast-container fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
-        {toasts.map(t => (
-          <div key={t.id} className="bg-[#17120F] text-[#F3EDE6] border border-white/10 pl-3 pr-4 py-2.5 rounded-lg shadow-[var(--shadow-3)] text-[13px] flex items-center gap-2.5 animate-fade-in max-w-md">
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.type === "info" ? "#DA9066" : "#6FBF8B" }} />
-            <div style={{ whiteSpace: 'pre-line' }}>{t.message}</div>
-          </div>
-        ))}
-      </div>
+      <Toasts toasts={toasts} />
 
     </div>
     </WorkspaceContext.Provider>

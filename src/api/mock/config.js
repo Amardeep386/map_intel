@@ -43,7 +43,7 @@ function account(name) {
     cells: {},
     schedules: [{ id: id(), name: "Daily marketplace sweep", selector: {}, listingScope: "Included and Staged", listingStatus: "Active only", takedownStatus: "All", kind: "both", cadence: "0 6 * * *", timezone: "UTC", priority: 10, active: true, nextRun: null }],
     settings: { name, regions: ["US"], currency: "USD", timezone: "America/New_York", contractFrom: null, contractTo: null, seats: 8,
-      settings: { mapTolerancePct: 2, minDepth: 1, graceHours: 0, matchInclude: 90, matchReview: 60, qaSamplePct: 5, brandApprovalRequired: true, brandUsersSeeNeedsReview: false, requestBudget: 3000 } },
+      settings: { mapTolerancePct: 2, minDepth: 1, graceHours: 0, matchInclude: 90, matchReview: 60, qaSamplePct: 5, brandApprovalRequired: true, brandUsersSeeNeedsReview: false, requestBudget: 3000, retentionObservationDays: 730, retentionEvidenceDays: 365, retentionAuditDays: 2555, mfaRequired: false, ssoDomains: [], ssoDefaultRole: "Brand user" } },
     audit: [],
     users: [
       { userId: id(), name: "Fenil Dholaviya", email: "fenil@mirethos.com", role: "Account manager", status: "Active", lastLoginAt: now() },

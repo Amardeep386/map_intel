@@ -88,8 +88,9 @@ export const mockP3 = {
     const r = S(client).rules.find((x) => x.versions.some((v) => v.id === versionId));
     const v = r.versions.find((x) => x.id === versionId);
     const summary = { observations: 412, listings: 38, violationsLive: 7, violationsCandidate: 7, newlyViolating: 0, noLongerViolating: 0, bySeller: [] };
-    r.replays = [{ id: id(), rule_version_id: versionId, version: v.version, range_from: range.from, range_to: range.to, status: "done", summary, created_at: new Date().toISOString() }, ...(r.replays ?? [])];
-    return { id: r.replays[0].id, summary };
+    r.replays = [{ id: id(), rule_version_id: versionId, version: v.version, range_from: range.from, range_to: range.to, status: "done", total: 412, processed: 412, summary, created_at: new Date().toISOString() }, ...(r.replays ?? [])];
+    // Same shape as the API (202): the run is queued; the demo finishes it at once.
+    return { id: r.replays[0].id, status: "queued", total: 412 };
   },
 
   async reportTemplates(client) { return S(client).templates; },

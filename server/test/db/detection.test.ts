@@ -8,7 +8,8 @@ import { after, before, test } from 'node:test';
 import { closeDb, pool, type Db } from '../../src/lib/db.js';
 import { judgeAccount } from '../../src/lib/judge.js';
 import { decideListings } from '../../src/lib/mapping.js';
-import { dryRun, publish, replay } from '../../src/lib/ruleAdmin.js';
+import { dryRun, publish } from '../../src/lib/ruleAdmin.js';
+import { replayNow } from '../../src/lib/replay.js';
 import { contentHash } from '../../src/lib/rules.js';
 import { changeStatus, listViolations, violationDetail } from '../../src/lib/violations.js';
 import { createLink, evidenceRecord, openLink } from '../../src/lib/evidenceLinks.js';
@@ -246,7 +247,7 @@ test('rule versions: publish needs a dry run of the exact draft; publishing clos
     assert.equal(versions[0].valid_to?.getTime(), now.getTime());
 
     // Observations before `now` keep their v1 verdicts; a replay of v2 shows what v2 would have said.
-    const rp = await replay(db, w.account, draft, d('10-01T00:00:00'), d('10-31T00:00:00'), null);
+    const rp = await replayNow(db, w.account, { mode: 'version', versionId: draft }, d('10-01T00:00:00'), d('10-31T00:00:00'), null);
     assert.equal(rp.summary.newlyViolating, 1);
     const shadow = (await db.query<{ outcome: string; live_outcome: string }>(
       'SELECT outcome, live_outcome FROM replay_result WHERE replay_run_id = $1 ORDER BY observed_at', [rp.id])).rows;

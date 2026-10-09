@@ -171,7 +171,7 @@ export function judgeOne(ctx: JudgeContext, o: ObservationRow, rules: DatedRule[
 export async function loadObservations(
   db: Db,
   accountId: string,
-  opts: { from?: Date; to?: Date; unjudgedOnly?: boolean; limit?: number } = {},
+  opts: { from?: Date; to?: Date; unjudgedOnly?: boolean; limit?: number; after?: { at: Date; id: string } } = {},
 ): Promise<ObservationRow[]> {
   const { rows } = await db.query(
     `SELECT o.id, o.observed_at, o.listing_id, m.product_id, coalesce(o.seller_id, l.seller_id) AS seller_id,
@@ -184,9 +184,12 @@ export async function loadObservations(
       WHERE o.status = 'ok' AND o.advertised_price IS NOT NULL AND l.origin <> 'synthetic'
         AND o.observed_at >= $2 AND o.observed_at < $3
         AND ($4::boolean IS FALSE OR NOT EXISTS (SELECT 1 FROM verdict v WHERE v.account_id = $1 AND v.observation_id = o.id))
-      ORDER BY o.observed_at, o.id
+        AND ($6::timestamptz IS NULL OR (date_trunc('milliseconds', o.observed_at), o.id) > ($6::timestamptz, $7::uuid))
+      -- Milliseconds, as a JS Date holds them: a cursor taken from the last row then compares exactly.
+      ORDER BY date_trunc('milliseconds', o.observed_at), o.id
       LIMIT $5`,
-    [accountId, opts.from ?? new Date('2000-01-01'), opts.to ?? new Date('2100-01-01'), opts.unjudgedOnly ?? false, opts.limit ?? 100000],
+    [accountId, opts.from ?? new Date('2000-01-01'), opts.to ?? new Date('2100-01-01'), opts.unjudgedOnly ?? false, opts.limit ?? 100000,
+      opts.after?.at ?? null, opts.after?.id ?? null],
   );
   return rows;
 }

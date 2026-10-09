@@ -74,6 +74,8 @@ async function request(path, { method = "GET", body } = {}) {
 
 /** Enforcement (P4) needs the API: in demo mode say so instead of pretending. */
 const P4 = (fn) => (USE_MOCK ? Promise.reject(new ApiError(501, "Enforcement needs the API: demo mode has no cases yet")) : fn());
+/** Guided onboarding (P5) writes real configuration: it needs the API too. */
+const P5 = (fn) => (USE_MOCK ? Promise.reject(new ApiError(501, "This needs the API: demo mode has no accounts to set up or crawl budgets")) : fn());
 
 /** Fetch a file with the session token and hand it to the browser as a download. */
 async function download(path, fileName) {
@@ -124,6 +126,11 @@ function toSkuRow(p) {
   };
 }
 
+function keepToken(t) {
+  token = t;
+  try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+}
+
 export const api = {
   isMock: USE_MOCK,
 
@@ -134,10 +141,63 @@ export const api = {
       return { id: "mock", email, name: "Fenil Dholaviya", role: "admin" };
     }
     const data = await request("/auth/login", { method: "POST", body: { email, password } });
-    token = data.token;
-    try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+    // A second step (P5 MFA): { mfa: "code" | "setup", challenge } and no session yet.
+    if (data.mfa) return { mfa: data.mfa, challenge: data.challenge, user: data.user };
+    keepToken(data.token);
     return data.user;
   },
+
+  // ---------------- Data exports and API keys (P5) ----------------
+  apiKeys(client) { return P5(() => request(`/accounts/${client.id}/api-keys`)); },
+  createApiKey(client, body) { return P5(() => request(`/accounts/${client.id}/api-keys`, { method: "POST", body })); },
+  revokeApiKey(client, keyId) { return P5(() => request(`/accounts/${client.id}/api-keys/${keyId}`, { method: "DELETE" })); },
+  apiKeyLog(client, keyId) { return P5(() => request(`/accounts/${client.id}/api-keys/${keyId}/log`)); },
+  exportData(client, dataset, query) {
+    return P5(() => download(`/accounts/${client.id}/exports/${dataset}${qs(query)}`, `${dataset}-${new Date().toLocaleDateString("en-CA")}.${query.format || "csv"}`));
+  },
+  apiBaseUrl() { return API_URL; },
+
+  // ---------------- Single sign-on (P5) ----------------
+  /** Providers the API offers (none in demo mode or before client ids are set). */
+  async ssoProviders() {
+    if (USE_MOCK) return [];
+    try { return await request("/auth/sso/providers"); } catch { return []; }
+  },
+  /** A full page load: the API sets its cookie and sends the browser to the provider. */
+  ssoStartUrl(providerId) { return `${API_URL}/auth/sso/${encodeURIComponent(providerId)}/start`; },
+  /** The one-time code the API put in the portal URL after the provider's redirect. */
+  async ssoExchange(code) {
+    const data = await request("/auth/sso/exchange", { method: "POST", body: { code } });
+    if (data.mfa) return { mfa: data.mfa, challenge: data.challenge, user: data.user };
+    keepToken(data.token);
+    return data.user;
+  },
+
+  // ---------------- Multi-factor sign-in (P5) ----------------
+  async mfaVerify(challenge, code) {
+    const data = await request("/auth/mfa/verify", { method: "POST", body: { challenge, code } });
+    keepToken(data.token);
+    return data;
+  },
+  mfaSetup(challenge) { return request("/auth/mfa/setup", { method: "POST", body: { challenge } }); },
+  async mfaSetupConfirm(challenge, code) {
+    const data = await request("/auth/mfa/setup/confirm", { method: "POST", body: { challenge, code } });
+    keepToken(data.token);
+    return data;
+  },
+  mfaStatus() { return P5(() => request("/auth/mfa")); },
+  mfaEnrol() { return P5(() => request("/auth/mfa/enrol", { method: "POST", body: {} })); },
+  /** Confirms set-up; the new session counts as MFA, so it replaces the current one. */
+  mfaEnrolConfirm(code) {
+    return P5(async () => {
+      const data = await request("/auth/mfa/enrol/confirm", { method: "POST", body: { code } });
+      keepToken(data.token);
+      return data;
+    });
+  },
+  mfaDisable(code) { return P5(() => request("/auth/mfa/disable", { method: "POST", body: { code } })); },
+  mfaRecoveryCodes(code) { return P5(() => request("/auth/mfa/recovery-codes", { method: "POST", body: { code } })); },
+  resetUserMfa(client, userId) { return P5(() => request(`/accounts/${client.id}/users/${userId}/mfa/reset`, { method: "POST" })); },
 
   /** Start the API early (the free host sleeps when idle) so it is awake by the time the user signs in. */
   wake() {
@@ -163,8 +223,8 @@ export const api = {
 
   async acceptInvite(inviteToken, password, name) {
     const data = await request("/auth/accept-invite", { method: "POST", body: { token: inviteToken, password, name: name || undefined } });
-    token = data.token;
-    try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+    if (data.mfa) return { mfa: data.mfa, challenge: data.challenge, user: data.user };
+    keepToken(data.token);
     return data.user;
   },
 
@@ -179,7 +239,9 @@ export const api = {
     const accounts = await request("/accounts");
     return accounts.map((a) => ({
       id: a.id,
+      slug: a.slug,
       name: a.name,
+      brand: a.brand,
       status: a.status,
       skus: a.skus,
       merchants: a.merchants,
@@ -333,6 +395,10 @@ export const api = {
   audit(client, query) {
     return USE_MOCK ? mockConfig.audit(client) : request(`/accounts/${client.id}/audit${qs(query)}`);
   },
+  // Tamper evidence and export (P5): need the API, which holds the hash chain.
+  verifyAudit(client) { return P5(() => request(`/accounts/${client.id}/audit/verify`)); },
+  exportAudit(client, query = {}) { return P5(() => download(`/accounts/${client.id}/audit/export${qs(query)}`, `audit-log-${new Date().toLocaleDateString("en-CA")}.csv`)); },
+  governance() { return P5(() => request("/platform/governance")); },
 
   // ---------------- Catalogue, MAP policies, sellers, mapping (P2a) ----------------
   products(client, query) {
@@ -580,6 +646,24 @@ export const api = {
   markAlertsRead(client, body) { return USE_MOCK ? mockDetection.markAlertsRead(client, body) : request(`/accounts/${client.id}/alerts/events/read`, { method: "POST", body }); },
   alertRules(client) { return USE_MOCK ? mockDetection.alertRules(client) : request(`/accounts/${client.id}/alerts/rules`); },
   updateAlertRule(client, id, body) { return USE_MOCK ? mockDetection.updateAlertRule(client, id, body) : request(`/accounts/${client.id}/alerts/rules/${id}`, { method: "PATCH", body }); },
+
+  // ---------------- Guided onboarding (P5, needs the API) ----------------
+  createAccount(body) { return P5(() => request("/accounts", { method: "POST", body })); },
+  onboarding(client) { return P5(() => request(`/accounts/${client.id}/onboarding`)); },
+  setOnboardingStep(client, currentStep) { return P5(() => request(`/accounts/${client.id}/onboarding`, { method: "PATCH", body: { currentStep } })); },
+  goLive(client) { return P5(() => request(`/accounts/${client.id}/onboarding/go-live`, { method: "POST" })); },
+
+  // ---------------- Platform (Mirethos administrators, P5) ----------------
+  crawlBudget(days = 14) { return P5(() => request(`/platform/crawl-budget${qs({ days })}`)); },
+  setCrawlBudget(body) { return P5(() => request("/platform/crawl-budget", { method: "PUT", body })); },
+  tickets(filters = {}) { return P5(() => request(`/platform/tickets${qs(filters)}`)); },
+  ticket(id) { return P5(() => request(`/platform/tickets/${id}`)); },
+  createTicket(body) { return P5(() => request("/platform/tickets", { method: "POST", body })); },
+  updateTicket(id, body) { return P5(() => request(`/platform/tickets/${id}`, { method: "PATCH", body })); },
+  ticketAssignees() { return P5(() => request("/platform/assignees")); },
+  sourceList() { return P5(() => request("/sources")); },
+  platformReplays() { return P5(() => request("/platform/replays")); },
+  startPlatformReplay(body) { return P5(() => request("/platform/replays", { method: "POST", body })); },
 
   // ---------------- Evidence (real when the backend is on) ----------------
   async getEvidence(evidenceId) {

@@ -2,11 +2,16 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { verifyToken, type TokenClaims } from '../lib/auth.js';
 import { config } from '../lib/config.js';
+import { authenticateKey, type ApiKeyAuth } from '../lib/apiKeys.js';
 import { parseOrigins } from '../lib/cors.js';
 import { apiPool, withApi } from '../lib/db.js';
 import { can, type AccountAction, type RoutePermission } from '../lib/permissions.js';
 import { closeRateLimiter } from '../lib/rateLimit.js';
 import { accountRoutes } from './routes/accounts.js';
+import { onboardingRoutes } from './routes/onboarding.js';
+import { platformRoutes } from './routes/platform.js';
+import { publicApiRoutes } from './routes/publicApi.js';
+import { apiKeyRoutes } from './routes/apiKeys.js';
 import { settingsRoutes } from './routes/settings.js';
 import { userRoutes } from './routes/users.js';
 import { auditRoutes } from './routes/audit.js';
@@ -40,6 +45,8 @@ declare module 'fastify' {
     /** Set for routes with an account action: the :accountId and the caller's role in it. */
     accountId: string | null;
     accountRole: string | null;
+    /** Phase 5 · M9: set when the request carries an API key (only /v1 routes accept it). */
+    apiKey: ApiKeyAuth | null;
   }
   interface FastifyContextConfig {
     permission?: RoutePermission;
@@ -55,6 +62,9 @@ export class HttpError extends Error {
   }
 }
 
+/** The message the portal recognises to offer MFA set-up. */
+export const MFA_NEEDED = 'this account requires multi-factor sign-in: turn it on under Security, then sign in again';
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -63,14 +73,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export async function accountRoleFor(user: TokenClaims, accountId: string): Promise<string> {
   if (!UUID.test(accountId)) throw new HttpError(404, 'account not found');
-  const { exists, role } = await withApi(async (db) => {
-    const { rows } = await db.query<{ exists: boolean; role: string | null }>(
-      'SELECT EXISTS (SELECT 1 FROM account WHERE id = $1) AS exists, app_account_role($1, $2) AS role',
+  const { exists, role, mfa_required } = await withApi(async (db) => {
+    const { rows } = await db.query<{ exists: boolean; role: string | null; mfa_required: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM account WHERE id = $1) AS exists, app_account_role($1, $2) AS role,
+              coalesce((SELECT (settings->>'mfa_required')::boolean FROM account WHERE id = $1), false) AS mfa_required`,
       [accountId, user.sub],
     );
     return rows[0];
   });
   if (!exists) throw new HttpError(404, 'account not found');
+  // Phase 5 · M7: an account that requires MFA opens only for sessions that used a second factor.
+  if (mfa_required && !user.mfa && (role || user.role === 'admin')) throw new HttpError(403, MFA_NEEDED);
   if (user.role === 'admin') return 'Administrator';
   if (!role) throw new HttpError(403, 'no access to this account');
   return role;
@@ -105,9 +118,15 @@ export async function buildApp() {
   app.decorateRequest('user', null);
   app.decorateRequest('accountId', null);
   app.decorateRequest('accountRole', null);
+  app.decorateRequest('apiKey', null);
 
   app.addHook('onRequest', async (req) => {
     const header = req.headers.authorization;
+    // An API key (Phase 5 · M9) is never a session: it only opens the /v1 routes.
+    if (header?.startsWith('Bearer mik_')) {
+      req.apiKey = await withApi((db) => authenticateKey(db, header.slice(7))).catch(() => null);
+      return;
+    }
     if (header?.startsWith('Bearer ')) {
       try {
         const claims = await verifyToken(header.slice(7));
@@ -125,10 +144,15 @@ export async function buildApp() {
   app.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
     const permission = req.routeOptions.config?.permission;
     if (!permission || permission === 'public') return undefined;
+    if (permission === 'apikey') {
+      if (!req.apiKey) return reply.code(401).send({ error: 'a valid API key is required (Authorization: Bearer mik_...)' });
+      return undefined;
+    }
     if (!req.user) return reply.code(401).send({ error: 'sign in required' });
     if (permission === 'user') return undefined;
     if (permission === 'platform') {
       if (req.user.role !== 'admin') return reply.code(403).send({ error: 'Mirethos administrators only' });
+      if (config.PLATFORM_MFA_REQUIRED && !req.user.mfa) return reply.code(403).send({ error: 'platform screens require multi-factor sign-in: turn it on under Security, then sign in again' });
       return undefined;
     }
     const accountId = (req.params as { accountId?: string } | undefined)?.accountId;
@@ -156,6 +180,10 @@ export async function buildApp() {
   await app.register(ebayRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(accountRoutes);
+  await app.register(onboardingRoutes);
+  await app.register(platformRoutes);
+  await app.register(apiKeyRoutes);
+  await app.register(publicApiRoutes);
   await app.register(auditRoutes);
   await app.register(catalogueRoutes);
   await app.register(policyRoutes);

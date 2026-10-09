@@ -177,6 +177,19 @@ function DryRunResult({ run }) {
   );
 }
 
+/** A replay run's state: queued, running with progress, done, or failed with its reason. */
+export function ReplayStatus({ run }) {
+  if (run.status === "done") return <Pill text="Done" tone="bg-emerald-50 text-emerald-700 border-emerald-200" />;
+  if (run.status === "failed") return <span title={run.error || undefined}><Pill text="Failed" tone="bg-red-50 text-red-700 border-red-200" /></span>;
+  const pct = run.total ? Math.min(100, Math.round((run.processed / run.total) * 100)) : 0;
+  return (
+    <span className="inline-flex items-center gap-2 text-xs text-brand-taupe">
+      <Pill text={run.status === "queued" ? "Queued" : "Running"} tone="bg-sky-50 text-sky-700 border-sky-200" />
+      {run.status === "running" && <span className="tabular-nums">{pct}%</span>}
+    </span>
+  );
+}
+
 function RuleDrawer({ ruleId, onClose, onChanged }) {
   const { client, can, showToast } = useWorkspace();
   const [rule, setRule] = useState(null);
@@ -197,6 +210,13 @@ function RuleDrawer({ ruleId, onClose, onChanged }) {
     setDry(draft?.last_dry_run && (!draft.content_hash || draft.last_dry_run.content_hash === draft.content_hash) ? draft.last_dry_run : null);
   }, [client, ruleId, showToast]);
   useEffect(() => { attempt(showToast, load); }, [load, showToast]);
+  // A replay runs in the background: refresh while one is queued or running.
+  const replaying = rule?.replays?.some((r) => r.status === "queued" || r.status === "running");
+  useEffect(() => {
+    if (!replaying) return undefined;
+    const t = setInterval(() => attempt(showToast, load), 4000);
+    return () => clearInterval(t);
+  }, [replaying, load, showToast]);
 
   if (!rule) return <Drawer open onClose={onClose} eyebrow="Rule" title="Loading…"><div className="text-sm text-brand-taupe">Loading…</div></Drawer>;
   const draft = rule.versions.find((v) => v.status === "Draft");
@@ -223,7 +243,7 @@ function RuleDrawer({ ruleId, onClose, onChanged }) {
   const replay = async () => {
     if (!pub) return;
     const r = await attempt(showToast, () => api.replayRuleVersion(client, pub.id, { from: range.from, to: range.to }));
-    if (r) { showToast(`Replayed v${pub.version} into a shadow result set: ${r.summary.newlyViolating} newly violating, ${r.summary.noLongerViolating} no longer.`); await load(); }
+    if (r) { showToast(`Replay of v${pub.version} queued over ${r.total.toLocaleString("en-US")} observations. It runs in the background; results appear below.`); await load(); }
   };
 
   return (
@@ -262,9 +282,16 @@ function RuleDrawer({ ruleId, onClose, onChanged }) {
       </Card>
       {rule.replays?.length > 0 && (
         <Card title="Replays (shadow result sets)" className="mt-4">
-          <Table columns={["Version", "Range", "Newly violating", "No longer", "Run"]}>
+          <Table columns={["Version", "Range", "Status", "Newly violating", "No longer", "Run"]}>
             {rule.replays.map((r) => (
-              <tr key={r.id}><Td>v{r.version}</Td><Td className="text-brand-taupe">{formatDay(r.range_from)} – {formatDay(r.range_to)}</Td><Td>{r.summary.newlyViolating ?? "—"}</Td><Td>{r.summary.noLongerViolating ?? "—"}</Td><Td className="text-brand-taupe">{formatWhen(r.created_at)}</Td></tr>
+              <tr key={r.id}>
+                <Td>v{r.version}</Td>
+                <Td className="text-brand-taupe">{formatDay(r.range_from)} – {formatDay(r.range_to)}</Td>
+                <Td><ReplayStatus run={r} /></Td>
+                <Td>{r.summary.newlyViolating ?? "—"}</Td>
+                <Td>{r.summary.noLongerViolating ?? "—"}</Td>
+                <Td className="text-brand-taupe">{formatWhen(r.created_at)}</Td>
+              </tr>
             ))}
           </Table>
         </Card>

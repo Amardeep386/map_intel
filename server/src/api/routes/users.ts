@@ -7,6 +7,7 @@ import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { hashPassword } from '../../lib/auth.js';
 import { config } from '../../lib/config.js';
 import { withApi, withTenant, type Db } from '../../lib/db.js';
+import { clearMfa } from '../../lib/mfaStore.js';
 import { ACCOUNT_ROLES, actionsFor, grantableRoles, type AccountRole } from '../../lib/permissions.js';
 import { HttpError } from '../app.js';
 import { parse, uuidOr404 } from '../validate.js';
@@ -30,12 +31,15 @@ interface MemberRow {
   status: string;
   last_login_at: Date | null;
   role: AccountRole;
+  mfa_enabled: boolean;
+  platform_role: 'admin' | 'member';
 }
 
 async function members(db: Db): Promise<MemberRow[]> {
   return (
     await db.query<MemberRow>(
-      `SELECT u.id AS user_id, u.email, u.full_name, u.status, u.last_login_at, m.role
+      `SELECT u.id AS user_id, u.email, u.full_name, u.status, u.last_login_at, m.role,
+              u.mfa_enabled_at IS NOT NULL AS mfa_enabled, u.platform_role
          FROM account_membership m JOIN app_user u ON u.id = m.user_id
         ORDER BY array_position($1::text[], m.role), lower(u.full_name)`,
       [ACCOUNT_ROLES],
@@ -85,6 +89,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
           role: m.role,
           status: m.status,
           lastLoginAt: m.last_login_at,
+          mfaEnabled: m.mfa_enabled,
           can: actionsFor(m.role),
         })),
         invites: invites.map((i) => ({ id: i.id, email: i.email, name: i.full_name, role: i.role, createdAt: i.created_at, expiresAt: i.expires_at })),
@@ -206,6 +211,32 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         });
       });
       return reply.code(204).send();
+    },
+  );
+
+  // Reset a member's MFA (lost phone): they set it up again at their next sign-in if an account
+  // requires it. Phase 5 · M7.
+  app.post<{ Params: Params & { userId: string } }>(
+    '/accounts/:accountId/users/:userId/mfa/reset',
+    { config: { permission: 'users.manage' } },
+    async (req) => {
+      const target = await withTenant(req.params.accountId, async (db) => member(db, req.params.userId));
+      assertCanManage(req, target.role);
+      if (target.platform_role === 'admin' && req.user!.role !== 'admin') throw new HttpError(403, "only Mirethos administrators reset an administrator's MFA");
+      if (target.user_id === req.user!.sub) throw new HttpError(409, 'turn your own MFA off under Security');
+      if (!target.mfa_enabled) throw new HttpError(409, `${target.email} has no multi-factor sign-in to reset`);
+      await withApi((db) => clearMfa(db, target.user_id));
+      await withTenant(req.params.accountId, (db) =>
+        audit(db, req, {
+          action: 'member.mfa_reset',
+          entityType: 'app_user',
+          entityId: target.user_id,
+          summary: `Reset multi-factor sign-in for ${target.email}`,
+          before: { mfaEnabled: true },
+          after: { mfaEnabled: false },
+        }),
+      );
+      return { userId: target.user_id, mfaEnabled: false };
     },
   );
 

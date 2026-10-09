@@ -48,9 +48,10 @@ export type AccountAction = (typeof ACCOUNT_ACTIONS)[number];
  *  - 'public'   no sign-in (health, login, accept invite)
  *  - 'user'     signed in; the handler checks account access itself (e.g. /accounts, /evidence/:id)
  *  - 'platform' Mirethos platform administrators only (shared source catalogue, crawl runs)
+ *  - 'apikey'   the read-only public API (/v1): an account's API key, never a session (Phase 5)
  *  - an AccountAction, checked against the caller's role in :accountId
  */
-export type RoutePermission = 'public' | 'user' | 'platform' | AccountAction;
+export type RoutePermission = 'public' | 'user' | 'platform' | 'apikey' | AccountAction;
 
 const READ_ALL: AccountAction[] = [
   'account.read',

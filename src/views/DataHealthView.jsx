@@ -25,6 +25,7 @@ const FAILURE_LABEL = {
   not_executable: "Not allowed here (no search)",
   no_collector: "No collector",
   budget: "Over request budget",
+  org_budget: "Over the daily org-wide cap",
   cancelled: "Cancelled",
 };
 

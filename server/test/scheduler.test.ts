@@ -141,3 +141,18 @@ test('queue priority: rechecks first, higher schedule priority sooner, collect b
   assert.ok(queuePriority(90, 'collect') < queuePriority(10, 'collect'));
   assert.ok(queuePriority(10, 'collect') < queuePriority(10, 'discover'));
 });
+
+test('expand: the org-wide daily caps skip what is left over as org_budget, after the account budget', () => {
+  // Runnable work: amazon collect 1 + walmart collect 1 + amazon search 2 + target browse 1 = 5 requests.
+  const capped = expandFiring(input({ dailyRemaining: { org: null, sources: { 'id-amazon_us': 2 } } }));
+  assert.deepEqual(capped.filter((j) => j.skipReason === 'org_budget').map((j) => `${j.kind}:${j.sourceCode}`), ['discover:amazon_us']); // 1 used by the collect, 2 pages do not fit in 1
+  const org = expandFiring(input({ dailyRemaining: { org: 2, sources: {} } }));
+  assert.deepEqual(org.filter((j) => j.skipReason === 'org_budget').map((j) => `${j.kind}:${j.sourceCode}`), ['discover:amazon_us', 'discover:target_us']);
+  assert.equal(org.filter((j) => !j.skipReason).reduce((n, j) => n + j.cost, 0), 2);
+  // The account's own budget is checked first: work over it stays 'budget' even when the org cap is also reached.
+  const both = expandFiring(input({ budget: 0, dailyRemaining: { org: 0, sources: {} } }));
+  assert.ok(both.filter((j) => j.cost > 0).every((j) => j.skipReason === 'budget' || j.skipReason === 'not_executable'));
+  assert.ok(both.every((j) => j.skipReason !== 'org_budget'));
+  // No caps: nothing is skipped for the org budget.
+  assert.ok(expandFiring(input()).every((j) => j.skipReason !== 'org_budget'));
+});
