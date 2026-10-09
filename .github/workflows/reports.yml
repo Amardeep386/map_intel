@@ -62,6 +62,10 @@ jobs:
       # P5 · M5: finish replay runs the API left unfinished (restart or sleep); each resumes from its cursor.
       - name: Replays
         run: npm run replays
+      # P5 · M6: retention (old evidence files, observations, audit events per account; never behind an
+      # open violation or unresolved case). Applies at most once a day; every run is logged.
+      - name: Retention
+        run: npm run retention -- --apply --daily
       - name: Anything to do?
         id: work
         run: |

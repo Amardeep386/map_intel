@@ -12,6 +12,7 @@ import { withApi, withTenant } from '../../lib/db.js';
 import { createTicket, KINDS, listTickets, PRIORITIES, STATUSES, TicketError, ticketDetail, updateTicket } from '../../lib/tickets.js';
 import { HttpError } from '../app.js';
 import { parse, uuidOr404 } from '../validate.js';
+import { verifyChain } from './audit.js';
 
 const DAY_MS = 86_400_000;
 
@@ -276,4 +277,16 @@ export async function platformRoutes(app: FastifyInstance): Promise<void> {
     }
     return [...batches.values()];
   });
+
+  // ---------------------------------------------------------------- retention and audit chains (M6)
+  app.get('/platform/governance', { config: { permission: 'platform' } }, async (req) =>
+    withApi(async (db) => {
+      const accounts = (await db.query<{ id: string; name: string }>('SELECT id, name FROM app_accounts_for_user($1, true)', [req.user!.sub])).rows;
+      const chains = [{ id: null as string | null, name: 'Platform' }, ...accounts];
+      const verified = [];
+      for (const c of chains) verified.push({ accountId: c.id, name: c.name, ...(await verifyChain(db, c.id)) });
+      const runs = (await db.query('SELECT id, applied, started_at, finished_at, counts, error FROM retention_run ORDER BY started_at DESC LIMIT 10')).rows;
+      return { chains: verified, retentionRuns: runs };
+    }),
+  );
 }

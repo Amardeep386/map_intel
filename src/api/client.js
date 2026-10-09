@@ -337,6 +337,10 @@ export const api = {
   audit(client, query) {
     return USE_MOCK ? mockConfig.audit(client) : request(`/accounts/${client.id}/audit${qs(query)}`);
   },
+  // Tamper evidence and export (P5): need the API, which holds the hash chain.
+  verifyAudit(client) { return P5(() => request(`/accounts/${client.id}/audit/verify`)); },
+  exportAudit(client, query = {}) { return P5(() => download(`/accounts/${client.id}/audit/export${qs(query)}`, `audit-log-${new Date().toLocaleDateString("en-CA")}.csv`)); },
+  governance() { return P5(() => request("/platform/governance")); },
 
   // ---------------- Catalogue, MAP policies, sellers, mapping (P2a) ----------------
   products(client, query) {

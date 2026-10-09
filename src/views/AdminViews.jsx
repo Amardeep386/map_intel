@@ -1,6 +1,6 @@
 // Settings, Users & Access and Audit Log (docs/reference/prototype-src/views_admin.jsx).
 import React, { useCallback, useEffect, useState } from "react";
-import { Check, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Download, KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { api } from "../api/client.js";
 import { Card, Field, KV, Modal, Note, PageHeader, Pill, PrimaryButton, SearchBox, SecondaryButton, Table, Td, Toggle, inputCls } from "../ui.jsx";
 import { attempt, formatWhen, useWorkspace } from "../workspace.js";
@@ -106,6 +106,16 @@ export function SettingsView() {
           <div className="space-y-3 text-xs">
             <Field label="Requests per collection cycle"><input type="number" min="100" step="100" className={inputCls} value={s.requestBudget} onChange={(e) => setS("requestBudget", num(e.target.value))} /></Field>
             <Note>The subscription matrix on Sources & Terms shows the projected requests against this budget.</Note>
+          </div>
+        </Card>
+        <Card title="Data retention">
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Observations (days)"><input type="number" min="90" max="3650" className={inputCls} value={s.retentionObservationDays ?? ""} onChange={(e) => setS("retentionObservationDays", num(e.target.value))} /></Field>
+              <Field label="Evidence files (days)"><input type="number" min="90" max="3650" className={inputCls} value={s.retentionEvidenceDays ?? ""} onChange={(e) => setS("retentionEvidenceDays", num(e.target.value))} /></Field>
+              <Field label="Audit log (days)"><input type="number" min="365" max="3650" className={inputCls} value={s.retentionAuditDays ?? ""} onChange={(e) => setS("retentionAuditDays", num(e.target.value))} /></Field>
+            </div>
+            <Note>Older data is deleted once a day. Nothing behind an open violation or an unresolved case is deleted, and verdicts and violations are always kept. Prices seen on a listing other brands also monitor are kept for the longest period among them. Evidence files cannot be deleted before their storage lock ends.</Note>
           </div>
         </Card>
       </fieldset>
@@ -350,9 +360,34 @@ export function AuditLogView() {
     }
   };
 
+  const [check, setCheck] = useState(null);
+  const verify = async () => {
+    const r = await attempt(showToast, () => api.verifyAudit(client));
+    if (r) setCheck(r);
+  };
+  const exportCsv = () => attempt(showToast, () => api.exportAudit(client));
+
   return (
     <div>
-      <PageHeader title={`Audit Log — ${client.name} (${client.status})`} subtitle="Append-only. Every change records who (person, rule or model version), when, and before → after." />
+      <PageHeader
+        title={`Audit Log — ${client.name} (${client.status})`}
+        subtitle="Append-only and tamper-evident: every change records who (person, rule or model version), when, and before → after, chained by a hash to the change before it."
+        action={<>
+          <SecondaryButton onClick={verify}><ShieldCheck className="w-4 h-4" /> Verify integrity</SecondaryButton>
+          <SecondaryButton onClick={exportCsv}><Download className="w-4 h-4" /> Export CSV</SecondaryButton>
+        </>}
+      />
+      {check && (
+        <div className="mb-4">
+          <Note tone={check.ok ? "text-emerald-800 bg-emerald-50 border-emerald-200" : "text-red-800 bg-red-50 border-red-200"}>
+            {check.ok
+              ? `Intact: ${check.checked.toLocaleString("en-US")} events checked, each hash matches its content and the event before it.`
+              : `Broken at event #${check.broken.seq}: ${check.broken.reason}. Raise this with Mirethos.`}
+            {check.purged ? ` Events before ${formatWhen(check.purged.before)} were deleted under the retention setting (${check.purged.count.toLocaleString("en-US")}); the chain is checked from there.` : ""}
+            {check.lastHash ? <span className="block mt-1 font-mono text-[11px] break-all opacity-80">Latest hash {check.lastHash}</span> : null}
+          </Note>
+        </div>
+      )}
       <Card>
         <div className="flex gap-2 mb-3 flex-wrap">
           <SearchBox placeholder="Filter by person (email)..." value={actor} onChange={setActor} />
