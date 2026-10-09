@@ -61,6 +61,6 @@ Cases (Open → Notice sent → Awaiting response → Contested / Escalated → 
 Screens: Enforcement (replaces Email Center), Alerts inbox, seller profile.
 **Exit test:** detected → notice sent → resolved and re-verified without a spreadsheet.
 
-### P5 Scale & governance (wk 24+)
+### P5 Scale & governance — DONE on the LG slice (9 Oct 2026, exit 17/17)
 Guided onboarding; org-wide crawl budget; internal tickets; replay at scale; retention and audit hardening; SSO/MFA; public API and exports; hand-off note for Pricing Intel.
 **Exit test:** onboarding a new brand is a guided flow, not a wiki page or a call.

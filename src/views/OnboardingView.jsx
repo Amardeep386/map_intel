@@ -14,7 +14,7 @@ const STEP_INFO = {
   catalogue: { d: "Import the SKUs with their identifiers. The import shows a dry-run diff before anything is saved.", open: [["product", "Product Summary"]] },
   map: { d: "Import MAP with effective dates, add promotion windows and upload the MAP policy PDF.", open: [["pricing", "MAP Policies"]] },
   sellers: { d: "Classify the authorised resellers and the brand's own stores, and add contacts for notices.", open: [["merchants", "Sellers"]] },
-  sources: { d: "Subscribe sources, generate terms from the catalogue, set a schedule and check the request estimate.", open: [["sources", "Sources & Terms"]] },
+  sources: { d: "Subscribe sources, generate terms from the catalogue (and add brand or category page URLs for sources that cannot search, such as Walmart), set a schedule and check the request estimate.", open: [["sources", "Sources & Terms"]] },
   rules: { d: "The default violation and mapping rules are in place. Review them; the baseline crawl runs at go-live.", open: [["rules", "Rules"], ["mapping", "Mapping Center"]] },
   reports: { d: "Schedule at least one report with its recipients and delivery, and check the alerts.", open: [["reports", "Reports"], ["alerts", "Alerts"]] },
 };

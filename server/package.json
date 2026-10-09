@@ -20,6 +20,7 @@
     "db:seed": "tsx src/scripts/seed.ts",
     "admin:set-password": "tsx src/scripts/set-admin-password.ts",
     "exit:p1": "tsx src/scripts/exit-p1.ts",
+    "exit:p5": "tsx src/scripts/exit-p5.ts",
     "storage:init": "tsx src/scripts/storage-init.ts",
     "collect": "tsx src/scripts/collect.ts",
     "collect:report": "tsx src/scripts/report.ts",

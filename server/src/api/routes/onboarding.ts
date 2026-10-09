@@ -5,7 +5,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
 import { withApi, withTenant, type Db } from '../../lib/db.js';
-import { goLive, onboardingState, OnboardingError, setCurrentStep, STEPS } from '../../lib/onboarding.js';
+import { forecastAccount } from '../../lib/crawlBudget.js';
+import { goLive, onboardingState, OnboardingError, setCurrentStep, STEPS, type Estimates } from '../../lib/onboarding.js';
 import { accountEstimate } from '../configData.js';
 import { HttpError } from '../app.js';
 import { parse } from '../validate.js';
@@ -50,13 +51,21 @@ function validTimezone(tz: string): boolean {
   }
 }
 
-async function overBudget(db: Db, accountId: string): Promise<boolean | null> {
+/** The request estimate against the budget, and what the schedules would collect a day. */
+async function estimates(db: Db, accountId: string): Promise<Estimates> {
+  let overBudget: boolean | null = null;
+  let plannedPerDay: number | null = null;
   try {
-    const { estimate } = await accountEstimate(db, accountId);
-    return estimate.overBudget;
+    overBudget = (await accountEstimate(db, accountId)).estimate.overBudget;
   } catch {
-    return null;
+    /* not known */
   }
+  try {
+    plannedPerDay = Object.values(await forecastAccount(db, accountId)).reduce((a, b) => a + b, 0);
+  } catch {
+    /* not known */
+  }
+  return { overBudget, plannedPerDay };
 }
 
 function fail(err: unknown): never {
@@ -98,13 +107,13 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
         summary: `Created the account ${b.name} (${b.brand}) for guided onboarding`,
         after: { slug, ...b },
       });
-      return onboardingState(db, id, await overBudget(db, id));
+      return onboardingState(db, id, await estimates(db, id));
     });
     return reply.code(201).send({ id, slug, ...state });
   });
 
   app.get<{ Params: Params }>('/accounts/:accountId/onboarding', { config: { permission: 'settings.read' } }, async (req) =>
-    withTenant(req.params.accountId, async (db) => onboardingState(db, req.params.accountId, await overBudget(db, req.params.accountId))),
+    withTenant(req.params.accountId, async (db) => onboardingState(db, req.params.accountId, await estimates(db, req.params.accountId))),
   );
 
   // Where the person is in the flow, so "Save & exit" comes back to the same step.
@@ -113,14 +122,14 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     const { accountId } = req.params;
     return withTenant(accountId, async (db) => {
       await setCurrentStep(db, accountId, b.currentStep).catch(fail);
-      return onboardingState(db, accountId, await overBudget(db, accountId));
+      return onboardingState(db, accountId, await estimates(db, accountId));
     });
   });
 
   app.post<{ Params: Params }>('/accounts/:accountId/onboarding/go-live', { config: { permission: 'settings.write' } }, async (req) => {
     const { accountId } = req.params;
     return withTenant(accountId, async (db) => {
-      const state = await goLive(db, accountId, req.user!.sub, await overBudget(db, accountId)).catch(fail);
+      const state = await goLive(db, accountId, req.user!.sub, await estimates(db, accountId)).catch(fail);
       await recordAudit(db, {
         accountId,
         actor: actorFrom(req),

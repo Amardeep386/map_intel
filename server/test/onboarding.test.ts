@@ -23,6 +23,7 @@ const empty: Facts = {
   subscribedGroups: 0,
   activeSchedules: 0,
   overBudget: null,
+  plannedPerDay: 0,
   publishedRules: 3,
   matchRules: 6,
   scheduledReports: 0,
@@ -40,6 +41,7 @@ const complete: Facts = {
   activeTerms: 20,
   subscribedGroups: 1,
   activeSchedules: 1,
+  plannedPerDay: 40,
   scheduledReports: 1,
 };
 
@@ -65,9 +67,17 @@ test('advice never blocks: a complete account with missing identifiers, no polic
 });
 
 test('sources: subscriptions, terms, a subscribed group and a schedule are all required', () => {
-  for (const k of ['subscriptions', 'activeTerms', 'subscribedGroups', 'activeSchedules'] as const) {
+  for (const k of ['subscriptions', 'activeTerms', 'subscribedGroups', 'activeSchedules', 'plannedPerDay'] as const) {
     assert.equal(done({ ...complete, [k]: 0 }).sources, false, k);
   }
+});
+
+test('sources: terms no source can run plan nothing, and the step says what to add', () => {
+  const sources = evaluate({ ...complete, plannedPerDay: 0 }, false).find((s) => s.key === 'sources')!;
+  const work = sources.checks.find((c) => c.key === 'work')!;
+  assert.equal(work.ok, false);
+  assert.match(work.detail!, /brand or category page URLs/);
+  assert.equal(evaluate({ ...complete, plannedPerDay: null }, false).find((s) => s.key === 'sources')!.done, false);
 });
 
 test('brand user advice depends on brand approval', () => {

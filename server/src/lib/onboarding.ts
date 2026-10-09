@@ -63,6 +63,7 @@ export interface Facts {
   subscribedGroups: number;
   activeSchedules: number;
   overBudget: boolean | null; // null when not known
+  plannedPerDay: number | null; // requests a day the schedules would make (crawl budget forecast); null when not known
   publishedRules: number;
   matchRules: number;
   scheduledReports: number;
@@ -116,6 +117,18 @@ export function evaluate(f: Facts, baselineRequested: boolean): Step[] {
       { key: 'terms', label: 'Active search terms', required: true, ok: f.activeTerms > 0, detail: n(f.activeTerms, 'term') },
       { key: 'matrix', label: 'A term group subscribed to a source category', required: true, ok: f.subscribedGroups > 0 },
       { key: 'schedule', label: 'An active collection schedule', required: true, ok: f.activeSchedules > 0, detail: n(f.activeSchedules, 'schedule') },
+      {
+        // Terms a source cannot run (e.g. keyword search where robots.txt forbids it) plan nothing.
+        key: 'work',
+        label: 'The schedules plan collection work',
+        required: true,
+        ok: (f.plannedPerDay ?? 0) > 0,
+        detail: f.plannedPerDay === null
+          ? 'not estimated yet'
+          : f.plannedPerDay > 0
+            ? `${n(f.plannedPerDay, 'request')} a day`
+            : 'nothing these sources can collect yet: add brand or category page URLs as terms for sources that cannot search (such as Walmart), or subscribe a source that searches by keyword',
+      },
       { key: 'budget', label: 'Request estimate within the account budget', required: false, ok: f.overBudget === false, detail: f.overBudget === null ? 'not estimated yet' : undefined },
     ],
     rules: [
@@ -139,7 +152,13 @@ export function evaluate(f: Facts, baselineRequested: boolean): Step[] {
 }
 
 /** Read the facts for one account. Runs as the tenant (RLS limits every table to the account). */
-export async function loadFacts(db: Db, accountId: string, overBudget: boolean | null): Promise<Facts> {
+/** Estimates computed outside SQL (lib/cost.ts, lib/crawlBudget.ts). */
+export interface Estimates {
+  overBudget: boolean | null;
+  plannedPerDay: number | null;
+}
+
+export async function loadFacts(db: Db, accountId: string, est: Estimates): Promise<Facts> {
   const { rows } = await db.query(
     `SELECT a.name, a.brand, a.timezone, (a.contract_from IS NOT NULL AND a.contract_to IS NOT NULL) AS contract_set,
             coalesce((a.settings->>'brand_approval_required')::boolean, true) AS brand_approval,
@@ -194,7 +213,8 @@ export async function loadFacts(db: Db, accountId: string, overBudget: boolean |
     activeTerms: num(r.terms),
     subscribedGroups: num(r.groups),
     activeSchedules: num(r.schedules),
-    overBudget,
+    overBudget: est.overBudget,
+    plannedPerDay: est.plannedPerDay,
     publishedRules: num(r.published_rules),
     matchRules: num(r.match_rules),
     scheduledReports: num(r.reports),
@@ -203,8 +223,8 @@ export async function loadFacts(db: Db, accountId: string, overBudget: boolean |
   };
 }
 
-export async function onboardingState(db: Db, accountId: string, overBudget: boolean | null): Promise<OnboardingState> {
-  const facts = await loadFacts(db, accountId, overBudget);
+export async function onboardingState(db: Db, accountId: string, est: Estimates): Promise<OnboardingState> {
+  const facts = await loadFacts(db, accountId, est);
   const { rows } = await db.query(
     `SELECT a.status, o.account_id IS NOT NULL AS guided, o.current_step, o.went_live_at, o.baseline_requested_at, o.baseline_fired_at,
             coalesce((SELECT json_agg(json_build_object('id', r.id, 'status', r.status, 'jobsTotal', r.jobs_total, 'jobsDone', r.jobs_done) ORDER BY r.started_at)
@@ -241,8 +261,8 @@ export async function setCurrentStep(db: Db, accountId: string, step: StepKey): 
 }
 
 /** Go live: every required check passes; the account becomes Active and a baseline crawl is asked for. */
-export async function goLive(db: Db, accountId: string, userId: string | null, overBudget: boolean | null): Promise<OnboardingState> {
-  const state = await onboardingState(db, accountId, overBudget);
+export async function goLive(db: Db, accountId: string, userId: string | null, est: Estimates): Promise<OnboardingState> {
+  const state = await onboardingState(db, accountId, est);
   if (!state.guided) throw new OnboardingError(404, 'this account was not created through guided onboarding');
   if (state.wentLiveAt) throw new OnboardingError(409, 'this account is already live');
   if (state.status !== 'Onboarding') throw new OnboardingError(409, `the account is ${state.status}, not Onboarding`);
@@ -255,5 +275,5 @@ export async function goLive(db: Db, accountId: string, userId: string | null, o
     [accountId, userId],
   );
   await db.query(`UPDATE account SET status = 'Active' WHERE id = $1`, [accountId]);
-  return onboardingState(db, accountId, overBudget);
+  return onboardingState(db, accountId, est);
 }

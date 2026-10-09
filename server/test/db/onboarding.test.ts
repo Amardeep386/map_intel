@@ -76,7 +76,7 @@ test('steps follow the configuration; go-live makes the account Active; the base
     await db.query("INSERT INTO seller_classification (account_id, seller_id, class) VALUES ($1, $2, 'MAP Authorised')", [id, seller]);
     await db.query('INSERT INTO account_source (account_id, source_id) VALUES ($1, $2)', [id, source]);
     const group = (await db.query<{ id: string }>("INSERT INTO term_group (account_id, name) VALUES ($1, 'Brand SKUs') RETURNING id", [id])).rows[0].id;
-    await db.query("INSERT INTO term (account_id, group_id, type, value) VALUES ($1, $2, 'keyword', 'onboarding widget')", [id, group]);
+    await db.query("INSERT INTO term (account_id, group_id, type, value) VALUES ($1, $2, 'url', 'https://www.walmart.com/browse/electronics/onboarding-widgets/3944_1')", [id, group]);
     await db.query("INSERT INTO term_group_subscription (account_id, group_id, source_category, mode) VALUES ($1, $2, 'Marketplace', 'All')", [id, group]);
     await db.query("INSERT INTO schedule (account_id, name, cadence) VALUES ($1, 'Daily', '0 6 * * *')", [id]);
     const template = (await db.query<{ id: string }>('SELECT id FROM report_template ORDER BY code LIMIT 1')).rows[0].id;
