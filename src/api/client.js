@@ -147,6 +147,22 @@ export const api = {
     return data.user;
   },
 
+  // ---------------- Single sign-on (P5) ----------------
+  /** Providers the API offers (none in demo mode or before client ids are set). */
+  async ssoProviders() {
+    if (USE_MOCK) return [];
+    try { return await request("/auth/sso/providers"); } catch { return []; }
+  },
+  /** A full page load: the API sets its cookie and sends the browser to the provider. */
+  ssoStartUrl(providerId) { return `${API_URL}/auth/sso/${encodeURIComponent(providerId)}/start`; },
+  /** The one-time code the API put in the portal URL after the provider's redirect. */
+  async ssoExchange(code) {
+    const data = await request("/auth/sso/exchange", { method: "POST", body: { code } });
+    if (data.mfa) return { mfa: data.mfa, challenge: data.challenge, user: data.user };
+    keepToken(data.token);
+    return data.user;
+  },
+
   // ---------------- Multi-factor sign-in (P5) ----------------
   async mfaVerify(challenge, code) {
     const data = await request("/auth/mfa/verify", { method: "POST", body: { challenge, code } });

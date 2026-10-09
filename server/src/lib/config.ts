@@ -44,6 +44,16 @@ const schema = z.object({
   // Require MFA of every Mirethos platform administrator (on top of each account's own setting).
   PLATFORM_MFA_REQUIRED: bool(false),
 
+  // Single sign-on (Phase 5 · M8). A provider is offered only when its client id and secret are set.
+  // The redirect URI to register with each provider: <API_PUBLIC_URL>/auth/sso/<google|microsoft>/callback
+  API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  // 'organizations' = any work or school tenant; or one tenant id to allow a single organisation.
+  MICROSOFT_TENANT: z.string().default('organizations'),
+
   // Credential vault: comma-separated `id:base64key` pairs (32-byte keys) and the id used for new secrets.
   // Old keys stay listed so existing secrets still decrypt after a key change.
   VAULT_KEYS: z.string().optional(),

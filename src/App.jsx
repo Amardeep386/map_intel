@@ -189,7 +189,7 @@ const LOGIN_POINTS = [
   { icon: Activity, title: "From detection to notice", text: "Spot below-MAP sellers, review the proof and act from one place." },
 ];
 
-function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, slow, onForgot }) {
+function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, slow, onForgot, providers = [] }) {
   const [showPw, setShowPw] = useState(false);
   const field = "w-full h-11 pl-10 pr-3 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal placeholder:text-brand-taupe/70 shadow-sm transition focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
   return (
@@ -280,6 +280,20 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
             )}
           </form>
 
+          {providers.length > 0 && (
+            <div className="mt-6">
+              <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-brand-taupe"><span className="flex-1 border-t border-brand-beige" />or<span className="flex-1 border-t border-brand-beige" /></div>
+              <div className="mt-4 space-y-2.5">
+                {providers.map((p) => (
+                  <a key={p.id} href={api.ssoStartUrl(p.id)}
+                    className="w-full h-11 rounded-xl border border-brand-beige bg-brand-white text-sm font-medium flex items-center justify-center gap-2.5 hover:bg-surface-3 transition">
+                    <ProviderMark id={p.id} /> Continue with {p.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mt-10 pt-6 border-t border-brand-beige flex items-center gap-2 text-xs text-brand-taupe">
             <ShieldCheck className="w-4 h-4 text-brand-copper" /> Encrypted connection · access is limited to invited users
           </div>
@@ -300,6 +314,22 @@ function Toasts({ toasts }) {
       ))}
     </div>
   );
+}
+
+/** Small provider marks for the sign-in buttons (plain shapes, no external images). */
+function ProviderMark({ id }) {
+  if (id === "microsoft") {
+    return (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" aria-hidden="true">
+        <rect x="0" y="0" width="7.5" height="7.5" fill="#F25022" /><rect x="8.5" y="0" width="7.5" height="7.5" fill="#7FBA00" />
+        <rect x="0" y="8.5" width="7.5" height="7.5" fill="#00A4EF" /><rect x="8.5" y="8.5" width="7.5" height="7.5" fill="#FFB900" />
+      </svg>
+    );
+  }
+  if (id === "google") {
+    return <span className="w-4 h-4 rounded-full border-2 border-[#4285F4] inline-flex items-center justify-center text-[9px] font-bold text-[#4285F4]">G</span>;
+  }
+  return <ShieldCheck className="w-4 h-4" />;
 }
 
 /** White or dark text, whichever reads better on a hex colour (WCAG relative luminance). */
@@ -416,6 +446,37 @@ export default function App() {
 
   // Wake the API while the user is still typing (the free host sleeps when idle).
   useEffect(() => { api.wake(); }, []);
+
+  // P5 SSO: the providers to offer, and the return from a provider (?sso=<code> or ?sso_error=...).
+  const [ssoProviders, setSsoProviders] = useState([]);
+  useEffect(() => { api.ssoProviders().then(setSsoProviders); }, []);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const code = q.get("sso");
+    const error = q.get("sso_error");
+    if (!code && !error) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    if (error) {
+      showToast(error, "info", 8000);
+      return;
+    }
+    (async () => {
+      try {
+        const r = await api.ssoExchange(code);
+        if (r?.mfa) {
+          setMfaStep(r);
+          setScreen('mfa');
+          return;
+        }
+        await enterPortal();
+        showToast("Signed in.", "success");
+      } catch (err) {
+        showToast(err.message || "Sign-in failed.", "info");
+      }
+    })();
+    // Runs once, on the page load that comes back from the provider.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // After sign-in (or accepting an invite): load the user, accounts and shared data together,
   // then each account's workspace, and open the client picker.
@@ -534,6 +595,7 @@ export default function App() {
   // --------------------------------------------------------------------------
   if (screen === 'invite') {
     return (
+      <>
       <InviteAcceptScreen
         inviteToken={inviteToken}
         onAccepted={async (r) => {
@@ -549,6 +611,8 @@ export default function App() {
         onCancel={() => { window.history.replaceState(null, '', window.location.pathname); setScreen('login'); }}
         showToast={showToast}
       />
+      <Toasts toasts={toasts} />
+      </>
     );
   }
 
@@ -565,12 +629,16 @@ export default function App() {
 
   if (screen === 'login') {
     return (
-      <LoginScreen
-        email={loginEmail} setEmail={setLoginEmail}
-        password={loginPassword} setPassword={setLoginPassword}
-        onSubmit={handleLoginSubmit} busy={isLoggingIn} slow={slowLogin}
-        onForgot={() => showToast("Recovery portal loaded.", "info")}
-      />
+      <>
+        <LoginScreen
+          email={loginEmail} setEmail={setLoginEmail}
+          password={loginPassword} setPassword={setLoginPassword}
+          onSubmit={handleLoginSubmit} busy={isLoggingIn} slow={slowLogin}
+          onForgot={() => showToast("Recovery portal loaded.", "info")}
+          providers={ssoProviders}
+        />
+        <Toasts toasts={toasts} />
+      </>
     );
   }
 

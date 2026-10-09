@@ -71,6 +71,29 @@ export async function signChallenge(userId: string, purpose: ChallengePurpose): 
     .sign(secret);
 }
 
+/** SSO (Phase 5 · M8): what the provider's redirect carries back, signed; ten minutes. Never a session. */
+export interface SsoState {
+  provider: string;
+  nonce: string;
+  verifier: string;
+  browser: string; // must match the browser's cookie (stops login CSRF)
+}
+
+export async function signSsoState(s: SsoState): Promise<string> {
+  return new SignJWT({ pur: 'sso-state', p: s.provider, n: s.nonce, v: s.verifier, b: s.browser })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(ISSUER)
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(secret);
+}
+
+export async function verifySsoState(token: string): Promise<SsoState> {
+  const { payload } = await jwtVerify(token, secret, { issuer: ISSUER });
+  if (payload.pur !== 'sso-state') throw new Error('not an SSO state');
+  return { provider: String(payload.p), nonce: String(payload.n), verifier: String(payload.v), browser: String(payload.b) };
+}
+
 export async function verifyChallenge(token: string, purposes: ChallengePurpose[]): Promise<{ userId: string; purpose: ChallengePurpose }> {
   const { payload } = await jwtVerify(token, secret, { issuer: ISSUER });
   if (typeof payload.sub !== 'string' || !purposes.includes(payload.pur as ChallengePurpose)) throw new Error('not a sign-in challenge');

@@ -26,6 +26,8 @@ export const SETTINGS_DEFAULTS = {
   retention_evidence_days: RETENTION_DEFAULTS.evidence,
   retention_audit_days: RETENTION_DEFAULTS.audit,
   mfa_required: false,
+  sso_domains: [] as string[],
+  sso_default_role: 'Brand user' as 'Brand user' | 'Analyst',
 };
 type Settings = typeof SETTINGS_DEFAULTS;
 
@@ -63,6 +65,13 @@ const settingsPatch = z
         retentionEvidenceDays: z.number().int().min(90).max(3650),
         retentionAuditDays: z.number().int().min(365).max(3650),
         mfaRequired: z.boolean(),
+        // SSO (Phase 5 · M8): people signing in with Google / Microsoft from these domains join the
+        // account with ssoDefaultRole. Public email domains are refused (anyone could join).
+        ssoDomains: z
+          .array(z.string().trim().toLowerCase().regex(/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z]{2,}$/, 'a domain such as lg.com'))
+          .max(20)
+          .refine((d) => !d.some((x) => PUBLIC_EMAIL_DOMAINS.has(x)), 'public email domains (gmail.com, outlook.com, …) cannot be allowed: invite those people instead'),
+        ssoDefaultRole: z.enum(['Brand user', 'Analyst']),
       })
       .partial(),
   })
@@ -84,7 +93,14 @@ const toDb: Record<string, keyof Settings> = {
   retentionEvidenceDays: 'retention_evidence_days',
   retentionAuditDays: 'retention_audit_days',
   mfaRequired: 'mfa_required',
+  ssoDomains: 'sso_domains',
+  ssoDefaultRole: 'sso_default_role',
 };
+
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'ymail.com', 'icloud.com',
+  'me.com', 'aol.com', 'proton.me', 'protonmail.com', 'gmx.com', 'mail.com', 'zoho.com', 'yandex.com', 'rediffmail.com',
+]);
 
 interface AccountRow {
   id: string;

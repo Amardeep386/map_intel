@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { actorFrom, recordAudit } from '../../lib/audit.js';
-import { hashPassword, needsRehash, signChallenge, signToken, verifyChallenge, verifyPassword, type ChallengePurpose } from '../../lib/auth.js';
+import { randomBytes } from 'node:crypto';
+import { hashPassword, needsRehash, signChallenge, signSsoState, signToken, verifyChallenge, verifyPassword, verifySsoState, type ChallengePurpose } from '../../lib/auth.js';
+import { config } from '../../lib/config.js';
+import { authorizationUrl, finish, provider, providers, randomToken, SsoError } from '../../lib/sso.js';
 import { withApi } from '../../lib/db.js';
 import { checkSecondFactor, confirmSetup, disableMfa, MfaError, mfaStatus, regenerateRecoveryCodes, startSetup } from '../../lib/mfaStore.js';
 import { HttpError } from '../app.js';
@@ -23,6 +26,9 @@ interface UserRow {
 
 // Brake on password guessing, per IP + email, shared across API processes (Redis).
 const LOGIN_LIMIT: Limit = { max: 5, windowSeconds: 10 * 60 };
+/** SSO users have no password: store the hash of one nobody knows, so password sign-in never works for them. */
+const unusablePassword = () => hashPassword(randomBytes(32).toString('base64'));
+
 // Brake on guessing MFA codes, per user (a code has a million values; five tries per ten minutes).
 const MFA_LIMIT: Limit = { max: 5, windowSeconds: 10 * 60 };
 // Brake on guessing invite tokens, per IP.
@@ -53,7 +59,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     await reset(key);
     const rehash = needsRehash(user.password_hash) ? await hashPassword(body.data.password) : null;
     if (rehash) await withApi((db) => db.query('UPDATE app_user SET password_hash = $2 WHERE id = $1', [user.id, rehash]));
-    // Second step (Phase 5 · M7): a code when MFA is on; set-up first when an account requires it.
+    return afterFirstFactor(user);
+  });
+
+  /**
+   * The password (or an SSO provider) is right. Second step (Phase 5 · M7): a code when MFA is on;
+   * set-up first when an account requires it; otherwise the session.
+   */
+  async function afterFirstFactor(user: Pick<UserRow, 'id' | 'email' | 'full_name' | 'platform_role'>) {
     const next = await withApi(async (db) => {
       const s = await mfaStatus(db, user.id);
       return s.enabled ? 'code' : s.required ? 'setup' : null;
@@ -62,6 +75,79 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       return { mfa: next, challenge: await signChallenge(user.id, next === 'code' ? 'mfa' : 'mfa-setup'), user: { email: user.email, name: user.full_name } };
     }
     return session(user, false);
+  }
+
+  // ---------------------------------------------------------------- single sign-on (Phase 5 · M8)
+  // 1. The portal sends the browser here (a full page load, so the cookie below is first-party).
+  // 2. The provider sends it back to /callback with a code; the API checks everything and sends it
+  //    to the portal with a one-minute, one-time code (never the session itself in a URL).
+  // 3. The portal trades that code at /sso/exchange and continues as after a password.
+  const SSO_COOKIE = 'mi_sso';
+  const portal = (params: Record<string, string>) => `${config.PORTAL_URL.replace(/\/$/, '')}/?${new URLSearchParams(params)}`;
+  const cookieValue = (req: FastifyRequest, name: string) =>
+    (req.headers.cookie ?? '').split(';').map((c) => c.trim().split('=')).find(([k]) => k === name)?.[1] ?? null;
+  const cookie = (value: string, maxAge: number) =>
+    `${SSO_COOKIE}=${value}; Path=/auth/sso; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${config.API_PUBLIC_URL.startsWith('https:') ? '; Secure' : ''}`;
+
+  app.get('/sso/providers', { config: { permission: 'public' } }, async () => providers().map((p) => ({ id: p.id, name: p.name })));
+
+  app.get<{ Params: { provider: string } }>('/sso/:provider/start', { config: { permission: 'public' } }, async (req, reply) => {
+    const p = provider(req.params.provider);
+    if (!p) return reply.redirect(portal({ sso_error: 'this sign-in method is not available' }));
+    const s = { provider: p.id, nonce: randomToken(), verifier: randomToken(48), browser: randomToken(16) };
+    try {
+      const url = await authorizationUrl(p, { state: await signSsoState(s), nonce: s.nonce, verifier: s.verifier });
+      return reply.header('set-cookie', cookie(s.browser, 600)).redirect(url);
+    } catch (err) {
+      req.log.warn({ err }, 'sso start failed');
+      return reply.redirect(portal({ sso_error: err instanceof SsoError ? err.message : `${p.name} sign-in is not available right now` }));
+    }
+  });
+
+  app.get<{ Params: { provider: string }; Querystring: Record<string, string | undefined> }>(
+    '/sso/:provider/callback',
+    { config: { permission: 'public' } },
+    async (req, reply) => {
+      reply.header('set-cookie', cookie('', 0));
+      const fail = (message: string) => reply.redirect(portal({ sso_error: message }));
+      const p = provider(req.params.provider);
+      if (!p) return fail('this sign-in method is not available');
+      if (req.query.error) return fail(req.query.error === 'access_denied' ? 'sign-in was cancelled' : `${p.name} refused the sign-in`);
+      let s;
+      try {
+        s = await verifySsoState(req.query.state ?? '');
+      } catch {
+        return fail('the sign-in took too long: try again');
+      }
+      if (s.provider !== p.id || !req.query.code || cookieValue(req, SSO_COOKIE) !== s.browser) return fail('the sign-in did not match this browser: try again');
+      try {
+        const who = await finish(p, req.query.code, s.verifier, s.nonce);
+        const joined = await withApi(async (db) =>
+          (await db.query<{ user_id: string; how: string }>('SELECT * FROM app_sso_join($1, $2, $3, $4, $5)', [p.id, who.subject, who.email, who.name, await unusablePassword()])).rows[0]);
+        if (!joined) return fail(`${who.email} has no access to MAP Intel: ask your administrator for an invite`);
+        const code = randomToken();
+        await withApi((db) =>
+          db.query("INSERT INTO sso_login (code_hash, user_id, provider, expires_at) VALUES ($1, $2, $3, now() + interval '60 seconds')", [hashToken(code), joined.user_id, p.id]));
+        return reply.redirect(portal({ sso: code }));
+      } catch (err) {
+        req.log.warn({ err }, 'sso callback failed');
+        return fail(err instanceof SsoError ? err.message : `${p.name} sign-in failed: try again`);
+      }
+    },
+  );
+
+  app.post('/sso/exchange', { config: { permission: 'public' } }, async (req, reply) => {
+    const b = parse(z.object({ code: z.string().min(20).max(200) }), req.body);
+    const user = await withApi(async (db) => {
+      const row = (await db.query<{ user_id: string; provider: string }>(
+        'UPDATE sso_login SET used_at = now() WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now() RETURNING user_id, provider',
+        [hashToken(b.code)],
+      )).rows[0];
+      if (!row) return null;
+      return (await db.query<UserRow>("SELECT * FROM app_user WHERE id = $1 AND status = 'Active'", [row.user_id])).rows[0] ?? null;
+    });
+    if (!user) return reply.code(401).send({ error: 'the sign-in link expired: sign in again' });
+    return afterFirstFactor(user);
   });
 
   /** A session token for a user who has passed every step; records the sign-in. */
