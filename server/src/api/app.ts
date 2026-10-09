@@ -132,7 +132,12 @@ export async function buildApp() {
         const claims = await verifyToken(header.slice(7));
         // A disabled (or removed) user is signed out on their next request, not when the token expires.
         // One read, no transaction: this runs on every signed-in request.
-        const active = (await apiPool().query("SELECT 1 FROM app_user WHERE id = $1 AND status = 'Active'", [claims.sub])).rowCount;
+        // ... and a session issued before the user's last password reset is over (whoever reset it may not be the one holding it).
+        const active = (await apiPool().query(
+          `SELECT 1 FROM app_user WHERE id = $1 AND status = 'Active'
+              AND (password_changed_at IS NULL OR date_trunc('second', password_changed_at) <= to_timestamp($2))`,
+          [claims.sub, claims.iat ?? 0],
+        )).rowCount;
         req.user = active ? claims : null;
       } catch {
         req.user = null;

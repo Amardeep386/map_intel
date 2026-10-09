@@ -239,6 +239,10 @@ export function UsersView() {
       await load();
     }
   };
+  const resetPassword = async (m) => {
+    const r = await attempt(showToast, () => api.createResetLink(client, m.userId));
+    if (r) setLink({ kind: "reset", email: r.email, url: r.resetUrl, expiresAt: r.expiresAt });
+  };
   const resetMfa = async (m) => {
     if (!window.confirm(`Reset multi-factor sign-in for ${m.email}? They set it up again at their next sign-in if an account requires it.`)) return;
     if (await attempt(showToast, () => api.resetUserMfa(client, m.userId))) {
@@ -280,7 +284,10 @@ export function UsersView() {
               </Td>
               <Td>
                 {canManage && data.grantableRoles.includes(m.role) && (
-                  <button onClick={() => remove(m)} className="text-brand-taupe hover:text-red-600 cursor-pointer" title="Remove from account"><Trash2 className="w-4 h-4" /></button>
+                  <span className="inline-flex items-center gap-3">
+                    {m.status === "Active" && <button onClick={() => resetPassword(m)} className="text-xs text-brand-copper hover:underline cursor-pointer whitespace-nowrap" title="A one-hour link to choose a new password">Reset password</button>}
+                    <button onClick={() => remove(m)} className="text-brand-taupe hover:text-red-600 cursor-pointer" title="Remove from account"><Trash2 className="w-4 h-4" /></button>
+                  </span>
                 )}
               </Td>
             </tr>
@@ -300,17 +307,21 @@ export function UsersView() {
         <div className="mt-3"><Note>Brand users only ever see their own account. Mirethos administrators can open every account; that access is logged.</Note></div>
       </Card>
       {inviting && (
-        <InviteModal grantable={data?.grantableRoles ?? []} onClose={() => setInviting(false)} onDone={async (r) => { setInviting(false); if (r.inviteUrl) setLink(r); await load(); }} />
+        <InviteModal grantable={data?.grantableRoles ?? []} onClose={() => setInviting(false)} onDone={async (r) => { setInviting(false); if (r.inviteUrl) setLink({ kind: "invite", url: r.inviteUrl, expiresAt: r.expiresAt }); await load(); }} />
       )}
       {link && (
-        <Modal open onClose={() => setLink(null)} title="Invite link" width="w-[34rem]">
+        <Modal open onClose={() => setLink(null)} title={link.kind === "reset" ? "Password reset link" : "Invite link"} width="w-[34rem]">
           <div className="space-y-3">
-            <p className="text-sm text-brand-charcoal">Send this link to the new user. It works once and expires {formatWhen(link.expiresAt)}.</p>
+            <p className="text-sm text-brand-charcoal">
+              {link.kind === "reset"
+                ? `Send this link to ${link.email} yourself (chat, phone, a known address). It lets them choose a new password, works once and expires ${formatWhen(link.expiresAt)}. Their open sessions end when they use it.`
+                : `Send this link to the new user. It works once and expires ${formatWhen(link.expiresAt)}.`}
+            </p>
             <div className="flex gap-2">
-              <input readOnly className={`${inputCls} font-mono text-xs`} value={link.inviteUrl} onFocus={(e) => e.target.select()} />
-              <SecondaryButton onClick={() => { navigator.clipboard?.writeText(link.inviteUrl); showToast("Link copied."); }}><Copy className="w-4 h-4" /> Copy</SecondaryButton>
+              <input readOnly className={`${inputCls} font-mono text-xs`} value={link.url} onFocus={(e) => e.target.select()} />
+              <SecondaryButton onClick={() => { navigator.clipboard?.writeText(link.url); showToast("Link copied."); }}><Copy className="w-4 h-4" /> Copy</SecondaryButton>
             </div>
-            <Note>Email delivery of invites arrives with Phase 3.</Note>
+            <Note>MAP Intel has no email sending yet: links are sent by hand.</Note>
           </div>
         </Modal>
       )}

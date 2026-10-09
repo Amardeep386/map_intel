@@ -11,6 +11,8 @@ export interface TokenClaims {
   role: 'admin' | 'member';
   /** The session was opened with a second factor (MFA code or recovery code, or SSO later). */
   mfa?: boolean;
+  /** When the session was issued (seconds since epoch): a later password reset ends it. */
+  iat?: number;
 }
 
 /** Between the password and the second factor: proves the password was right, nothing else. */
@@ -57,6 +59,7 @@ export async function verifyToken(token: string): Promise<TokenClaims> {
     email: String(payload.email ?? ''),
     role: payload.role === 'admin' ? 'admin' : 'member',
     mfa: payload.mfa === true,
+    iat: typeof payload.iat === 'number' ? payload.iat : undefined,
   };
 }
 

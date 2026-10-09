@@ -8,6 +8,7 @@ import { hashPassword } from '../../lib/auth.js';
 import { config } from '../../lib/config.js';
 import { withApi, withTenant, type Db } from '../../lib/db.js';
 import { clearMfa } from '../../lib/mfaStore.js';
+import { createReset } from '../../lib/passwordReset.js';
 import { ACCOUNT_ROLES, actionsFor, grantableRoles, type AccountRole } from '../../lib/permissions.js';
 import { HttpError } from '../app.js';
 import { parse, uuidOr404 } from '../validate.js';
@@ -239,6 +240,50 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       return { userId: target.user_id, mfaEnabled: false };
     },
   );
+
+  // A password reset link for a member (no email provider yet: the caller sends it). One hour, once.
+  app.post<{ Params: Params & { userId: string } }>(
+    '/accounts/:accountId/users/:userId/password-reset',
+    { config: { permission: 'users.manage' } },
+    async (req) => {
+      const target = await withTenant(req.params.accountId, async (db) => member(db, req.params.userId));
+      assertCanManage(req, target.role);
+      if (target.platform_role === 'admin' && req.user!.role !== 'admin') throw new HttpError(403, "only Mirethos administrators reset an administrator's password");
+      if (target.status !== 'Active') throw new HttpError(409, `${target.email} is ${target.status.toLowerCase()}: ${target.status === 'Invited' ? 'send the invite link instead' : 'enable the user first'}`);
+      const link = await withApi((db) => createReset(db, target.user_id, req.user!.sub));
+      await withTenant(req.params.accountId, (db) =>
+        audit(db, req, {
+          action: 'member.password_reset_link', entityType: 'app_user', entityId: target.user_id,
+          summary: `Created a password reset link for ${target.email} (one hour, single use)`,
+        }),
+      );
+      return { email: target.email, ...link };
+    },
+  );
+
+  // Platform: a reset link for anyone (Mirethos staff included).
+  app.post<{ Params: { userId: string } }>('/users/:userId/password-reset', { config: { permission: 'platform' } }, async (req) => {
+    const userId = uuidOr404(req.params.userId, 'user');
+    return withApi(async (db) => {
+      const u = (await db.query<{ email: string; status: string }>('SELECT email, status FROM app_user WHERE id = $1', [userId])).rows[0];
+      if (!u) throw new HttpError(404, 'user not found');
+      if (u.status !== 'Active') throw new HttpError(409, `${u.email} is ${u.status.toLowerCase()}`);
+      const link = await createReset(db, userId, req.user!.sub);
+      await recordAudit(db, {
+        accountId: null, actor: actorFrom(req), requestId: req.id, action: 'user.password_reset_link', entityType: 'app_user', entityId: userId,
+        summary: `Created a password reset link for ${u.email} (one hour, single use)`,
+      });
+      return { email: u.email, ...link };
+    });
+  });
+
+  // Platform: find a user by email (for a reset from a ticket).
+  app.get<{ Querystring: { email?: string } }>('/users', { config: { permission: 'platform' } }, async (req) => {
+    const email = (req.query.email ?? '').trim();
+    if (!email) throw new HttpError(400, 'email: required');
+    return withApi(async (db) => (await db.query(
+      'SELECT id, email, full_name AS name, status, platform_role AS role, last_login_at FROM app_user WHERE lower(email) = lower($1)', [email])).rows);
+  });
 
   // Platform: disable or re-enable a user everywhere (takes effect on their next request).
   app.patch<{ Params: { userId: string } }>('/users/:userId', { config: { permission: 'platform' } }, async (req) => {

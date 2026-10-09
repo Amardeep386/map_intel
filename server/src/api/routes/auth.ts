@@ -6,6 +6,7 @@ import { hashPassword, needsRehash, signChallenge, signSsoState, signToken, veri
 import { config } from '../../lib/config.js';
 import { authorizationUrl, finish, provider, providers, randomToken, SsoError } from '../../lib/sso.js';
 import { withApi } from '../../lib/db.js';
+import { requestReset, ResetError, resetInfo, useReset } from '../../lib/passwordReset.js';
 import { checkSecondFactor, confirmSetup, disableMfa, MfaError, mfaStatus, regenerateRecoveryCodes, startSetup } from '../../lib/mfaStore.js';
 import { HttpError } from '../app.js';
 import { parse } from '../validate.js';
@@ -31,7 +32,9 @@ const unusablePassword = () => hashPassword(randomBytes(32).toString('base64'));
 
 // Brake on guessing MFA codes, per user (a code has a million values; five tries per ten minutes).
 const MFA_LIMIT: Limit = { max: 5, windowSeconds: 10 * 60 };
-// Brake on guessing invite tokens, per IP.
+// "Forgot password?" requests, per IP.
+const FORGOT_LIMIT: Limit = { max: 5, windowSeconds: 60 * 60 };
+// Brake on guessing invite tokens, per IP (reset links use it too).
 const INVITE_LIMIT: Limit = { max: 20, windowSeconds: 10 * 60 };
 
 const acceptBody = z.object({
@@ -281,6 +284,44 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     const token = await signToken({ sub: user.id, email: user.email, role: user.platform_role });
     return { token, user: { id: user.id, email: user.email, name: user.full_name, role: user.platform_role }, accountId: accepted.account_id };
+  });
+
+  // ---------------------------------------------------------------- password reset
+  // "Forgot password?": always the same answer; for a real user, Mirethos gets a ticket.
+  app.post('/forgot', { config: { permission: 'public' } }, async (req, reply) => {
+    const b = parse(z.object({ email: z.string().trim().email().max(200) }), req.body);
+    const key = `forgot:${req.ip}`;
+    if (await isLimited(key, FORGOT_LIMIT)) return reply.code(429).send({ error: 'too many requests, try again later' });
+    await hit(key, FORGOT_LIMIT);
+    await withApi((db) => requestReset(db, b.email));
+    return { ok: true };
+  });
+
+  app.get<{ Params: { token: string } }>('/reset/:token', { config: { permission: 'public' } }, async (req, reply) => {
+    const key = `reset:${req.ip}`;
+    if (await isLimited(key, INVITE_LIMIT)) return reply.code(429).send({ error: 'too many attempts, try again in a few minutes' });
+    const info = await withApi((db) => resetInfo(db, req.params.token));
+    if (!info) {
+      await hit(key, INVITE_LIMIT);
+      return reply.code(404).send({ error: 'this reset link is not valid' });
+    }
+    return info;
+  });
+
+  app.post('/reset', { config: { permission: 'public' } }, async (req, reply) => {
+    const b = parse(z.object({ token: z.string().min(20).max(200), password: z.string().min(12, 'the password must be at least 12 characters').max(200) }), req.body);
+    const key = `reset:${req.ip}`;
+    if (await isLimited(key, INVITE_LIMIT)) return reply.code(429).send({ error: 'too many attempts, try again in a few minutes' });
+    const done = await withApi(async (db) => useReset(db, b.token, await hashPassword(b.password))).catch(async (err) => {
+      await hit(key, INVITE_LIMIT);
+      if (err instanceof ResetError) throw new HttpError(err.statusCode, err.message);
+      throw err;
+    });
+    await withApi((db) => recordAudit(db, {
+      accountId: null, actor: { type: 'user', id: done.userId, label: done.email }, requestId: req.id,
+      action: 'user.password_reset', entityType: 'app_user', entityId: done.userId, summary: `${done.email} set a new password with a reset link`,
+    }));
+    return { ok: true, email: done.email };
   });
 
   // The signed-in user with each account they can open, their role there and what that role allows.

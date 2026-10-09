@@ -191,7 +191,7 @@ const LOGIN_POINTS = [
   { icon: Activity, title: "From detection to notice", text: "Spot below-MAP sellers, review the proof and act from one place." },
 ];
 
-function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, slow, onForgot, providers = [] }) {
+function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, slow, onForgot, providers = [], remember, setRemember }) {
   const [showPw, setShowPw] = useState(false);
   const field = "w-full h-11 pl-10 pr-3 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal placeholder:text-brand-taupe/70 shadow-sm transition focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
   return (
@@ -270,7 +270,7 @@ function LoginScreen({ email, setEmail, password, setPassword, onSubmit, busy, s
             </div>
 
             <label className="flex items-center gap-2.5 text-[13px] text-brand-taupe cursor-pointer select-none">
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded accent-[var(--accent-coral)] cursor-pointer" /> Keep me signed in
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4 rounded accent-[var(--accent-coral)] cursor-pointer" /> Keep me signed in
             </label>
 
             <button type="submit" disabled={busy} style={{ background: "var(--copper-sheen)" }}
@@ -318,6 +318,110 @@ function Toasts({ toasts }) {
   );
 }
 
+// ---------- Forgot password (no email provider yet: Mirethos gets a ticket and sends a link) ----------
+function ForgotPasswordModal({ email, providers, onClose, showToast }) {
+  const [value, setValue] = useState(email || "");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.forgotPassword(value.trim());
+      setSent(true);
+    } catch (err) {
+      showToast(err.message || "Could not send the request.", "info");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const google = providers.find((p) => p.id === "google");
+  const field = "w-full h-11 px-3.5 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal shadow-sm focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
+  return (
+    <div className="fixed inset-0 bg-[#0c0907]/45 backdrop-blur-[2px] flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-brand-white border border-brand-beige rounded-2xl w-[30rem] max-w-full p-7 shadow-[var(--shadow-3)]" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold tracking-tight">Forgot your password?</h3>
+        {sent ? (
+          <div className="mt-3 space-y-3 text-sm text-brand-taupe">
+            <p>Thanks. If <b className="text-brand-charcoal">{value.trim()}</b> has a MAP Intel account, Mirethos has been asked to send you a link to choose a new password. It works once, for one hour.</p>
+            <p>Your account's Administrator can also send you one straight away from Users &amp; Access.</p>
+            {google && <a href={api.ssoStartUrl(google.id)} className="w-full h-11 rounded-xl border border-brand-beige text-sm font-medium flex items-center justify-center gap-2.5 hover:bg-surface-3 text-brand-charcoal"><ProviderMark id="google" /> Or sign in with Google now</a>}
+            <div className="flex justify-end"><button onClick={onClose} className="h-10 px-4 rounded-xl bg-brand-charcoal text-white text-sm font-medium cursor-pointer">Back to sign in</button></div>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="mt-3 space-y-4">
+            <p className="text-sm text-brand-taupe">Enter your business email. We'll ask Mirethos to send you a one-time link to choose a new password.{google ? " If you use Google with this email, you can also just sign in with Google." : ""}</p>
+            <input type="email" required autoFocus value={value} onChange={(e) => setValue(e.target.value)} className={field} placeholder="name@company.com" />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="h-10 px-4 rounded-xl border border-brand-beige text-sm cursor-pointer hover:bg-surface-3">Cancel</button>
+              <button type="submit" disabled={busy || !value.trim()} className="h-10 px-4 rounded-xl bg-brand-charcoal text-white text-sm font-medium cursor-pointer disabled:opacity-60 inline-flex items-center gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />} Request a reset link</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Choose a new password (opened from a reset link) ----------
+function ResetPasswordScreen({ resetToken, onDone, showToast }) {
+  const [info, setInfo] = useState(null);
+  const [error, setError] = useState(null);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.getReset(resetToken).then(setInfo).catch((err) => setError(err.message || "This reset link is not valid."));
+  }, [resetToken]);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (password.length < 12) return showToast("Use at least 12 characters.", "info");
+    if (password !== confirm) return showToast("The two passwords do not match.", "info");
+    setBusy(true);
+    try {
+      const r = await api.resetPassword(resetToken, password);
+      showToast("Password changed. Sign in with the new one.", "success");
+      onDone(r.email);
+    } catch (err) {
+      showToast(err.message || "Could not change the password.", "info");
+    } finally {
+      setBusy(false);
+    }
+    return undefined;
+  };
+  const inputCls = "w-full h-11 px-3.5 text-sm rounded-xl border border-brand-beige bg-brand-white text-brand-charcoal shadow-sm focus:outline-none focus:border-brand-copper focus:ring-4 focus:ring-brand-copper/15";
+  const open = info && info.state === "open";
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-brand-ivory font-sans text-brand-charcoal px-6 py-12">
+      <div className="w-full max-w-[420px] bg-brand-white border border-brand-beige rounded-2xl p-8 shadow-[var(--shadow-3)]">
+        <div className="flex items-center gap-3 mb-6">
+          <img src={mirethosMark} alt="" className="h-8 w-auto" />
+          <div className="text-[11px] uppercase tracking-[0.2em] text-brand-taupe">MAP Intelligence · Password</div>
+        </div>
+        {!info && !error && <p className="text-sm text-brand-taupe flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Checking your link…</p>}
+        {(error || (info && !open)) && (
+          <>
+            <h2 className="text-2xl font-semibold tracking-tight">This link can't be used</h2>
+            <p className="mt-1.5 mb-6 text-sm text-brand-taupe">{error || `This link has ${info.state === "used" ? "already been used" : "expired"}. Ask for a new one with "Forgot password?" on the sign-in page.`}</p>
+            <button onClick={() => onDone(info?.email)} className="w-full h-11 rounded-xl bg-brand-charcoal text-white text-sm font-semibold cursor-pointer">Go to sign in</button>
+          </>
+        )}
+        {open && (
+          <form onSubmit={submit} className="space-y-4">
+            <h2 className="text-2xl font-semibold tracking-tight">Choose a new password</h2>
+            <p className="text-sm text-brand-taupe">For <b className="text-brand-charcoal">{info.email}</b>. Sessions open elsewhere end when you save.</p>
+            <div><label className="block text-[13px] font-medium mb-1.5">New password <span className="text-brand-taupe font-normal">(at least 12 characters)</span></label>
+              <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required className={inputCls} /></div>
+            <div><label className="block text-[13px] font-medium mb-1.5">Repeat it</label>
+              <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required className={inputCls} /></div>
+            <button type="submit" disabled={busy} className="w-full h-11 rounded-xl bg-brand-charcoal text-white text-sm font-semibold cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />} Save new password</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** The provider mark on the sign-in button (inline, no external images). */
 function ProviderMark({ id }) {
   if (id === "google") {
@@ -352,7 +456,15 @@ export default function App() {
   // Screen Router States: 'invite', 'login', 'client-select', 'app'
   // An invite link (?invite=<token>) opens the accept-invite screen instead of sign-in.
   const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'));
-  const [screen, setScreen] = useState(() => (inviteToken ? 'invite' : 'login'));
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset'));
+  // A session from an earlier visit is restored ('restoring') instead of asking to sign in again.
+  const [screen, setScreen] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (inviteToken) return 'invite';
+    if (resetToken) return 'reset';
+    if (api.hasSession() && !q.get('sso') && !q.get('sso_error')) return 'restoring';
+    return 'login';
+  });
   const [activeClient, setActiveClient] = useState("LG");
   
   const [isDark, setIsDark] = useState(false);
@@ -395,7 +507,9 @@ export default function App() {
   const toastSeq = React.useRef(0);
 
   // Login variables (the mock sign-in keeps its demo values; the real API needs a real password)
-  const [loginEmail, setLoginEmail] = useState('operations@mirethos.com');
+  const [loginEmail, setLoginEmail] = useState(() => (api.isMock ? 'operations@mirethos.com' : api.lastEmail()));
+  const [remember, setRemember] = useState(true);
+  const [forgotOpen, setForgotOpen] = useState(false);
   const [loginPassword, setLoginPassword] = useState(api.isMock ? '••••••••••••' : '');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   // Shown when sign-in takes long, which usually means the API is waking from sleep.
@@ -449,6 +563,17 @@ export default function App() {
   // Wake the API while the user is still typing (the free host sleeps when idle).
   useEffect(() => { api.wake(); }, []);
 
+  // Restore an earlier session (page reload, or "Keep me signed in" after closing the browser).
+  useEffect(() => {
+    if (screen !== 'restoring') return;
+    enterPortal().catch(() => {
+      api.logout(); // expired, signed out elsewhere, or the password was reset
+      setScreen('login');
+    });
+    // Runs once on load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // P5 SSO: the providers to offer, and the return from a provider (?sso=<code> or ?sso_error=...).
   const [ssoProviders, setSsoProviders] = useState([]);
   useEffect(() => { api.ssoProviders().then(setSsoProviders); }, []);
@@ -491,6 +616,7 @@ export default function App() {
     setClients(list);
     setDb(nextDb);
     setCurrentUser(user);
+    if (user?.email) api.rememberEmail(user.email);
     if (list.length && !list.some((c) => c.name === activeClient)) setActiveClient(list[0].name);
     setScreen('client-select');
   };
@@ -500,14 +626,16 @@ export default function App() {
     setIsLoggingIn(true);
     const slowTimer = setTimeout(() => setSlowLogin(true), 5000);
     try {
-      const r = await api.login(loginEmail, loginPassword);
+      api.setRemember(remember);
+      const r = await api.login(loginEmail.trim(), loginPassword);
+      api.rememberEmail(loginEmail.trim());
       if (r?.mfa) {
         setMfaStep(r);
         setScreen('mfa');
         return;
       }
       await enterPortal();
-      showToast("Credentials authorized.", "success");
+      showToast("Signed in.", "success");
     } catch (err) {
       showToast(err.message || "Sign in failed.", "info");
     } finally {
@@ -519,8 +647,12 @@ export default function App() {
 
   const handleLogout = () => {
     api.logout();
+    if (!api.isMock) {
+      setLoginEmail(api.lastEmail());
+      setLoginPassword('');
+    }
     setScreen('login');
-    showToast("Logged out of session.", "info");
+    showToast("Signed out.", "info");
   };
 
   const handleSelectClient = (clientName) => {
@@ -596,6 +728,24 @@ export default function App() {
   // --------------------------------------------------------------------------
   // RENDER: WELCOME LOGIN
   // --------------------------------------------------------------------------
+  if (screen === 'restoring') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-brand-ivory font-sans text-brand-taupe text-sm gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" /> Signing you back in…
+      </div>
+    );
+  }
+
+  if (screen === 'reset') {
+    return (
+      <>
+        <ResetPasswordScreen resetToken={resetToken} showToast={showToast}
+          onDone={(email) => { window.history.replaceState(null, '', window.location.pathname); if (email) setLoginEmail(email); setLoginPassword(''); setScreen('login'); }} />
+        <Toasts toasts={toasts} />
+      </>
+    );
+  }
+
   if (screen === 'invite') {
     return (
       <>
@@ -637,9 +787,11 @@ export default function App() {
           email={loginEmail} setEmail={setLoginEmail}
           password={loginPassword} setPassword={setLoginPassword}
           onSubmit={handleLoginSubmit} busy={isLoggingIn} slow={slowLogin}
-          onForgot={() => showToast("Recovery portal loaded.", "info")}
+          onForgot={() => setForgotOpen(true)}
           providers={ssoProviders}
+          remember={remember} setRemember={setRemember}
         />
+        {forgotOpen && <ForgotPasswordModal email={loginEmail} providers={ssoProviders} onClose={() => setForgotOpen(false)} showToast={showToast} />}
         <Toasts toasts={toasts} />
       </>
     );
@@ -685,7 +837,7 @@ export default function App() {
                 <ShieldCheck className="w-4 h-4" /> Security
               </button>
             )}
-            <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={() => setScreen('login')}>Sign out</button>
+            <button className="text-[13px] text-rail-ink-2 hover:text-rail-ink cursor-pointer" onClick={handleLogout}>Sign out</button>
           </div>
         </header>
         <main className="flex-1 w-full max-w-4xl mx-auto px-6 py-14">

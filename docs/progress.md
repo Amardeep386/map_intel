@@ -170,6 +170,10 @@
 - **Lint warnings.** 10 remain, all from before P1: 8 in the portal (6 unused names, 2 React notes) and 2 in `server/` (`collect.ts`, `report.ts`); none is a bug. `docs/reference/` is excluded from lint and build.
 
 ## Log
+### 9 Oct 2026 (later) — Sign-in fixes: remembered email, Keep me signed in, password reset (Claude Code)
+- The email field started with a hard-coded demo address: it now starts empty and remembers the last email that signed in on that browser.
+- "Keep me signed in" did nothing and a reload always showed the sign-in page: a reload now restores the session; ticked = it also survives closing the browser (localStorage), unticked = this tab only. Sign out on the workspace picker now really ends the session. Sessions still last `JWT_TTL_HOURS` (12 h).
+- "Forgot password?" was a placeholder: it now asks for a reset (opens a High ticket for Mirethos; the same answer whether or not the email exists; one a day per user) and offers Google sign-in. Administrators / Account managers create a one-hour, single-use reset link under Users & Access → Reset password (Mirethos: `POST /users/:id/password-reset`); the link opens "Choose a new password", and a reset ends every older session of that user. Migrations 051 (`password_reset`) and 052 (`app_user.password_changed_at`). No email provider yet, so links are sent by hand.
 ### 9 Oct 2026 (later) — Google sign-in live; Microsoft removed (Claude Code)
 - The user registered the Google OAuth client and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `API_PUBLIC_URL` on Render; the live API offers Google and Google accepts the client and redirect URI. The button now shows Google's standard four-colour G. Microsoft sign-in removed from the code, config, tests and docs (decision 44).
 ### 9 Oct 2026 — P5 Scale & governance M1–M10 on the LG slice; exit test 17/17 (Claude Code)

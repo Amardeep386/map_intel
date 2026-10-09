@@ -27,8 +27,12 @@ export const USE_MOCK = String(import.meta.env.VITE_USE_MOCK ?? "true").toLowerC
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
 
 const TOKEN_KEY = "mapintel.token";
+const EMAIL_KEY = "mapintel.lastEmail";
+// "Keep me signed in": the session token in localStorage (survives closing the browser);
+// otherwise in sessionStorage (this tab only). Both survive a page reload.
 let token = null;
-try { token = sessionStorage.getItem(TOKEN_KEY); } catch { token = null; }
+let remember = true;
+try { token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY); } catch { token = null; }
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -128,7 +132,10 @@ function toSkuRow(p) {
 
 function keepToken(t) {
   token = t;
-  try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+  try {
+    (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+    (remember ? sessionStorage : localStorage).removeItem(TOKEN_KEY);
+  } catch { /* private mode: the token lives in memory only */ }
 }
 
 export const api = {
@@ -230,8 +237,21 @@ export const api = {
 
   logout() {
     token = null;
-    try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+    try { sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
   },
+
+  /** A session from an earlier visit (restored on load; the API still checks it). */
+  hasSession() { return !USE_MOCK && !!token; },
+  setRemember(on) { remember = !!on; },
+  /** The email that last signed in on this browser (sign-in page convenience). */
+  lastEmail() { try { return localStorage.getItem(EMAIL_KEY) || ""; } catch { return ""; } },
+  rememberEmail(email) { try { localStorage.setItem(EMAIL_KEY, email); } catch { /* ignore */ } },
+
+  // ---------------- Password reset ----------------
+  forgotPassword(email) { return request("/auth/forgot", { method: "POST", body: { email } }); },
+  getReset(resetToken) { return request(`/auth/reset/${encodeURIComponent(resetToken)}`); },
+  resetPassword(resetToken, password) { return request("/auth/reset", { method: "POST", body: { token: resetToken, password } }); },
+  createResetLink(client, userId) { return P5(() => request(`/accounts/${client.id}/users/${userId}/password-reset`, { method: "POST" })); },
 
   // ---------------- Clients (accounts) ----------------
   async listClients() {
